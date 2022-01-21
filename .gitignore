@@ -13,3 +13,12 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Jetbrains IDE
+.idea/
+
+# vscode
+.vscode/
+
+# go mod
+go.sum
