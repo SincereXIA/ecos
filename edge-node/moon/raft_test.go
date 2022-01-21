@@ -2,6 +2,7 @@ package moon
 
 import (
 	"go.etcd.io/etcd/raft"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -26,9 +27,24 @@ func TestRaft(t *testing.T) {
 			}
 			time.Sleep(100 * time.Microsecond)
 		}
-		if leader > 0 {
+		if leader >= 0 {
 			t.Logf("leader: %v", leader+1)
 			break
 		}
+	}
+
+	for i := 0; i < 3; i++ {
+		nodes[i].reportSelfInfo()
+	}
+
+	time.Sleep(2 * time.Second)
+	info := nodes[0].infoStorage.ListAllNodeInfo()
+	t.Log(info)
+	for i := 1; i < 3; i++ {
+		anotherInfo := nodes[i].infoStorage.ListAllNodeInfo()
+		if !reflect.DeepEqual(info, anotherInfo) {
+			t.Errorf("Node Info Not Equal")
+		}
+		t.Log(info)
 	}
 }
