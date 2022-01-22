@@ -1,6 +1,6 @@
 package moon
 
-type NodeID string
+type NodeID uint64
 
 type NodeInfoStorage interface {
 	UpdateNodeInfo(info *NodeInfo) error
@@ -14,7 +14,7 @@ type MemoryNodeInfoStorage struct {
 }
 
 func (storage *MemoryNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
-	nodeId := NodeID(info.Uuid.String())
+	nodeId := info.ID
 	storage.infoMap[nodeId] = *info
 	return nil
 }

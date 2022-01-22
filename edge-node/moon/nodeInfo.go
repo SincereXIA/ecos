@@ -7,8 +7,10 @@ import (
 )
 
 type NodeInfo struct {
-	Uuid   uuid.UUID
-	IpAddr string
+	ID      NodeID
+	Uuid    uuid.UUID
+	IpAddr  string
+	RpcPort uint64
 }
 
 var selfInfo *NodeInfo
@@ -44,11 +46,12 @@ func GetSelfInfo() *NodeInfo {
 
 // NewSelfInfo Generate new nodeInfo
 // ** just for test **
-func NewSelfInfo() *NodeInfo {
-	_, ipAddr := getSelfIpAddr()
+func NewSelfInfo(id NodeID, ipaddr string, rpcPort uint64) *NodeInfo {
 	selfInfo := &NodeInfo{
-		Uuid:   uuid.New(),
-		IpAddr: ipAddr,
+		ID:      id,
+		Uuid:    uuid.New(),
+		IpAddr:  ipaddr,
+		RpcPort: rpcPort,
 	}
 	return selfInfo
 }

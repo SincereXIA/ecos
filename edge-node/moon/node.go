@@ -11,7 +11,8 @@ import (
 )
 
 type node struct {
-	id          uint64          //raft节点的id
+	id          uint64 //raft节点的id
+	selfInfo    *NodeInfo
 	ctx         context.Context //context
 	infoStorage NodeInfoStorage
 	raftStorage *raft.MemoryStorage //raft需要的内存结构
@@ -26,15 +27,16 @@ var (
 		make(chan raftpb.Message),
 		make(chan raftpb.Message),
 		make(chan raftpb.Message),
+		make(chan raftpb.Message),
 	}
 )
 
-func newNode(id uint64, peers []raft.Peer) *node {
+func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo) *node {
 	ctx := context.TODO()
 	storage := raft.NewMemoryStorage()
 	infoStorage := NewMemoryNodeInfoStorage()
 	cfg := raft.Config{
-		ID:              id,
+		ID:              uint64(selfInfo.ID),
 		ElectionTick:    10,
 		HeartbeatTick:   1,
 		Storage:         storage,
@@ -42,14 +44,25 @@ func newNode(id uint64, peers []raft.Peer) *node {
 		MaxInflightMsgs: 256,
 	}
 
+	id := selfInfo.ID
+
 	n := &node{
-		id:          id,
+		id:          uint64(selfInfo.ID),
+		selfInfo:    selfInfo,
 		ctx:         ctx,
 		infoStorage: infoStorage,
 		raftStorage: storage,
 		cfg:         &cfg,
-		ticker:      time.Tick(time.Microsecond),
+		ticker:      time.Tick(time.Millisecond),
 		recv:        bcChans[id-1],
+	}
+
+	var peers []raft.Peer
+	for _, nodeInfo := range groupInfo {
+		peers = append(peers, raft.Peer{
+			ID:      uint64(nodeInfo.ID),
+			Context: nil,
+		})
 	}
 
 	n.raft = raft.StartNode(n.cfg, peers)
@@ -104,7 +117,7 @@ func (n *node) run() {
 }
 
 func (n *node) reportSelfInfo() {
-	info := NewSelfInfo()
+	info := n.selfInfo
 	js, _ := json.Marshal(info)
 	err := n.raft.Propose(n.ctx, js)
 	if err != nil {
