@@ -2,11 +2,16 @@ package moon
 
 import (
 	"context"
+	"ecos/messenger"
+	"ecos/messenger/moon"
 	"ecos/utils/logger"
 	"encoding/json"
 	"github.com/coreos/etcd/raft/raftpb"
 	"go.etcd.io/etcd/Godeps/_workspace/src/github.com/golang/glog"
 	"go.etcd.io/etcd/raft"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"strconv"
 	"time"
 )
 
@@ -31,10 +36,14 @@ var (
 	}
 )
 
-func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo) *node {
+func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo, rpcServer *messenger.RpcServer) *node {
 	ctx := context.TODO()
 	storage := raft.NewMemoryStorage()
 	infoStorage := NewMemoryNodeInfoStorage()
+	raftChan := make(chan raftpb.Message)
+	moonServer := moon.Server{RaftChan: raftChan}
+	moon.RegisterMoonServer(rpcServer, &moonServer)
+
 	cfg := raft.Config{
 		ID:              uint64(selfInfo.ID),
 		ElectionTick:    10,
@@ -44,8 +53,6 @@ func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo) *n
 		MaxInflightMsgs: 256,
 	}
 
-	id := selfInfo.ID
-
 	n := &node{
 		id:          uint64(selfInfo.ID),
 		selfInfo:    selfInfo,
@@ -53,8 +60,8 @@ func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo) *n
 		infoStorage: infoStorage,
 		raftStorage: storage,
 		cfg:         &cfg,
-		ticker:      time.Tick(time.Millisecond),
-		recv:        bcChans[id-1],
+		ticker:      time.Tick(time.Millisecond * 100),
+		recv:        raftChan,
 	}
 
 	var peers []raft.Peer
@@ -63,6 +70,7 @@ func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo) *n
 			ID:      uint64(nodeInfo.ID),
 			Context: nil,
 		})
+		infoStorage.UpdateNodeInfo(nodeInfo)
 	}
 
 	n.raft = raft.StartNode(n.cfg, peers)
@@ -76,6 +84,35 @@ func (n *node) send(messages []raftpb.Message) {
 		ch := bcChans[to-1]
 		glog.Infof("%d send to %v, type %v", n.id, m.To, m.Type)
 		ch <- m
+	}
+}
+
+func (n *node) sendByRpc(messages []raftpb.Message) {
+	for _, m := range messages {
+		glog.Infof(raft.DescribeMessage(m, nil))
+		glog.Infof("%d send to %v, type %v", n.id, m.To, m.Type)
+		nodeId := NodeID(m.To)
+		err, nodeInfo := n.infoStorage.GetNodeInfo(nodeId)
+		port := strconv.FormatUint(nodeInfo.RpcPort, 10)
+		conn, err := grpc.Dial(nodeInfo.IpAddr+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			logger.Errorf("faild to connect: %v", err)
+			return
+		}
+		defer func(conn *grpc.ClientConn) {
+			err = conn.Close()
+			if err != nil {
+				logger.Errorf("close grpc conn err: %v", err)
+			}
+		}(conn)
+
+		c := moon.NewMoonClient(conn)
+		_, err = c.SendRaftMessage(context.Background(), &m)
+		if err != nil {
+			logger.Errorf("could not send raft message: %v", err)
+			return
+		}
+		//logger.Infof("Send raft message success!\n")
 	}
 }
 
@@ -98,7 +135,8 @@ func (n *node) run() {
 			n.raft.Tick()
 		case rd := <-n.raft.Ready():
 			_ = n.raftStorage.Append(rd.Entries)
-			go n.send(rd.Messages)
+			//go n.send(rd.Messages)
+			go n.sendByRpc(rd.Messages)
 			for _, entry := range rd.CommittedEntries {
 				n.process(entry)
 				if entry.Type == raftpb.EntryConfChange {
@@ -118,6 +156,14 @@ func (n *node) run() {
 
 func (n *node) reportSelfInfo() {
 	info := n.selfInfo
+	js, _ := json.Marshal(info)
+	err := n.raft.Propose(n.ctx, js)
+	if err != nil {
+		logger.Errorf("report self info err: %v", err.Error())
+	}
+}
+
+func (n *node) AddNodeInfo(info *NodeInfo) {
 	js, _ := json.Marshal(info)
 	err := n.raft.Propose(n.ctx, js)
 	if err != nil {

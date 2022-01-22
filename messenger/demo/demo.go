@@ -9,11 +9,11 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-type server struct {
+type Server struct {
 	UnimplementedGreeterServer
 }
 
-func (s *server) SayHello(_ context.Context, in *HelloRequest) (*HelloReply, error) {
+func (s *Server) SayHello(_ context.Context, in *HelloRequest) (*HelloReply, error) {
 	return &HelloReply{Message: "Hello " + in.Name}, nil
 }
 
@@ -25,7 +25,7 @@ func ServerRun() {
 		return
 	}
 	s := grpc.NewServer()               // 创建gRPC服务器
-	RegisterGreeterServer(s, &server{}) // 在gRPC服务端注册服务
+	RegisterGreeterServer(s, &Server{}) // 在gRPC服务端注册服务
 
 	reflection.Register(s) //在给定的gRPC服务器上注册服务器反射服务
 	// Serve方法在lis上接受传入连接，为每个连接创建一个ServerTransport和server的goroutine。

@@ -1,19 +1,10 @@
 syntax = "proto3";
-
 package messenger;
 
-option go_package = "./moon_grpc";
+import "raft/raftpb/raft.proto";
 
-service Greeter {
-  rpc SayHello (HelloRequest) returns (HelloReply) {}
+option go_package = "./moon";
+
+service Moon {
+  rpc SendRaftMessage (raftpb.Message) returns (raftpb.Message) {}
 }
-message HelloRequest {
-  string name = 1;
-}
-
-message HelloReply {
-  string message = 1;
-}
-
-
-
