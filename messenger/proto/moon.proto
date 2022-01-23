@@ -1,0 +1,10 @@
+syntax = "proto3";
+package messenger;
+
+import "raft/raftpb/raft.proto";
+
+option go_package = "./moon";
+
+service Moon {
+  rpc SendRaftMessage (raftpb.Message) returns (raftpb.Message) {}
+}
