@@ -10,7 +10,7 @@ variables:
   DOCKER_REGISTRY: harbor.sums.top
   DOCKERHUB_NAMESPACE: ecos
   BRANCH_NAME: $CI_COMMIT_REF_NAME
-  BUILD_NUMBER: $CI_COMMIT_SHA
+  COMMIT_SHA: $CI_COMMIT_SHA
 
 before_script:
   - export GOPATH=$GOPATH:/usr/local/${CI_PROJECT_NAME}
@@ -65,11 +65,12 @@ ecos-docker-build:
   before_script:
     - docker info
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $DOCKER_REGISTRY
+    - export BUILD_NUMBER=${COMMIT_SHA:0:5}
   script:
     - echo "build ecos docker image"
     - export APP_NAME=ecos
     - docker build -f Dockerfile -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
-    - docker push  $REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
+    - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
 
 deploy-job:      # This job runs in the deploy stage.
   stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
