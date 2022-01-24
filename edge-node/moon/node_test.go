@@ -58,6 +58,9 @@ func TestRaft(t *testing.T) {
 	// Node4
 	node4Info := NewSelfInfo(0x04, "127.0.0.1", 32674)
 	nodes[leader].AddNodeInfo(node4Info)
+	rpcServer4 := messenger.NewRpcServer(32674)
+	node4 := NewNode(node4Info, nil, groupInfo, rpcServer4)
+	go rpcServer4.Run()
 
 	// 集群提交增加节点请求
 	_ = node1.raft.ProposeConfChange(node1.ctx, raftpb.ConfChange{
@@ -70,9 +73,6 @@ func TestRaft(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// 启动 Node4
-	rpcServer4 := messenger.NewRpcServer(32674)
-	node4 := NewNode(node4Info, nil, groupInfo, rpcServer4)
-	go rpcServer4.Run()
 	go node4.run()
 
 	nodes = append(nodes, node4)
