@@ -2,6 +2,7 @@ package moon
 
 import (
 	"context"
+	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/messenger/moon"
 	"ecos/utils/logger"
@@ -15,16 +16,18 @@ import (
 	"time"
 )
 
-type node struct {
+type Moon struct {
 	id          uint64 //raft节点的id
-	selfInfo    *NodeInfo
+	selfInfo    *node.NodeInfo
 	ctx         context.Context //context
-	infoStorage NodeInfoStorage
+	infoStorage node.NodeInfoStorage
 	raftStorage *raft.MemoryStorage //raft需要的内存结构
 	cfg         *raft.Config        //raft需要的配置
-	raft        raft.Node           // raft node
-	ticker      <-chan time.Time    //定时器，提供周期时钟源和超时触发能力
+	raft        raft.Node
+	ticker      <-chan time.Time //定时器，提供周期时钟源和超时触发能力
 	recv        chan raftpb.Message
+
+	sunAddr string
 }
 
 var (
@@ -36,16 +39,16 @@ var (
 	}
 )
 
-func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo, rpcServer *messenger.RpcServer) *node {
+func NewMoon(selfInfo *node.NodeInfo, leaderInfo *node.NodeInfo, groupInfo []*node.NodeInfo, rpcServer *messenger.RpcServer) *Moon {
 	ctx := context.TODO()
 	storage := raft.NewMemoryStorage()
-	infoStorage := NewMemoryNodeInfoStorage()
+	infoStorage := node.NewMemoryNodeInfoStorage()
 	raftChan := make(chan raftpb.Message)
 	moonServer := moon.Server{RaftChan: raftChan}
 	moon.RegisterMoonServer(rpcServer, &moonServer)
 
 	cfg := raft.Config{
-		ID:              uint64(selfInfo.ID),
+		ID:              selfInfo.RaftId,
 		ElectionTick:    10,
 		HeartbeatTick:   1,
 		Storage:         storage,
@@ -53,8 +56,8 @@ func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo, rp
 		MaxInflightMsgs: 256,
 	}
 
-	n := &node{
-		id:          uint64(selfInfo.ID),
+	n := &Moon{
+		id:          selfInfo.RaftId,
 		selfInfo:    selfInfo,
 		ctx:         ctx,
 		infoStorage: infoStorage,
@@ -67,7 +70,7 @@ func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo, rp
 	var peers []raft.Peer
 	for _, nodeInfo := range groupInfo {
 		peers = append(peers, raft.Peer{
-			ID:      uint64(nodeInfo.ID),
+			ID:      nodeInfo.RaftId,
 			Context: nil,
 		})
 		infoStorage.UpdateNodeInfo(nodeInfo)
@@ -77,7 +80,7 @@ func NewNode(selfInfo *NodeInfo, leaderInfo *NodeInfo, groupInfo []*NodeInfo, rp
 	return n
 }
 
-func (n *node) send(messages []raftpb.Message) {
+func (n *Moon) send(messages []raftpb.Message) {
 	for _, m := range messages {
 		glog.Infof(raft.DescribeMessage(m, nil))
 		to := m.To
@@ -87,11 +90,11 @@ func (n *node) send(messages []raftpb.Message) {
 	}
 }
 
-func (n *node) sendByRpc(messages []raftpb.Message) {
+func (n *Moon) sendByRpc(messages []raftpb.Message) {
 	for _, m := range messages {
 		glog.Infof(raft.DescribeMessage(m, nil))
 		glog.Infof("%d send to %v, type %v", n.id, m.To, m.Type)
-		nodeId := NodeID(m.To)
+		nodeId := node.NodeID(m.To)
 		err, nodeInfo := n.infoStorage.GetNodeInfo(nodeId)
 		port := strconv.FormatUint(nodeInfo.RpcPort, 10)
 		conn, err := grpc.Dial(nodeInfo.IpAddr+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -116,19 +119,19 @@ func (n *node) sendByRpc(messages []raftpb.Message) {
 	}
 }
 
-func (n *node) process(entry raftpb.Entry) {
+func (n *Moon) process(entry raftpb.Entry) {
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var nodeInfo NodeInfo
+		var nodeInfo node.NodeInfo
 		err := json.Unmarshal(entry.Data, &nodeInfo)
 		if err != nil {
 			logger.Errorf("Moon process nodeInfo err: %v", err.Error())
 		}
-		logger.Infof("Node %v: get node info %v", n.id, nodeInfo)
+		logger.Infof("Node %v: get Moon info %v", n.id, nodeInfo)
 		_ = n.infoStorage.UpdateNodeInfo(&nodeInfo)
 	}
 }
 
-func (n *node) run() {
+func (n *Moon) run() {
 	for {
 		select {
 		case <-n.ticker:
@@ -154,7 +157,7 @@ func (n *node) run() {
 	}
 }
 
-func (n *node) reportSelfInfo() {
+func (n *Moon) reportSelfInfo() {
 	info := n.selfInfo
 	js, _ := json.Marshal(info)
 	err := n.raft.Propose(n.ctx, js)
@@ -163,7 +166,7 @@ func (n *node) reportSelfInfo() {
 	}
 }
 
-func (n *node) AddNodeInfo(info *NodeInfo) {
+func (n *Moon) AddNodeInfo(info *node.NodeInfo) {
 	js, _ := json.Marshal(info)
 	err := n.raft.Propose(n.ctx, js)
 	if err != nil {

@@ -1,17 +1,10 @@
-package moon
+package node
 
 import (
 	"github.com/google/uuid"
 	"net"
 	"sync"
 )
-
-type NodeInfo struct {
-	ID      NodeID
-	Uuid    uuid.UUID
-	IpAddr  string
-	RpcPort uint64
-}
 
 var selfInfo *NodeInfo
 var once sync.Once
@@ -37,7 +30,7 @@ func GetSelfInfo() *NodeInfo {
 	once.Do(func() {
 		_, ipAddr := getSelfIpAddr()
 		selfInfo = &NodeInfo{
-			Uuid:   uuid.New(),
+			Uuid:   uuid.New().String(),
 			IpAddr: ipAddr,
 		}
 	})
@@ -46,10 +39,10 @@ func GetSelfInfo() *NodeInfo {
 
 // NewSelfInfo Generate new nodeInfo
 // ** just for test **
-func NewSelfInfo(id NodeID, ipaddr string, rpcPort uint64) *NodeInfo {
+func NewSelfInfo(raftID uint64, ipaddr string, rpcPort uint64) *NodeInfo {
 	selfInfo := &NodeInfo{
-		ID:      id,
-		Uuid:    uuid.New(),
+		RaftId:  raftID,
+		Uuid:    uuid.New().String(),
 		IpAddr:  ipaddr,
 		RpcPort: rpcPort,
 	}
