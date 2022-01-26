@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package messenger;
+
+option go_package = "ecos/messenger";
+
+message Block {
+  repeated bytes data = 1;
+}
+
+message BlockInfo {
+  string filename = 1;
+  string hash = 2;
+  uint64 size = 3;
+}
+
+message ObjectInfo {
+  string objId = 1;
+  string contentHash = 2;
+  uint64 updateTime = 3;
+  repeated BlockInfo blocks = 4;
+}
