@@ -1,11 +1,13 @@
 package node
 
+import "errors"
+
 type NodeID uint64
 
 type NodeInfoStorage interface {
 	UpdateNodeInfo(info *NodeInfo) error
 	DeleteNodeInfo(nodeId NodeID) error
-	GetNodeInfo(nodeId NodeID) (error, NodeInfo)
+	GetNodeInfo(nodeId NodeID) (*NodeInfo, error)
 	ListAllNodeInfo() map[NodeID]NodeInfo
 }
 
@@ -24,8 +26,12 @@ func (storage *MemoryNodeInfoStorage) DeleteNodeInfo(nodeId NodeID) error {
 	return nil
 }
 
-func (storage *MemoryNodeInfoStorage) GetNodeInfo(nodeId NodeID) (error, NodeInfo) {
-	return nil, storage.infoMap[nodeId]
+func (storage *MemoryNodeInfoStorage) GetNodeInfo(nodeId NodeID) (*NodeInfo, error) {
+	if nodeInfo, ok := storage.infoMap[nodeId]; ok {
+		return &nodeInfo, nil
+	}
+	return nil, errors.New("node not found")
+
 }
 
 func (storage *MemoryNodeInfoStorage) ListAllNodeInfo() map[NodeID]NodeInfo {

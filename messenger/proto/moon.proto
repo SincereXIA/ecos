@@ -2,9 +2,17 @@ syntax = "proto3";
 package messenger;
 
 import "raft/raftpb/raft.proto";
+import "node-info.proto";
+import "common.proto";
 
-option go_package = "./moon";
+option go_package = "ecos/edge-node/moon";
 
 service Moon {
   rpc SendRaftMessage (raftpb.Message) returns (raftpb.Message) {}
+  rpc AddNodeToGroup (NodeInfo) returns (AddNodeReply) {}
+}
+
+message AddNodeReply {
+  Result result = 1;
+  NodeInfo leaderInfo = 2;
 }

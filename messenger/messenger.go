@@ -3,6 +3,7 @@ package messenger
 import (
 	"ecos/messenger/demo"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"net"
 	"strconv"
@@ -33,4 +34,10 @@ func (server *RpcServer) Run() error {
 		return err
 	}
 	return nil
+}
+
+func GetRpcConn(addr string, port uint64) (*grpc.ClientConn, error) {
+	strPort := strconv.FormatUint(port, 10)
+	conn, err := grpc.Dial(addr+":"+strPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	return conn, err
 }

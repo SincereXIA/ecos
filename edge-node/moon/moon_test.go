@@ -1,6 +1,8 @@
 package moon
 
 import (
+	"context"
+	"ecos/cloud/sun"
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"github.com/coreos/etcd/raft/raftpb"
@@ -23,13 +25,13 @@ func TestRaft(t *testing.T) {
 	rpcServer2 := messenger.NewRpcServer(32672)
 	rpcServer3 := messenger.NewRpcServer(32673)
 
-	node1 := NewMoon(groupInfo[0], nil, groupInfo, rpcServer1)
+	node1 := NewMoon(groupInfo[0], "", nil, groupInfo, rpcServer1)
 	go rpcServer1.Run()
 	go node1.run()
-	node2 := NewMoon(groupInfo[1], nil, groupInfo, rpcServer2)
+	node2 := NewMoon(groupInfo[1], "", nil, groupInfo, rpcServer2)
 	go rpcServer2.Run()
 	go node2.run()
-	node3 := NewMoon(groupInfo[2], nil, groupInfo, rpcServer3)
+	node3 := NewMoon(groupInfo[2], "", nil, groupInfo, rpcServer3)
 	go rpcServer3.Run()
 	go node3.run()
 
@@ -43,7 +45,7 @@ func TestRaft(t *testing.T) {
 				leader = i
 				break
 			}
-			time.Sleep(100 * time.Microsecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 		if leader >= 0 {
 			t.Logf("leader: %v", leader+1)
@@ -58,9 +60,9 @@ func TestRaft(t *testing.T) {
 
 	// Node4
 	node4Info := node.NewSelfInfo(0x04, "127.0.0.1", 32674)
-	nodes[leader].AddNodeInfo(node4Info)
+	nodes[leader].AddNodeToGroup(context.TODO(), node4Info)
 	rpcServer4 := messenger.NewRpcServer(32674)
-	node4 := NewMoon(node4Info, nil, groupInfo, rpcServer4)
+	node4 := NewMoon(node4Info, "", nil, groupInfo, rpcServer4)
 	go rpcServer4.Run()
 
 	// 集群提交增加节点请求
@@ -99,7 +101,54 @@ func TestRaftSingle(t *testing.T) {
 	groupInfo := []*node.NodeInfo{
 		node.NewSelfInfo(0x01, "127.0.0.1", 32671),
 	}
-	node1 := NewMoon(groupInfo[0], nil, groupInfo, rpcServer1)
+	node1 := NewMoon(groupInfo[0], "", nil, groupInfo, rpcServer1)
 	go node1.run()
 	time.Sleep(5 * time.Second)
+}
+
+func TestMoon_Register(t *testing.T) {
+
+	sunRpc := messenger.NewRpcServer(3260)
+	sun.NewSun(sunRpc)
+	go sunRpc.Run()
+
+	groupInfo := []*node.NodeInfo{
+		node.NewSelfInfo(0x01, "127.0.0.1", 32671),
+		node.NewSelfInfo(0x02, "127.0.0.1", 32672),
+		node.NewSelfInfo(0x03, "127.0.0.1", 32673),
+	}
+
+	rpcServers := []*messenger.RpcServer{
+		messenger.NewRpcServer(32671),
+		messenger.NewRpcServer(32672),
+		messenger.NewRpcServer(32673),
+	}
+
+	var moons []*Moon
+
+	for i := 0; i < 3; i++ {
+		moon := NewMoon(groupInfo[i], "127.0.0.1:3260", nil, nil,
+			rpcServers[i])
+		moons = append(moons, moon)
+		go rpcServers[i].Run()
+		go moon.run()
+	}
+
+	time.Sleep(2 * time.Second)
+
+	leader := -1
+	for {
+		for i := 0; i < 3; i++ {
+			if raft.StateLeader == moons[i].raft.Status().RaftState {
+				leader = i
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if leader >= 0 {
+			t.Logf("leader: %v", leader+1)
+			break
+		}
+	}
+
 }
