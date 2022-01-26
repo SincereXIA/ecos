@@ -9,5 +9,8 @@ func Infof(format string, args ...interface{}) {
 	log.Infof(format, args...)
 }
 func Errorf(format string, args ...interface{}) {
-	log.Errorf(format, args...)
+	log.Errorf("ERROR! "+format, args...)
+}
+func Warningf(format string, args ...interface{}) {
+	log.Warningf(format, args...)
 }
