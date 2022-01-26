@@ -1,0 +1,12 @@
+syntax = "proto3";
+package messenger;
+
+option go_package = "ecos/edge-node/node";
+
+message NodeInfo {
+  uint64 raft_id= 1;
+  string uuid= 2;
+  string ip_addr = 3;
+  uint64 rpc_port = 4;
+  uint64 capacity = 5;
+}

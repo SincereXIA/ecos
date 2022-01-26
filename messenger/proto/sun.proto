@@ -1,0 +1,26 @@
+syntax = "proto3";
+package messenger;
+
+import "node-info.proto";
+import "common.proto";
+
+option go_package = "ecos/cloud/sun";
+
+
+service Sun {
+  rpc MoonRegister(NodeInfo) returns (RegisterResult) {}
+  rpc GetLeaderInfo(NodeInfo) returns (NodeInfo) {}
+  rpc ReportGroupInfo(GroupInfo) returns (Result) {}
+}
+
+message GroupInfo {
+  NodeInfo leader_info = 1;
+  repeated NodeInfo group_info = 2;
+}
+
+message RegisterResult {
+  Result result = 1;
+  uint64 raft_id = 2;
+  bool has_leader = 3;
+  GroupInfo group_info = 4;
+}

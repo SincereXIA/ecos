@@ -1,0 +1,14 @@
+syntax = "proto3";
+package messenger;
+
+option go_package = "ecos/messenger/common";
+
+message Result {
+  enum Status {
+    OK = 0;
+    FAIL = 1;
+  }
+  Status status = 1;
+  uint64 code = 2;
+  string message = 3;
+}
