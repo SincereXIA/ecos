@@ -30,8 +30,10 @@ func GetSelfInfo() *NodeInfo {
 	once.Do(func() {
 		_, ipAddr := getSelfIpAddr()
 		selfInfo = &NodeInfo{
-			Uuid:   uuid.New().String(),
-			IpAddr: ipAddr,
+			RaftId:  0,
+			Uuid:    uuid.New().String(),
+			IpAddr:  ipAddr,
+			RpcPort: 3267, // TODO: set port from config file
 		}
 	})
 	return selfInfo

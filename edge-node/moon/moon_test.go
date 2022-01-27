@@ -27,13 +27,13 @@ func TestRaft(t *testing.T) {
 
 	node1 := NewMoon(groupInfo[0], "", nil, groupInfo, rpcServer1)
 	go rpcServer1.Run()
-	go node1.run()
+	go node1.Run()
 	node2 := NewMoon(groupInfo[1], "", nil, groupInfo, rpcServer2)
 	go rpcServer2.Run()
-	go node2.run()
+	go node2.Run()
 	node3 := NewMoon(groupInfo[2], "", nil, groupInfo, rpcServer3)
 	go rpcServer3.Run()
-	go node3.run()
+	go node3.Run()
 
 	nodes := []*Moon{node1, node2, node3}
 
@@ -76,7 +76,7 @@ func TestRaft(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// 启动 Node4
-	go node4.run()
+	go node4.Run()
 
 	nodes = append(nodes, node4)
 	node4.reportSelfInfo()
@@ -84,26 +84,16 @@ func TestRaft(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// 判断集群是否达成共识
-	info := nodes[0].infoStorage.ListAllNodeInfo()
+	info := nodes[0].InfoStorage.ListAllNodeInfo()
 	t.Log(info)
 	for i := 1; i < 4; i++ {
-		anotherInfo := nodes[i].infoStorage.ListAllNodeInfo()
+		anotherInfo := nodes[i].InfoStorage.ListAllNodeInfo()
 		if !reflect.DeepEqual(info, anotherInfo) {
 			t.Errorf("Node Info Not Equal")
 		}
 		t.Log(anotherInfo)
 	}
 	t.Log("Reach agreement success")
-}
-
-func TestRaftSingle(t *testing.T) {
-	rpcServer1 := messenger.NewRpcServer(32671)
-	groupInfo := []*node.NodeInfo{
-		node.NewSelfInfo(0x01, "127.0.0.1", 32671),
-	}
-	node1 := NewMoon(groupInfo[0], "", nil, groupInfo, rpcServer1)
-	go node1.run()
-	time.Sleep(5 * time.Second)
 }
 
 func TestMoon_Register(t *testing.T) {
@@ -131,7 +121,7 @@ func TestMoon_Register(t *testing.T) {
 			rpcServers[i])
 		moons = append(moons, moon)
 		go rpcServers[i].Run()
-		go moon.run()
+		go moon.Run()
 	}
 
 	time.Sleep(2 * time.Second)
