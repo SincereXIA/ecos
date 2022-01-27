@@ -276,6 +276,9 @@ func (m *Moon) process(entry raftpb.Entry) {
 }
 
 func (m *Moon) Run() {
+
+	go m.reportSelfInfo()
+
 	for {
 		select {
 		case <-m.ticker:
@@ -302,6 +305,12 @@ func (m *Moon) Run() {
 }
 
 func (m *Moon) reportSelfInfo() {
+
+	for m.raft.Status().Lead == 0 {
+		time.Sleep(1 * time.Second)
+	}
+
+	logger.Infof("join group success, start report self info")
 	info := m.selfInfo
 	js, _ := json.Marshal(info)
 	err := m.raft.Propose(m.ctx, js)
