@@ -26,7 +26,8 @@ build-job:       # This job runs in the build stage, which runs first.
     - go mod vendor
     - go mod download
     - go build -o build/bin/ecos
-    - go build -o build/bin/edge-node ecos/edge-node
+    - go build -o build/bin/cloud ecos/cloud
+    - go build -o build/bin/ecos-edge-node ecos/edge-node
     - echo "Compile complete."
   artifacts:
     paths:
@@ -67,9 +68,13 @@ ecos-docker-build:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $DOCKER_REGISTRY
     - export BUILD_NUMBER=${COMMIT_SHA:0:5}
   script:
-    - echo "build ecos docker image"
-    - export APP_NAME=ecos
-    - docker build -f Dockerfile -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
+    - echo "build ecos-cloud docker image"
+    - export APP_NAME=ecos-cloud
+    - docker build -f Dockerfile/ecos-cloud -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
+    - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
+    - echo "build ecos-edge-node docker image"
+    - export APP_NAME=ecos-edge-node
+    - docker build -f Dockerfile/ecos-cloud -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
     - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
 
 deploy-job:      # This job runs in the deploy stage.
