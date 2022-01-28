@@ -53,11 +53,6 @@ func TestRaft(t *testing.T) {
 		}
 	}
 
-	// 三节点提交节点信息
-	for i := 0; i < 3; i++ {
-		nodes[i].reportSelfInfo()
-	}
-
 	// Node4
 	node4Info := node.NewSelfInfo(0x04, "127.0.0.1", 32674)
 	nodes[leader].AddNodeToGroup(context.TODO(), node4Info)
@@ -79,7 +74,6 @@ func TestRaft(t *testing.T) {
 	go node4.Run()
 
 	nodes = append(nodes, node4)
-	node4.reportSelfInfo()
 
 	time.Sleep(2 * time.Second)
 
