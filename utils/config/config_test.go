@@ -25,11 +25,11 @@ func TestGetConf(t *testing.T) {
 		},
 	}
 
-	var testConf *TestConf
+	var testConf TestConf
 	Register(&testConf, "test.json")
 	ReadAll()
 
-	if !reflect.DeepEqual(testConf, conf) {
+	if !reflect.DeepEqual(&testConf, conf) {
 		t.Errorf("config not equal")
 	}
 }

@@ -1,12 +1,17 @@
 package main
 
 import (
-	moon "ecos/edge-node/moon"
-	"ecos/edge-node/node"
+	moonConfig "ecos/edge-node/config"
+	"ecos/edge-node/moon"
 	"ecos/messenger"
+	"ecos/utils/config"
 	"ecos/utils/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/urfave/cli/v2"
 	"net/http"
+	"os"
+	"strconv"
+	"time"
 )
 
 var Moon *moon.Moon
@@ -25,19 +30,68 @@ func getGroupInfo(c *gin.Context) {
 	c.JSONP(http.StatusOK, info)
 }
 
-func main() {
+func action(c *cli.Context) error {
+	// read config
+	confPath := c.Path("config")
+	conf := moonConfig.DefaultConfig
+	config.Register(conf, confPath)
+	config.ReadAll()
+	_ = config.GetConf(conf)
+
 	// init moon node
 	logger.Infof("Start init moon node ...")
-	selfInfo := node.GetSelfInfo()
-	rpcServer := messenger.NewRpcServer(3267)
-	m := moon.NewMoon(selfInfo, "127.0.0.1:3267", nil, nil, // Todo: sun info
+	selfInfo := conf.SelfInfo
+	rpcServer := messenger.NewRpcServer(conf.RpcPort)
+	m := moon.NewMoon(selfInfo, conf.Moon.SunAddr, nil, nil,
 		rpcServer)
-	go rpcServer.Run()
+	go func() {
+		err := rpcServer.Run()
+		if err != nil {
+			logger.Errorf("RPC server run error: %v", err)
+		}
+	}()
 	go m.Run()
 	Moon = m
 	logger.Infof("moon node init success")
 
 	// init Gin
 	router := NewRouter()
-	_ = router.Run(":3268")
+	port := strconv.FormatUint(conf.HttpPort, 10)
+	_ = router.Run(":" + port)
+	return nil
+}
+
+func main() {
+	// init cli
+	flags := []cli.Flag{
+		&cli.PathFlag{
+			Name:    "config",
+			Aliases: []string{"c"},
+			Usage:   "set config file",
+			Value:   "./edge_node_config.json",
+		},
+	}
+	app := cli.App{
+		Name:                 "ECOS-EdgeNode",
+		Usage:                "",
+		UsageText:            "",
+		ArgsUsage:            "",
+		Version:              "",
+		Flags:                flags,
+		EnableBashCompletion: true,
+		BashComplete:         nil,
+		Action:               action,
+		Compiled:             time.Time{},
+		Authors: []*cli.Author{{
+			Name:  "Zhang Junhua",
+			Email: "zhangjh@mail.act.buaa.edu.cn",
+		}},
+		Copyright: "Copyright BUAA 2022",
+	}
+
+	err := app.Run(os.Args)
+	if err != nil {
+		logger.Errorf("edge node run error: %v", err)
+	}
+
 }
