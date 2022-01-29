@@ -17,6 +17,7 @@ RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -o build/bin/ecos-edge-node
 FROM alpine:3.15.0
 WORKDIR /ecos
 COPY --from=builder /ecos/build/bin/ecos-edge-node .
+COPY --from=builder /ecos/conf/edge_node.sample.json ./edge_node.json
 
 ENTRYPOINT ["./ecos-edge-node"]
 EXPOSE 3267

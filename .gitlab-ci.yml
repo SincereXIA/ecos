@@ -44,8 +44,14 @@ unit-test-job:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
   script:
     - echo "Running unit tests... This will take about 60 seconds."
-    - sleep 1
-    - echo "Code coverage is 90%"
+    - go mod vendor
+    - go mod download
+    - go test ./...
+  cache:
+    key: ecos_go_env
+    paths:
+      - vendor
+      - /go
 
 lint-test-job:   # This job also runs in the test stage.
   stage: test    # It can run at the same time as unit-test-job (in parallel).
@@ -72,13 +78,29 @@ ecos-docker-build:
     - export APP_NAME=ecos-cloud
     - docker build -f Dockerfile/ecos-cloud -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
     - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
+    - docker tag $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
+    - docker push $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
     - echo "build ecos-edge-node docker image"
     - export APP_NAME=ecos-edge-node
     - docker build -f Dockerfile/ecos-cloud -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
     - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
+    - docker tag $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
+    - docker push $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
 
 deploy-job:      # This job runs in the deploy stage.
   stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
+  image:
+    name: bitnami/kubectl:1.22.6-debian-10-r7
+    entrypoint: [""]
+  before_script:
+    - cp $KUBE_CONFIG /.kube/config
   script:
     - echo "Deploying application..."
+    - kubectl version
+    - cd deploy/dev-ol
+    - kubectl delete -f ecos-cloud.yaml || true
+    - kubectl apply -f ecos-cloud.yaml
+    - sleep 10
+    - kubectl delete -f ecos-edge.yaml || true
+    - kubectl apply -f ecos-edge.yaml
     - echo "Application successfully deployed."

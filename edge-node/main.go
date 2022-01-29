@@ -34,6 +34,7 @@ func action(c *cli.Context) error {
 	// read config
 	confPath := c.Path("config")
 	conf := moonConfig.DefaultConfig
+	conf.Moon.SunAddr = c.String("sun")
 	config.Register(conf, confPath)
 	config.ReadAll()
 	_ = config.GetConf(conf)
@@ -68,7 +69,13 @@ func main() {
 			Name:    "config",
 			Aliases: []string{"c"},
 			Usage:   "set config file",
-			Value:   "./edge_node_config.json",
+			Value:   "./edge_node.json",
+		},
+		&cli.StringFlag{
+			Name:    "sun",
+			Aliases: []string{"s"},
+			Usage:   "set ecos-sun addr",
+			Value:   "",
 		},
 	}
 	app := cli.App{

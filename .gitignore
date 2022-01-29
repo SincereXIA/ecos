@@ -22,3 +22,6 @@
 
 # go mod
 go.sum
+
+# build dir
+build/

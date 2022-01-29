@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  namespace: ecos
+  labels:
+    version: v1
+    app: ecos-cloud-dev
+  name: ecos-cloud-dev-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      version: v1
+      app: ecos-cloud-dev
+  template:
+    metadata:
+      labels:
+        version: v1
+        app: ecos-cloud-dev
+      annotations:
+        logging.kubesphere.io/logsidecar-config: '{}'
+        cni.projectcalico.org/ipv4pools: '["default-ipv4-ippool"]'
+    spec:
+      containers:
+        - name: ecos-cloud-pod
+          imagePullPolicy: Always
+          image: 'harbor.sums.top/ecos/ecos-cloud:SNAPSHOT-latest'
+          resources:
+            limits:
+              cpu: '2'
+              memory: 1000Mi
+          volumeMounts:
+            - name: host-time
+              mountPath: /etc/localtime
+              readOnly: false
+            - readOnly: false
+              mountPath: /data/ecos
+              name: ecos-cloud-data
+          ports:
+            - name: http-cloud
+              protocol: TCP
+              containerPort: 3268
+            - name: grpc-cloud
+              protocol: TCP
+              containerPort: 3267
+      serviceAccount: default
+      initContainers: []
+      volumes:
+        - hostPath:
+            path: /etc/localtime
+            type: ''
+          name: host-time
+      imagePullSecrets:
+        - name: harbor-sums-top
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  serviceName: ecos-cloud-dev
+  volumeClaimTemplates:
+    - spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: rook-ceph-block
+      metadata:
+        name: ecos-cloud-data
+        namespace: ecos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: ecos
+  labels:
+    version: v1
+    app: ecos-cloud-dev
+  annotations:
+    kubesphere.io/serviceType: statefulservice
+  name: ecos-cloud-dev
+spec:
+  sessionAffinity: None
+  selector:
+    app: ecos-cloud-dev
+  ports:
+    - name: http-cloud
+      protocol: TCP
+      port: 3268
+      targetPort: 3268
+    - name: grpc-cloud
+      protocol: TCP
+      port: 3267
+      targetPort: 3267
+  clusterIP: None

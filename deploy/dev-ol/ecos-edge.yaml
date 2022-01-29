@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  namespace: ecos
+  labels:
+    version: v1
+    app: ecos-edge-dev
+  name: ecos-edge-dev-v1
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      version: v1
+      app: ecos-edge-dev
+  template:
+    metadata:
+      labels:
+        version: v1
+        app: ecos-edge-dev
+      annotations:
+        logging.kubesphere.io/logsidecar-config: '{}'
+        cni.projectcalico.org/ipv4pools: '["default-ipv4-ippool"]'
+    spec:
+      containers:
+        - name: ecos-edge-node
+          imagePullPolicy: Always
+          image: 'harbor.sums.top/ecos/ecos-edge-node:SNAPSHOT-latest'
+          resources:
+            limits:
+              cpu: '2'
+              memory: 500Mi
+          ports:
+            - name: http-edge
+              protocol: TCP
+              containerPort: 3268
+            - name: grpc-edge
+              protocol: TCP
+              containerPort: 3267
+          volumeMounts:
+            - name: host-time
+              mountPath: /etc/localtime
+              readOnly: false
+            - readOnly: false
+              mountPath: /data/ecos
+              name: ecos-edge-storage
+      serviceAccount: default
+      initContainers: []
+      volumes:
+        - hostPath:
+            path: /etc/localtime
+            type: ''
+          name: host-time
+      imagePullSecrets:
+        - name: harbor-sums-top
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  serviceName: ecos-edge-dev
+  volumeClaimTemplates:
+    - spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 300Gi
+        storageClassName: rook-ceph-block
+      metadata:
+        name: ecos-edge-storage
+        namespace: ecos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: ecos
+  labels:
+    version: v1
+    app: ecos-edge-dev
+  annotations:
+    kubesphere.io/serviceType: statefulservice
+  name: ecos-edge-dev
+spec:
+  sessionAffinity: None
+  selector:
+    app: ecos-edge-dev
+  ports:
+    - name: http-edge
+      protocol: TCP
+      port: 3268
+      targetPort: 3268
+    - name: grpc-edge
+      protocol: TCP
+      port: 3267
+      targetPort: 3267
+  clusterIP: None

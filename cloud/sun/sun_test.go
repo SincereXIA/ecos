@@ -9,12 +9,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"testing"
+	"time"
 )
 
 func TestSun_MoonRegister(t *testing.T) {
 	rpc := messenger.NewRpcServer(3260)
 	NewSun(rpc)
 	go rpc.Run()
+	time.Sleep(time.Millisecond * 300)
 
 	conn, err := grpc.Dial("127.0.0.1:3260", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
