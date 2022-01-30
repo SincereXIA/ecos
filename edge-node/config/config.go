@@ -18,10 +18,11 @@ type MoonConf struct {
 
 type Config struct {
 	config.Config
-	SelfInfo *node.NodeInfo
-	RpcPort  uint64
-	HttpPort uint64
-	Moon     MoonConf
+	SelfInfo    *node.NodeInfo
+	RpcPort     uint64
+	HttpPort    uint64
+	Moon        MoonConf
+	StoragePath string
 }
 
 var DefaultConfig *Config
@@ -37,9 +38,10 @@ func init() {
 			RpcPort:  rpcPort,
 			Capacity: 0,
 		},
-		RpcPort:  rpcPort,
-		HttpPort: httpPort,
-		Moon:     MoonConf{SunAddr: ""},
+		RpcPort:     rpcPort,
+		HttpPort:    httpPort,
+		Moon:        MoonConf{SunAddr: ""},
+		StoragePath: "./ecos-data",
 	}
 }
 

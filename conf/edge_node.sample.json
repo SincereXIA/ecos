@@ -1,7 +1,6 @@
 {
   "SelfInfo": {
     "raft_id": 1,
-    "uuid": "9a393742-9b3b-47b7-bf38-367c66e64136",
     "rpc_port": 3267
   },
   "RpcPort": 3267,
@@ -9,5 +8,6 @@
   "Moon": {
     "SunAddr": "ecos-cloud-dev.ecos.svc.cluster.local:3267",
     "GroupInfo": {}
-  }
+  },
+  "StoragePath": "/data/ecos"
 }

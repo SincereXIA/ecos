@@ -112,3 +112,11 @@ func Write(conf interface{}) error {
 	}
 	return errors.New("config not found")
 }
+
+// WriteToPath write a config struct to confPath
+// the conf don't need to Register before
+func WriteToPath(conf interface{}, confPath string) error {
+	b, _ := json.Marshal(conf)
+	err := ioutil.WriteFile(confPath, b, 0644)
+	return err
+}
