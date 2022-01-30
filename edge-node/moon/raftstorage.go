@@ -26,13 +26,16 @@ type RaftStorage struct {
 	hardState pb.HardState
 	snapshot  pb.Snapshot
 	// ents[i] has raft log position i+snapshot.Metadata.Index
-	ents []pb.Entry
+	//ents []pb.Entry
 
-	db *leveldb.DB
+	dbPath string
+	entsdb *leveldb.DB
 }
 
 // NewMemoryStorage creates an empty MemoryStorage.
 func NewRaftStorage() *RaftStorage {
+	path :=
+	db, err := leveldb.OpenFile()
 	return &RaftStorage{
 		// When starting from scratch populate the list with a dummy entry at term zero.
 		ents: make([]pb.Entry, 1),
