@@ -16,6 +16,8 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/sincerexia/gocrush v0.0.0-20220213012034-a24f00a6eb8e
 	github.com/sirupsen/logrus v1.8.1
+	github.com/syndtr/goleveldb v1.0.0 // indirect
+	go.etcd.io/etcd v2.3.8+incompatible
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/wxnacy/wgo v1.0.4
