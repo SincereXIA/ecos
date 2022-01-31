@@ -27,7 +27,6 @@ type Config struct {
 	HttpPort    uint64
 	Moon        MoonConf
 	StoragePath string
-	Capacity    uint64
 }
 
 var DefaultConfig *Config
@@ -47,7 +46,6 @@ func init() {
 		HttpPort:    httpPort,
 		Moon:        MoonConf{SunAddr: ""},
 		StoragePath: "./ecos-data",
-		Capacity:    0,
 	}
 	//DefaultConfig.Capacity = common.GetAvailStorage(DefaultConfig.StoragePath)
 }
@@ -64,8 +62,8 @@ func InitConfig(conf *Config) error {
 	if err != nil {
 		return err
 	}
-	conf.Capacity = common.GetAvailStorage(conf.StoragePath)
-	if conf.Capacity == 0 {
+	conf.SelfInfo.Capacity = common.GetAvailStorage(conf.StoragePath)
+	if conf.SelfInfo.Capacity == 0 {
 		return errors.New("cannot write to storage path")
 	}
 
