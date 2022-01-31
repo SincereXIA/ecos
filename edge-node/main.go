@@ -38,6 +38,10 @@ func action(c *cli.Context) error {
 	config.Register(conf, confPath)
 	config.ReadAll()
 	_ = config.GetConf(conf)
+	err := moonConfig.InitConfig(conf)
+	if err != nil {
+		logger.Errorf("init config fail: %v", err)
+	}
 
 	// init moon node
 	logger.Infof("Start init moon node ...")

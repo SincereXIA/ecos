@@ -1,5 +1,15 @@
 # 开发日志
 
+
+## 2022/1/30
+
+- edge node 现在将生成的 uuid 以及其他配置信息持久化保存在 `$storagePath/config/edge_node.json`，
+node 重启时从之前保存的文件中再次读取，保证 node 身份信息一致，避免重分配 RaftID
+- sun 对已注册的 node 信息进行缓存，相同 uuid 再次注册时保证 RaftID 一致
+- 增加 `utils.common` 包，自动获取指定路径的可用存储容量
+- 调整 `EdgeNodeConfig`，加入 `storagePath`、 `Capacity` 配置字段
+- 修复 k8s 中的 moon 注册问题（edge Docker image 错误编译成了 cloud image）
+
 ## 2022/1/29
 
 - 打包 docker 镜像时，在镜像内加入默认 config 文件

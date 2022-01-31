@@ -46,4 +46,19 @@ func TestSun_MoonRegister(t *testing.T) {
 	assert.False(t, result1.HasLeader)
 	assert.True(t, result2.HasLeader)
 	assert.Equal(t, node1.Uuid, result2.GroupInfo.LeaderInfo.Uuid)
+	assert.NotEqual(t, result1.RaftId, result2.RaftId)
+
+	t.Run("Multi time Register", func(t *testing.T) {
+		node3 := node.NodeInfo{
+			RaftId:   0,
+			Uuid:     node1.Uuid,
+			IpAddr:   "127.0.0.1",
+			RpcPort:  3261,
+			Capacity: 0,
+		}
+		result1, err := c.MoonRegister(context.Background(), &node1)
+		result2, err := c.MoonRegister(context.Background(), &node3)
+		assert.Empty(t, err)
+		assert.Equal(t, result1.RaftId, result2.RaftId)
+	})
 }

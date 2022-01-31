@@ -25,3 +25,9 @@ go.sum
 
 # build dir
 build/
+
+# ecos data
+ecos-data/
+
+# config file in self machine
+conf/*.json
