@@ -17,6 +17,7 @@ type Sun struct {
 	groupInfo  *GroupInfo
 	lastRaftID uint64
 	mu         sync.Mutex
+	cachedInfo map[string]*node.NodeInfo //cache node info by uuid
 }
 
 type Server struct {
@@ -25,10 +26,6 @@ type Server struct {
 
 // MoonRegister give a Raft ID to a new edge node
 func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*RegisterResult, error) {
-
-	// Gen a new Raft ID
-	raftID := atomic.AddUint64(&s.lastRaftID, 1)
-	nodeInfo.RaftId = raftID
 	hasLeader := true
 
 	// Check Leader info
@@ -40,6 +37,21 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*Registe
 	}
 	s.mu.Unlock()
 
+	if info, ok := s.cachedInfo[nodeInfo.Uuid]; ok {
+		return &RegisterResult{
+			Result: &common.Result{
+				Status: common.Result_OK,
+			},
+			RaftId:    info.RaftId,
+			HasLeader: hasLeader,
+			GroupInfo: s.groupInfo,
+		}, nil
+	}
+
+	// Gen a new Raft ID
+	raftID := atomic.AddUint64(&s.lastRaftID, 1)
+	nodeInfo.RaftId = raftID
+
 	result := RegisterResult{
 		Result: &common.Result{
 			Status: common.Result_OK,
@@ -48,6 +60,8 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*Registe
 		HasLeader: hasLeader,
 		GroupInfo: s.groupInfo,
 	}
+
+	s.cachedInfo[nodeInfo.Uuid] = nodeInfo
 	return &result, nil
 }
 
@@ -75,6 +89,7 @@ func NewSun(rpc *messenger.RpcServer) *Sun {
 		},
 		lastRaftID: 0,
 		mu:         sync.Mutex{},
+		cachedInfo: map[string]*node.NodeInfo{},
 	}
 	RegisterSunServer(rpc, &sun)
 	return &sun

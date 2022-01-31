@@ -1,11 +1,13 @@
 package config
 
 import (
+	"ecos/utils/common"
 	"ecos/utils/logger"
 	"encoding/json"
 	"errors"
 	"github.com/mitchellh/copystructure"
 	"io/ioutil"
+	"path"
 	"reflect"
 )
 
@@ -95,6 +97,15 @@ func GetConf(conf interface{}) error {
 	return errors.New("config not found")
 }
 
+// GetDefaultConf set the default config value to conf interface
+// the conf interface must Register() before
+func GetDefaultConf(conf interface{}) error {
+	if c, ok := confDefaultMap[getConfType(conf)]; ok {
+		conf = c
+	}
+	return errors.New("config not found")
+}
+
 // ReadAll read all config file registered before,
 // and update configMap
 func ReadAll() {
@@ -116,7 +127,11 @@ func Write(conf interface{}) error {
 // WriteToPath write a config struct to confPath
 // the conf don't need to Register before
 func WriteToPath(conf interface{}, confPath string) error {
+	err := common.InitPath(path.Dir(confPath))
+	if err != nil {
+		return err
+	}
 	b, _ := json.Marshal(conf)
-	err := ioutil.WriteFile(confPath, b, 0644)
+	err = ioutil.WriteFile(confPath, b, 0644)
 	return err
 }

@@ -8,6 +8,8 @@ type Logger struct {
 func Infof(format string, args ...interface{}) {
 	log.Infof(format, args...)
 }
+
+// Errorf Print error message then EXIT
 func Errorf(format string, args ...interface{}) {
 	log.Errorf("ERROR! "+format, args...)
 }
