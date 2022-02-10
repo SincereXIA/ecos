@@ -5,6 +5,7 @@ import (
 	"ecos/utils/logger"
 	"encoding/json"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/coreos/etcd/snap"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -19,23 +20,21 @@ type Storage interface {
 	// DBFilePath returns the file path of database snapshot saved with given
 	// id.
 	// DBFilePath(id uint64) (string, error)
+	// Close closes the Storage and performs finalization.
+	Close() error
 }
 
 type storage struct {
-	dataDir string
+	*leveldb.DB
+	*snap.Snapshotter
 }
 
 func (s *storage) Save(st raftpb.HardState, ents []raftpb.Entry) error {
-	db, err := leveldb.OpenFile(s.dataDir, nil)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
 	hardstateData, err := json.Marshal(st)
 	if err != nil {
 		return err
 	}
-	err = db.Put([]byte("hardstate"), hardstateData, nil)
+	err = s.Put([]byte("hardstate"), hardstateData, nil)
 	if err != nil {
 		return err
 	}
@@ -43,7 +42,7 @@ func (s *storage) Save(st raftpb.HardState, ents []raftpb.Entry) error {
 	if err != nil {
 		return err
 	}
-	err = db.Put([]byte("ents"), entsData, nil)
+	err = s.Put([]byte("ents"), entsData, nil)
 	if err != nil {
 		return err
 	}
@@ -51,16 +50,11 @@ func (s *storage) Save(st raftpb.HardState, ents []raftpb.Entry) error {
 }
 
 func (s *storage) SaveSnap(snap raftpb.Snapshot) error {
-	db, err := leveldb.OpenFile(s.dataDir, nil)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
 	snapData, err := json.Marshal(snap)
 	if err != nil {
 		return err
 	}
-	err = db.Put([]byte("snapshot"), snapData, nil)
+	err = s.Put([]byte("snapshot"), snapData, nil)
 	if err != nil {
 		return err
 	}
@@ -68,24 +62,19 @@ func (s *storage) SaveSnap(snap raftpb.Snapshot) error {
 }
 
 func (s *storage) SaveNodeInfo(nodeInfo node.MemoryNodeInfoStorage) error {
-	db, err := leveldb.OpenFile(s.dataDir, nil)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
 	nodeInfoData, err := json.Marshal(nodeInfo)
 	if err != nil {
 		return nil
 	}
-	err = db.Put([]byte("nodeinfo"), nodeInfoData, nil)
+	err = s.Put([]byte("nodeinfo"), nodeInfoData, nil)
 	if err != nil {
 		return nil
 	}
 	return nil
 }
 
-func NewStorage(dataDir string) Storage {
-	return &storage{dataDir}
+func NewStorage(db *leveldb.DB, s *snap.Snapshotter) Storage {
+	return &storage{db, s}
 }
 
 func ReadSnap(dataBaseDir string) (snap raftpb.Snapshot) {
@@ -134,3 +123,4 @@ func ReadNodeInfo(dataBaseDir string) (nodeInfo node.MemoryNodeInfoStorage) {
 	json.Unmarshal(nodeInfoData, &nodeInfo)
 	return
 }
+
