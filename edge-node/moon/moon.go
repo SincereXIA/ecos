@@ -24,7 +24,8 @@ type Moon struct {
 	cancel      context.CancelFunc
 	InfoStorage node.InfoStorage
 	raftStorage *raft.MemoryStorage //raft需要的内存结构
-	cfg         *raft.Config        //raft需要的配置
+	storage     Storage
+	cfg         *raft.Config //raft需要的配置
 	raft        raft.Node
 	ticker      <-chan time.Time //定时器，提供周期时钟源和超时触发能力
 
