@@ -160,7 +160,8 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 	storage := raft.NewMemoryStorage()
 	infoStorage := node.NewMemoryNodeInfoStorage()
 	raftChan := make(chan raftpb.Message)
-
+	storagePath := "../../ecos-data/db/"
+	stableStorage := NewStorage(storagePath)
 	m := &Moon{
 		id:          0, // set raft id after register
 		selfInfo:    selfInfo,
@@ -168,6 +169,7 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 		cancel:      cancel,
 		InfoStorage: infoStorage,
 		raftStorage: storage,
+		storage:     stableStorage,
 		cfg:         nil, // set raft cfg after register
 		ticker:      time.Tick(time.Millisecond * 100),
 		raftChan:    raftChan,
@@ -292,6 +294,13 @@ func (m *Moon) Run() {
 		case <-m.ticker:
 			m.raft.Tick()
 		case rd := <-m.raft.Ready():
+			// 将HardState，entries写入持久化存储中
+			m.storage.Save(rd.HardState, rd.Entries)
+			//if !raft.IsEmptySnap(rd.Snapshot) {
+			//	// 如果快照数据不为空，也需要保存快照数据到持久化存储中
+			//	m.storage.SaveSnap(rd.Snapshot)
+			//	m.raftStorage.ApplySnapshot(rd.Snapshot)
+			//}
 			_ = m.raftStorage.Append(rd.Entries)
 			//go n.send(rd.Messages)
 			go m.sendByRpc(rd.Messages)

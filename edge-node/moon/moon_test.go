@@ -7,6 +7,7 @@ import (
 	"ecos/messenger"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -99,6 +100,10 @@ func TestRaft(t *testing.T) {
 	rpcServer2.Stop()
 	rpcServer3.Stop()
 	rpcServer4.Stop()
+	for i := 1; i < 4; i++ {
+		ss, _ := nodes[i].raftStorage.Snapshot()
+		fmt.Printf("snapshot %v\n", ss)
+	}
 }
 
 func TestMoon_Register(t *testing.T) {
