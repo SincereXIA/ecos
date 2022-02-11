@@ -1,1 +1,1 @@
-{"SelfInfo":{"raft_id":1,"uuid":"c7a159f7-4bdc-4491-b95e-4fa4fb16229b","ip_addr":"10.250.250.14","rpc_port":3267},"RpcPort":3267,"HttpPort":3268,"Moon":{"SunAddr":"","GroupInfo":{}},"StoragePath":"./ecos-data","Capacity":0}
+{"SelfInfo":{"raft_id":1,"uuid":"d46428a5-6037-4c4e-b3b2-7e60aec294d6","ip_addr":"10.250.250.14","rpc_port":3267},"RpcPort":3267,"HttpPort":3268,"Moon":{"SunAddr":"","GroupInfo":{}},"StoragePath":"./ecos-data","Capacity":0}

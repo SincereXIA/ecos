@@ -296,11 +296,11 @@ func (m *Moon) Run() {
 		case rd := <-m.raft.Ready():
 			// 将HardState，entries写入持久化存储中
 			m.storage.Save(rd.HardState, rd.Entries)
-			if !raft.IsEmptySnap(rd.Snapshot) {
-				// 如果快照数据不为空，也需要保存快照数据到持久化存储中
-				m.storage.SaveSnap(rd.Snapshot)
-				m.raftStorage.ApplySnapshot(rd.Snapshot)
-			}
+			//if !raft.IsEmptySnap(rd.Snapshot) {
+			//	// 如果快照数据不为空，也需要保存快照数据到持久化存储中
+			//	m.storage.SaveSnap(rd.Snapshot)
+			//	m.raftStorage.ApplySnapshot(rd.Snapshot)
+			//}
 			_ = m.raftStorage.Append(rd.Entries)
 			//go n.send(rd.Messages)
 			go m.sendByRpc(rd.Messages)
