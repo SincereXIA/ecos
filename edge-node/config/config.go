@@ -1,7 +1,6 @@
 package config
 
 import (
-	"ecos/cloud/sun"
 	"ecos/edge-node/node"
 	"ecos/utils/common"
 	"ecos/utils/config"
@@ -17,7 +16,7 @@ const httpPort = 3268
 
 type MoonConf struct {
 	SunAddr   string
-	GroupInfo sun.GroupInfo
+	GroupInfo node.GroupInfo
 }
 
 type Config struct {

@@ -145,7 +145,7 @@ func (m *Moon) Register(sunAddr string) error {
 		}
 	}
 
-	for _, nodeInfo := range result.GroupInfo.GroupInfo {
+	for _, nodeInfo := range result.GroupInfo.NodesInfo {
 		_ = m.InfoStorage.UpdateNodeInfo(nodeInfo)
 	}
 

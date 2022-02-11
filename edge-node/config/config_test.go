@@ -14,7 +14,7 @@ func TestEdgeNodeConfig(t *testing.T) {
 }
 
 func TestGetAvailStorage(t *testing.T) {
-	path := "/home"
+	path := "."
 	size := common.GetAvailStorage(path)
 	t.Logf("Available size: %v", size)
 	assert.True(t, size > 0)

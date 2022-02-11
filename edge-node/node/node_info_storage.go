@@ -1,6 +1,8 @@
 package node
 
-import "errors"
+import (
+	"errors"
+)
 
 type NodeID uint64
 
@@ -9,6 +11,7 @@ type NodeInfoStorage interface {
 	DeleteNodeInfo(nodeId NodeID) error
 	GetNodeInfo(nodeId NodeID) (*NodeInfo, error)
 	ListAllNodeInfo() map[NodeID]NodeInfo
+	// GetGroupInfo() sun.GroupInfo
 }
 
 type MemoryNodeInfoStorage struct {
