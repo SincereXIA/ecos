@@ -21,7 +21,7 @@ type Moon struct {
 	id          uint64 //raft节点的id
 	selfInfo    *node.NodeInfo
 	ctx         context.Context //context
-	InfoStorage node.NodeInfoStorage
+	InfoStorage node.InfoStorage
 	raftStorage *raft.MemoryStorage //raft需要的内存结构
 	cfg         *raft.Config        //raft需要的配置
 	raft        raft.Node
@@ -62,7 +62,7 @@ func (m *Moon) AddNodeToGroup(_ context.Context, info *node.NodeInfo) (*AddNodeR
 	logger.Infof("send propose node info success, start wait")
 	isReady := false
 	for i := 0; i < 10; i++ {
-		nodeInfo, err := m.InfoStorage.GetNodeInfo(node.NodeID(info.RaftId))
+		nodeInfo, err := m.InfoStorage.GetNodeInfo(node.ID(info.RaftId))
 		if err != nil || info.Uuid != nodeInfo.Uuid {
 			time.Sleep(1 * time.Second)
 		} else {
@@ -145,7 +145,7 @@ func (m *Moon) Register(sunAddr string) error {
 		}
 	}
 
-	for _, nodeInfo := range result.GroupInfo.GroupInfo {
+	for _, nodeInfo := range result.GroupInfo.NodesInfo {
 		_ = m.InfoStorage.UpdateNodeInfo(nodeInfo)
 	}
 
@@ -202,7 +202,7 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 	} else {
 		logger.Infof("Node: %v Get groupInfo form param", m.id)
 		for _, nodeInfo := range groupInfo {
-			info, err := infoStorage.GetNodeInfo(node.NodeID(nodeInfo.RaftId))
+			info, err := infoStorage.GetNodeInfo(node.ID(nodeInfo.RaftId))
 			if err != nil || info == nil { // node info not in InfoStorage
 				_ = infoStorage.UpdateNodeInfo(nodeInfo)
 			}
@@ -238,7 +238,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 	for _, message := range messages {
 		glog.Infof(raft.DescribeMessage(message, nil))
 		glog.Infof("%d send to %v, type %v", m.id, message, message.Type)
-		nodeId := node.NodeID(message.To)
+		nodeId := node.ID(message.To)
 		nodeInfo, err := m.InfoStorage.GetNodeInfo(nodeId)
 		port := strconv.FormatUint(nodeInfo.RpcPort, 10)
 		conn, err := grpc.Dial(nodeInfo.IpAddr+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))

@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 type SunClient interface {
 	MoonRegister(ctx context.Context, in *node.NodeInfo, opts ...grpc.CallOption) (*RegisterResult, error)
 	GetLeaderInfo(ctx context.Context, in *node.NodeInfo, opts ...grpc.CallOption) (*node.NodeInfo, error)
-	ReportGroupInfo(ctx context.Context, in *GroupInfo, opts ...grpc.CallOption) (*common.Result, error)
+	ReportGroupInfo(ctx context.Context, in *node.GroupInfo, opts ...grpc.CallOption) (*common.Result, error)
 }
 
 type sunClient struct {
@@ -51,7 +51,7 @@ func (c *sunClient) GetLeaderInfo(ctx context.Context, in *node.NodeInfo, opts .
 	return out, nil
 }
 
-func (c *sunClient) ReportGroupInfo(ctx context.Context, in *GroupInfo, opts ...grpc.CallOption) (*common.Result, error) {
+func (c *sunClient) ReportGroupInfo(ctx context.Context, in *node.GroupInfo, opts ...grpc.CallOption) (*common.Result, error) {
 	out := new(common.Result)
 	err := c.cc.Invoke(ctx, "/messenger.Sun/ReportGroupInfo", in, out, opts...)
 	if err != nil {
@@ -66,7 +66,7 @@ func (c *sunClient) ReportGroupInfo(ctx context.Context, in *GroupInfo, opts ...
 type SunServer interface {
 	MoonRegister(context.Context, *node.NodeInfo) (*RegisterResult, error)
 	GetLeaderInfo(context.Context, *node.NodeInfo) (*node.NodeInfo, error)
-	ReportGroupInfo(context.Context, *GroupInfo) (*common.Result, error)
+	ReportGroupInfo(context.Context, *node.GroupInfo) (*common.Result, error)
 	mustEmbedUnimplementedSunServer()
 }
 
@@ -80,7 +80,7 @@ func (UnimplementedSunServer) MoonRegister(context.Context, *node.NodeInfo) (*Re
 func (UnimplementedSunServer) GetLeaderInfo(context.Context, *node.NodeInfo) (*node.NodeInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLeaderInfo not implemented")
 }
-func (UnimplementedSunServer) ReportGroupInfo(context.Context, *GroupInfo) (*common.Result, error) {
+func (UnimplementedSunServer) ReportGroupInfo(context.Context, *node.GroupInfo) (*common.Result, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReportGroupInfo not implemented")
 }
 func (UnimplementedSunServer) mustEmbedUnimplementedSunServer() {}
@@ -133,7 +133,7 @@ func _Sun_GetLeaderInfo_Handler(srv interface{}, ctx context.Context, dec func(i
 }
 
 func _Sun_ReportGroupInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GroupInfo)
+	in := new(node.GroupInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func _Sun_ReportGroupInfo_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: "/messenger.Sun/ReportGroupInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SunServer).ReportGroupInfo(ctx, req.(*GroupInfo))
+		return srv.(SunServer).ReportGroupInfo(ctx, req.(*node.GroupInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }

@@ -2,7 +2,7 @@ syntax = "proto3";
 package messenger;
 
 import "raft/raftpb/raft.proto";
-import "node-info.proto";
+import "node_info.proto";
 import "common.proto";
 
 option go_package = "ecos/edge-node/moon";

@@ -14,7 +14,7 @@ type Sun struct {
 	rpc *messenger.RpcServer
 	Server
 	leaderInfo *node.NodeInfo
-	groupInfo  *GroupInfo
+	groupInfo  *node.GroupInfo
 	lastRaftID uint64
 	mu         sync.Mutex
 	cachedInfo map[string]*node.NodeInfo //cache node info by uuid
@@ -69,7 +69,7 @@ func (s *Sun) GetLeaderInfo(_ context.Context, nodeInfo *node.NodeInfo) (*node.N
 	return s.groupInfo.LeaderInfo, nil
 }
 
-func (s *Sun) ReportGroupInfo(_ context.Context, groupInfo *GroupInfo) (*common.Result, error) {
+func (s *Sun) ReportGroupInfo(_ context.Context, groupInfo *node.GroupInfo) (*common.Result, error) {
 	s.mu.Lock()
 	s.groupInfo = groupInfo
 	s.mu.Unlock()
@@ -83,9 +83,9 @@ func NewSun(rpc *messenger.RpcServer) *Sun {
 	sun := Sun{
 		rpc:        rpc,
 		leaderInfo: nil,
-		groupInfo: &GroupInfo{
+		groupInfo: &node.GroupInfo{
 			LeaderInfo: nil,
-			GroupInfo:  nil,
+			NodesInfo:  nil,
 		},
 		lastRaftID: 0,
 		mu:         sync.Mutex{},

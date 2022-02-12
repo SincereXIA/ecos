@@ -1,7 +1,8 @@
 syntax = "proto3";
 package messenger;
 
-import "node-info.proto";
+import "node_info.proto";
+import "group_info.proto";
 import "common.proto";
 
 option go_package = "ecos/cloud/sun";
@@ -13,10 +14,6 @@ service Sun {
   rpc ReportGroupInfo(GroupInfo) returns (Result) {}
 }
 
-message GroupInfo {
-  NodeInfo leader_info = 1;
-  repeated NodeInfo group_info = 2;
-}
 
 message RegisterResult {
   Result result = 1;
