@@ -4,13 +4,18 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/config"
 	"go.etcd.io/etcd/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
 func TestEdgeNodeConfig(t *testing.T) {
 	confPath := "./edge_node.json"
 	config.Register(DefaultConfig, confPath)
-	config.Write(DefaultConfig)
+	err := config.Write(DefaultConfig)
+	if err != nil {
+		t.Errorf("write config error: %v", err)
+	}
+	_ = os.Remove(confPath)
 }
 
 func TestGetAvailStorage(t *testing.T) {
