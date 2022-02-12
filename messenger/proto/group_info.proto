@@ -1,7 +1,7 @@
 syntax = "proto3";
 package messenger;
 
-import "node-info.proto";
+import "node_info.proto";
 
 option go_package = "ecos/edge-node/node";
 
