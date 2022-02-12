@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package messenger;
 
-option go_package = "ecos/messenger";
+option go_package = "ecos/client";
 
 message Block {
   repeated bytes data = 1;
