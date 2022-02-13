@@ -5,6 +5,10 @@ import log "github.com/sirupsen/logrus"
 type Logger struct {
 }
 
+func Tracef(format string, args ...interface{}) {
+	log.Tracef(format, args...)
+}
+
 func Infof(format string, args ...interface{}) {
 	log.Infof(format, args...)
 }

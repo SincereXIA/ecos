@@ -257,7 +257,6 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		_, err = c.SendRaftMessage(context.Background(), &message)
 		if err != nil {
 			logger.Errorf("could not send raft message: %v", err)
-			return
 		}
 		//logger.Infof("Send raft message to: %v success!\n", nodeId)
 	}
