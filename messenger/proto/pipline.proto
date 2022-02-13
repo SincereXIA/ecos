@@ -1,0 +1,15 @@
+syntax = "proto3";
+package messenger;
+
+import "common.proto";
+option go_package = "ecos/edge-node/pipline";
+
+message Pipline {
+  uint64 pg_id = 1;
+  repeated uint64 raft_id = 2;
+  enum SyncType {
+    RAFT = 0;
+    STREAM = 1;
+  }
+  SyncType sync_type = 3;
+}
