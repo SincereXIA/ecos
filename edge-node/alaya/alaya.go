@@ -13,8 +13,14 @@ type Alaya struct {
 	UnimplementedAlayaServer
 }
 
-func (a *Alaya) RecordObjectMeta(context.Context, *ObjectMeta) (*common.Result, error) {
+func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *ObjectMeta) (*common.Result, error) {
 	// TODO: 处理收到的元数据，转发给同组 Node
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	return nil, nil
 }
 
