@@ -8,6 +8,24 @@ service Gaia {
   rpc UploadBlockData(stream Chunk) returns (Result) {}
 }
 
+message UploadBlockRequest {
+  oneof type {
+    Chunk chunk= 1;
+    ControlMessage message = 2;
+  }
+}
+
+message ControlMessage {
+  enum Code {
+    BEGIN = 0;
+    EOF = 1;
+  }
+  Code code = 1;
+  string object_id = 2;
+  string block_id = 3;
+  string pg_id = 4;
+}
+
 message Chunk {
   bytes content = 1;
   bool no_more = 2;

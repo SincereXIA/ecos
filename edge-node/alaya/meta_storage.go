@@ -5,4 +5,5 @@ package alaya
 type MetaStorage interface {
 	RecordMeta(meta *ObjectMeta) error
 	GetMeta(objID string) (meta *ObjectMeta, err error)
+	GetMetaInPG()
 }

@@ -2,10 +2,12 @@ syntax = "proto3";
 package messenger;
 
 import "common.proto";
+import "raft/raftpb/raft.proto";
 option go_package = "ecos/edge-node/alaya";
 
 service Alaya {
   rpc RecordObjectMeta(ObjectMeta) returns (Result) {}
+  rpc SendRaftMessage (PGRaftMessage) returns (PGRaftMessage) {}
 }
 
 message MetaData {
@@ -23,4 +25,9 @@ message ObjectMeta {
 message BlockInfo {
   string block_id = 1;
   uint64 size = 2;
+}
+
+message PGRaftMessage {
+  uint64 pg_id = 1;
+  raftpb.Message message = 2;
 }
