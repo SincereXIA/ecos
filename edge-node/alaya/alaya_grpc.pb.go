@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AlayaClient interface {
 	RecordObjectMeta(ctx context.Context, in *ObjectMeta, opts ...grpc.CallOption) (*common.Result, error)
+	SendRaftMessage(ctx context.Context, in *PGRaftMessage, opts ...grpc.CallOption) (*PGRaftMessage, error)
 }
 
 type alayaClient struct {
@@ -39,11 +40,21 @@ func (c *alayaClient) RecordObjectMeta(ctx context.Context, in *ObjectMeta, opts
 	return out, nil
 }
 
+func (c *alayaClient) SendRaftMessage(ctx context.Context, in *PGRaftMessage, opts ...grpc.CallOption) (*PGRaftMessage, error) {
+	out := new(PGRaftMessage)
+	err := c.cc.Invoke(ctx, "/messenger.Alaya/SendRaftMessage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AlayaServer is the server API for Alaya service.
 // All implementations must embed UnimplementedAlayaServer
 // for forward compatibility
 type AlayaServer interface {
 	RecordObjectMeta(context.Context, *ObjectMeta) (*common.Result, error)
+	SendRaftMessage(context.Context, *PGRaftMessage) (*PGRaftMessage, error)
 	mustEmbedUnimplementedAlayaServer()
 }
 
@@ -53,6 +64,9 @@ type UnimplementedAlayaServer struct {
 
 func (UnimplementedAlayaServer) RecordObjectMeta(context.Context, *ObjectMeta) (*common.Result, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RecordObjectMeta not implemented")
+}
+func (UnimplementedAlayaServer) SendRaftMessage(context.Context, *PGRaftMessage) (*PGRaftMessage, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendRaftMessage not implemented")
 }
 func (UnimplementedAlayaServer) mustEmbedUnimplementedAlayaServer() {}
 
@@ -85,6 +99,24 @@ func _Alaya_RecordObjectMeta_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Alaya_SendRaftMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PGRaftMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AlayaServer).SendRaftMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/messenger.Alaya/SendRaftMessage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AlayaServer).SendRaftMessage(ctx, req.(*PGRaftMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Alaya_ServiceDesc is the grpc.ServiceDesc for Alaya service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -95,6 +127,10 @@ var Alaya_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordObjectMeta",
 			Handler:    _Alaya_RecordObjectMeta_Handler,
+		},
+		{
+			MethodName: "SendRaftMessage",
+			Handler:    _Alaya_SendRaftMessage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
