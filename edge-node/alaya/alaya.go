@@ -2,6 +2,8 @@ package alaya
 
 import (
 	"context"
+	"ecos/edge-node/node"
+	"ecos/edge-node/pipline"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/errno"
@@ -15,17 +17,22 @@ type Alaya struct {
 	UnimplementedAlayaServer
 
 	PGMessageChans map[uint64]chan raftpb.Message
+	PGRaftNode     map[uint64]*Raft
 }
 
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *ObjectMeta) (*common.Result, error) {
-	// TODO: 处理收到的元数据，转发给同组 Node
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
+		pgID := meta.PgId
+		a.PGRaftNode[pgID].ProposeObjectMeta(meta)
+		// TODO: 检查元数据是否同步成功
 	}
 
-	return nil, nil
+	return &common.Result{
+		Status: common.Result_OK,
+	}, nil
 }
 
 func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (*PGRaftMessage, error) {
@@ -40,8 +47,14 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	return nil, errno.PGNotExist
 }
 
-func NewAlaya(rpcServer *messenger.RpcServer) *Alaya {
+func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, rpcServer *messenger.RpcServer, piplines []*pipline.Pipline) *Alaya {
 	a := Alaya{}
+	for _, p := range piplines {
+		pgID := p.PgId
+		a.PGMessageChans[pgID] = make(chan raftpb.Message)
+		a.PGRaftNode[pgID] = NewAlayaRaft(selfInfo.RaftId, pgID, p, infoStorage, a.PGMessageChans[pgID])
+		a.PGRaftNode[pgID].Run()
+	}
 	RegisterAlayaServer(rpcServer, &a)
 	return &a
 }
