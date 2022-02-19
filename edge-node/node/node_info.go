@@ -17,64 +17,78 @@ func NewSelfInfo(raftID uint64, ipaddr string, rpcPort uint64) *NodeInfo {
 	return selfInfo
 }
 
-type Node struct {
-	NodeInfo
+type EcosNode struct {
+	*NodeInfo
 	Type     int
 	Failed   bool
 	Selector gocrush.Selector
+	Root     *EcosNode
+	Children []gocrush.Node
 }
 
-var rootNode = &Node{
-	NodeInfo: NodeInfo{
-		RaftId:  0,
-		Uuid:    uuid.New().String(),
-		IpAddr:  "0.0.0.0",
-		RpcPort: 0,
-	},
-	Type:     1,
-	Failed:   false,
-	Selector: nil,
+const (
+	RootNodeType int = iota
+	LeafNodeType
+)
+
+func NewRootNode() *EcosNode {
+	// defaultRootNode is used as the default root of implicit condition
+	return &EcosNode{
+		NodeInfo: &NodeInfo{
+			RaftId:  0,
+			Uuid:    uuid.New().String(),
+			IpAddr:  "0.0.0.0",
+			RpcPort: 0,
+		},
+		Type:   RootNodeType,
+		Failed: false,
+	}
 }
 
-func (x *Node) GetChildren() []gocrush.Node {
-	return nil
+func (x *EcosNode) GetChildren() []gocrush.Node {
+	return x.Children
 }
 
-func (x *Node) GetType() int {
+func (x *EcosNode) GetType() int {
 	return 1
 }
 
-func (x *Node) GetWeight() int64 {
+func (x *EcosNode) GetWeight() int64 {
 	return int64(x.Capacity)
 }
 
-func (x *Node) GetId() string {
+func (x *EcosNode) GetId() string {
 	return x.GetUuid()
 }
 
-func (x *Node) IsFailed() bool {
+func (x *EcosNode) IsFailed() bool {
 	return x.Failed
 }
 
-func (x *Node) GetSelector() gocrush.Selector {
+func (x *EcosNode) GetSelector() gocrush.Selector {
 	return x.Selector
 }
 
-func (x *Node) SetSelector(selector gocrush.Selector) {
+func (x *EcosNode) SetSelector(selector gocrush.Selector) {
 	x.Selector = selector
 }
 
-func (x *Node) GetParent() gocrush.Node {
-	if x == rootNode {
+func (x *EcosNode) GetParent() gocrush.Node {
+	if x == x.Root {
 		return nil
 	} else {
-		return rootNode
+		return x.Root
 	}
 }
-func (x *Node) IsLeaf() bool {
-	return x != rootNode
+
+func (x *EcosNode) IsLeaf() bool {
+	return x != x.Root
 }
 
-func (x *Node) Select(input int64, round int64) gocrush.Node {
+func (x *EcosNode) Select(input int64, round int64) gocrush.Node {
 	return x.GetSelector().Select(input, round)
+}
+
+func (x *EcosNode) GetRaftId() uint64 {
+	return x.RaftId
 }
