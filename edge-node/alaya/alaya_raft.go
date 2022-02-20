@@ -3,7 +3,7 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/node"
-	"ecos/edge-node/pipline"
+	"ecos/edge-node/pipeline"
 	"ecos/utils/logger"
 	"github.com/coreos/etcd/raft/raftpb"
 	"go.etcd.io/etcd/raft"
@@ -28,7 +28,7 @@ type Raft struct {
 	metaStorage MetaStorage
 }
 
-func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipline.Pipline,
+func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline,
 	infoStorage node.InfoStorage,
 	raftChan chan raftpb.Message) *Raft {
 

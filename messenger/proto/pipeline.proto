@@ -2,9 +2,9 @@ syntax = "proto3";
 package messenger;
 
 import "common.proto";
-option go_package = "ecos/edge-node/pipline";
+option go_package = "ecos/edge-node/pipeline";
 
-message Pipline {
+message Pipeline {
   uint64 pg_id = 1;
   repeated uint64 raft_id = 2;
   enum SyncType {
