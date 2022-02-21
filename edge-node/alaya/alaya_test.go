@@ -33,7 +33,7 @@ func TestNewAlaya(t *testing.T) {
 			RaftId:   uint64(i) + 1,
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",
-			RpcPort:  uint64(32671 + i),
+			RpcPort:  uint64(32771 + i),
 			Capacity: 1,
 		}
 		infoStorage.UpdateNodeInfo(&info)
