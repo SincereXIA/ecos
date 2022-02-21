@@ -17,6 +17,7 @@ import (
 type Raft struct {
 	pgID        uint64
 	ctx         context.Context //context
+	cancel      context.CancelFunc
 	InfoStorage node.InfoStorage
 	raftStorage *raft.MemoryStorage //raft需要的内存结构
 	raftCfg     *raft.Config        //raft需要的配置
@@ -32,12 +33,13 @@ func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline,
 	infoStorage node.InfoStorage, metaStorage MetaStorage,
 	raftChan chan raftpb.Message) *Raft {
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	raftStorage := raft.NewMemoryStorage()
 
 	r := &Raft{
 		pgID:        pgID,
 		ctx:         ctx,
+		cancel:      cancel,
 		InfoStorage: infoStorage,
 		raftStorage: raftStorage,
 		raftCfg: &raft.Config{
@@ -87,6 +89,10 @@ func (r *Raft) Run() {
 			_ = r.raft.Step(r.ctx, message)
 		}
 	}
+}
+
+func (r *Raft) Stop() {
+	r.cancel()
 }
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {

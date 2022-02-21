@@ -65,7 +65,7 @@ func TestNewAlaya(t *testing.T) {
 
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]
-		a.printPiplineInfo()
+		a.printPipelineInfo()
 	}
 
 	a := alayas[pipelines[0].RaftId[0]-1]

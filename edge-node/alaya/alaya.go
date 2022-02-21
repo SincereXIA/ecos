@@ -18,10 +18,14 @@ import (
 type Alaya struct {
 	UnimplementedAlayaServer
 
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	NodeID         uint64
 	PGMessageChans map[uint64]chan raftpb.Message
 	PGRaftNode     map[uint64]*Raft
 
+	InfoStorage node.InfoStorage
 	MetaStorage MetaStorage
 }
 
@@ -52,16 +56,49 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	return nil, errno.PGNotExist
 }
 
+func (a *Alaya) stop() {
+	a.cancel()
+}
+
+// ApplyNewPipelines use new pipelines info to change raft nodes in Alaya
+// pipelines must in order (from 1 to n)
+func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline) {
+	// Delete raft node not in new pipelines
+	for pgID, _ := range a.PGRaftNode {
+		if -1 == arrays.Contains(pipelines[pgID-1], a.NodeID) {
+			delete(a.PGRaftNode, pgID)
+			delete(a.PGMessageChans, pgID)
+		}
+	}
+	// Add raft node new in pipelines
+	for _, p := range pipelines {
+		if -1 == arrays.Contains(p.RaftId, a.NodeID) { // pass when node not in pipline
+			continue
+		}
+		pgID := p.PgId
+		if _, ok := a.PGMessageChans[pgID]; ok {
+			continue // raft node already exist
+		}
+		// Add new raft node
+		a.PGMessageChans[pgID] = make(chan raftpb.Message)
+		a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, a.InfoStorage, a.MetaStorage, a.PGMessageChans[pgID])
+	}
+}
+
 func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage MetaStorage,
-	rpcServer *messenger.RpcServer, piplines []*pipeline.Pipeline) *Alaya {
+	rpcServer *messenger.RpcServer, pipelines []*pipeline.Pipeline) *Alaya {
+	ctx, cancel := context.WithCancel(context.Background())
 	a := Alaya{
+		ctx:            ctx,
+		cancel:         cancel,
 		PGMessageChans: make(map[uint64]chan raftpb.Message),
 		PGRaftNode:     make(map[uint64]*Raft),
 		NodeID:         selfInfo.RaftId,
+		InfoStorage:    infoStorage,
 		MetaStorage:    metaStorage,
 	}
 	RegisterAlayaServer(rpcServer, &a)
-	for _, p := range piplines {
+	for _, p := range pipelines {
 		if -1 == arrays.Contains(p.RaftId, selfInfo.RaftId) { // pass when node not in pipline
 			continue
 		}
@@ -78,7 +115,7 @@ func (a *Alaya) Run() {
 	}
 }
 
-func (a *Alaya) printPiplineInfo() {
+func (a *Alaya) printPipelineInfo() {
 	logger.Infof("AlayaID: %v", a.NodeID)
 	for pgID, raftNode := range a.PGRaftNode {
 		logger.Infof("PGID: %v, leader: %v", pgID, raftNode.raft.Status().Lead)
