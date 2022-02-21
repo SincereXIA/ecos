@@ -1,9 +1,14 @@
 package alaya
 
 import (
+	"ecos/edge-node/node"
+	"ecos/edge-node/pipeline"
+	"ecos/messenger"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
+	"time"
 )
 import "github.com/sincerexia/gocrush"
 
@@ -14,6 +19,52 @@ const (
 	NODE        = 3
 	DISK        = 4
 )
+
+func TestNewAlaya(t *testing.T) {
+	infoStorage := node.NewMemoryNodeInfoStorage()
+	groupInfo := node.GroupInfo{
+		Term:            1,
+		LeaderInfo:      nil,
+		NodesInfo:       []*node.NodeInfo{},
+		UpdateTimestamp: uint64(time.Now().Unix()),
+	}
+	for i := 0; i < 9; i++ {
+		info := node.NodeInfo{
+			RaftId:   uint64(i) + 1,
+			Uuid:     uuid.New().String(),
+			IpAddr:   "127.0.0.1",
+			RpcPort:  uint64(32771 + i),
+			Capacity: 1,
+		}
+		infoStorage.UpdateNodeInfo(&info)
+		groupInfo.NodesInfo = append(groupInfo.NodesInfo, &info)
+	}
+	pipelines := pipeline.GenPipelines(&groupInfo, 9, 3)
+	var rpcServers []messenger.RpcServer
+	for _, info := range groupInfo.NodesInfo {
+		server := messenger.NewRpcServer(info.RpcPort)
+		rpcServers = append(rpcServers, *server)
+	}
+	var alayas []*Alaya
+	for i := 0; i < 9; i++ { // for each node
+		info := groupInfo.NodesInfo[i]
+		a := NewAlaya(info, infoStorage, &rpcServers[i], pipelines)
+		alayas = append(alayas, a)
+		server := rpcServers[i]
+		go server.Run()
+	}
+	t.Log("Alayas init done, start run")
+	for i := 0; i < 9; i++ {
+		a := alayas[i]
+		a.Run()
+	}
+	time.Sleep(time.Second * 5)
+
+	for i := 0; i < 9; i++ { // for each node
+		a := alayas[i]
+		a.printPiplineInfo()
+	}
+}
 
 func TestAlaya_RecordObjectMeta(t *testing.T) {
 	tree := makeStrawTree()
