@@ -1,6 +1,7 @@
 package alaya
 
 import (
+	"context"
 	"ecos/edge-node/node"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
@@ -45,10 +46,12 @@ func TestNewAlaya(t *testing.T) {
 		server := messenger.NewRpcServer(info.RpcPort)
 		rpcServers = append(rpcServers, *server)
 	}
+
 	var alayas []*Alaya
 	for i := 0; i < 9; i++ { // for each node
 		info := groupInfo.NodesInfo[i]
-		a := NewAlaya(info, infoStorage, &rpcServers[i], pipelines)
+		metaStorage := NewMemoryMetaStorage()
+		a := NewAlaya(info, infoStorage, metaStorage, &rpcServers[i], pipelines)
 		alayas = append(alayas, a)
 		server := rpcServers[i]
 		go server.Run()
@@ -62,8 +65,27 @@ func TestNewAlaya(t *testing.T) {
 
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]
-		a.printPiplineInfo()
+		a.printPipelineInfo()
 	}
+
+	a := alayas[pipelines[0].RaftId[0]-1]
+
+	_, err := a.RecordObjectMeta(context.TODO(), &ObjectMeta{
+		ObjId:      "/volume/bucket/testObj",
+		Size:       100,
+		UpdateTime: uint64(time.Now().Unix()),
+		Blocks:     nil,
+		PgId:       pipelines[0].PgId,
+	})
+
+	assert.NoError(t, err)
+	time.Sleep(time.Second * 1)
+	meta, err := a.MetaStorage.GetMeta("/volume/bucket/testObj")
+	assert.Equal(t, uint64(100), meta.Size, "obj size")
+
+	a2 := alayas[pipelines[0].RaftId[1]-1]
+	meta2, err := a2.MetaStorage.GetMeta("/volume/bucket/testObj")
+	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
 }
 
 func TestAlaya_RecordObjectMeta(t *testing.T) {

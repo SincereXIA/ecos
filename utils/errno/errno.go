@@ -17,10 +17,12 @@ const (
 	/* ALAYA error */
 
 	CodePgNotExist int = AlayaError + iota
+	CodeMetaNotExist
 )
 
 var (
-	PGNotExist = newErr(CodePgNotExist, "place group not exist")
+	PGNotExist   = newErr(CodePgNotExist, "place group not exist")
+	MetaNotExist = newErr(CodePgNotExist, "meta data not exist")
 )
 
 type Errno struct {

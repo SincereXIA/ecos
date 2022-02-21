@@ -1,5 +1,16 @@
 # 开发日志
 
+
+## 2022/2/21
+
+**SincereXIA:**
+
+- 完善 `Alaya` 相关方法和测试代码
+- 完善 MemoryMetaStorage
+- `Alaya` 目前已支持 multi Raft 和 meta 同步
+- logger 支持设置 loglevel
+
+
 ## 2022/2/13
 
 - `NodeInfoStorage` 接口支持设置 term，同 term `GroupInfo` 保证一致
