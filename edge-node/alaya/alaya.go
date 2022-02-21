@@ -21,6 +21,8 @@ type Alaya struct {
 	NodeID         uint64
 	PGMessageChans map[uint64]chan raftpb.Message
 	PGRaftNode     map[uint64]*Raft
+
+	MetaStorage MetaStorage
 }
 
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *ObjectMeta) (*common.Result, error) {
@@ -50,11 +52,13 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	return nil, errno.PGNotExist
 }
 
-func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, rpcServer *messenger.RpcServer, piplines []*pipeline.Pipeline) *Alaya {
+func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage MetaStorage,
+	rpcServer *messenger.RpcServer, piplines []*pipeline.Pipeline) *Alaya {
 	a := Alaya{
 		PGMessageChans: make(map[uint64]chan raftpb.Message),
 		PGRaftNode:     make(map[uint64]*Raft),
 		NodeID:         selfInfo.RaftId,
+		MetaStorage:    metaStorage,
 	}
 	RegisterAlayaServer(rpcServer, &a)
 	for _, p := range piplines {
@@ -63,7 +67,7 @@ func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, rpcServer *
 		}
 		pgID := p.PgId
 		a.PGMessageChans[pgID] = make(chan raftpb.Message)
-		a.PGRaftNode[pgID] = NewAlayaRaft(selfInfo.RaftId, pgID, p, infoStorage, a.PGMessageChans[pgID])
+		a.PGRaftNode[pgID] = NewAlayaRaft(selfInfo.RaftId, pgID, p, infoStorage, metaStorage, a.PGMessageChans[pgID])
 	}
 	return &a
 }

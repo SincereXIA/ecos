@@ -29,7 +29,7 @@ type Raft struct {
 }
 
 func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline,
-	infoStorage node.InfoStorage,
+	infoStorage node.InfoStorage, metaStorage MetaStorage,
 	raftChan chan raftpb.Message) *Raft {
 
 	ctx := context.Background()
@@ -48,8 +48,9 @@ func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline,
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
 		},
-		ticker:   time.Tick(time.Millisecond * 100),
-		raftChan: raftChan,
+		ticker:      time.Tick(time.Millisecond * 100),
+		raftChan:    raftChan,
+		metaStorage: metaStorage,
 	}
 
 	var peers []raft.Peer
