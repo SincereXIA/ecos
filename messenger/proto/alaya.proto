@@ -19,7 +19,7 @@ message ObjectMeta {
   uint64 size = 2;
   uint64 update_time = 3;
   repeated BlockInfo blocks = 4;
-  string pg_id = 5;
+  uint64 pg_id = 5;
 }
 
 message BlockInfo {
