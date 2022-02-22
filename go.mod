@@ -4,6 +4,9 @@ go 1.16
 
 require (
 	github.com/coreos/etcd v2.3.8+incompatible
+	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
+	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
+	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-playground/validator/v10 v10.10.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -19,6 +22,8 @@ require (
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	go.etcd.io/etcd v2.3.8+incompatible
 	github.com/stretchr/testify v1.7.0
+	github.com/syndtr/goleveldb v1.0.0
+	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/wxnacy/wgo v1.0.4
 	go.etcd.io/etcd/raft/v3 v3.5.2 // indirect
