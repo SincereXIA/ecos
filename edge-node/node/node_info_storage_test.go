@@ -2,7 +2,7 @@ package node
 
 import (
 	"github.com/google/uuid"
-	"go.etcd.io/etcd/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 

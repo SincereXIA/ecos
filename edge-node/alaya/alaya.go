@@ -8,8 +8,8 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/wxnacy/wgo/arrays"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 )
 
 // Alaya process record & inquire object Mata request

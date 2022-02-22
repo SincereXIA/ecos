@@ -5,7 +5,7 @@ import (
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"github.com/google/uuid"
-	"go.etcd.io/etcd/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"testing"

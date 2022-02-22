@@ -3,7 +3,7 @@ package config
 import (
 	"ecos/utils/common"
 	"ecos/utils/config"
-	"go.etcd.io/etcd/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 )
