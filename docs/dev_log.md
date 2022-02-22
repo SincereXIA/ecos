@@ -1,6 +1,5 @@
 # 开发日志
 
-
 ## 2022/2/21
 
 **SincereXIA:**
@@ -10,6 +9,17 @@
 - `Alaya` 目前已支持 multi Raft 和 meta 同步
 - logger 支持设置 loglevel
 
+## 2022/2/19
+@xionghc
+- 修改了`pipeline`的拼写（之前错为`pipline`）
+- 新增`EcosNode`，封装了`NodeInfo`并实现了`gocrush.Node`接口
+- 使用`gocrush`包实现了基于CRUSH算法的`GenPipelines`
+
+## 2022/2/19
+@xionghc
+- 修改了`pipeline`的拼写（之前错为`pipline`）
+- 新增`EcosNode`，封装了`NodeInfo`并实现了`gocrush.Node`接口
+- 使用`gocrush`包实现了基于CRUSH算法的`GenPipelines`
 
 ## 2022/2/13
 

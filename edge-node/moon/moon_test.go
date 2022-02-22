@@ -28,12 +28,18 @@ func TestRaft(t *testing.T) {
 	node1 := NewMoon(groupInfo[0], "", nil, groupInfo, rpcServer1)
 	go rpcServer1.Run()
 	go node1.Run()
+	defer node1.Stop()
+	defer rpcServer1.Stop()
 	node2 := NewMoon(groupInfo[1], "", nil, groupInfo, rpcServer2)
 	go rpcServer2.Run()
 	go node2.Run()
+	defer node2.Stop()
+	defer rpcServer2.Stop()
 	node3 := NewMoon(groupInfo[2], "", nil, groupInfo, rpcServer3)
 	go rpcServer3.Run()
 	go node3.Run()
+	defer node3.Stop()
+	defer rpcServer3.Stop()
 
 	nodes := []*Moon{node1, node2, node3}
 
@@ -72,6 +78,7 @@ func TestRaft(t *testing.T) {
 
 	// 启动 Node4
 	go node4.Run()
+	defer node4.Stop()
 
 	nodes = append(nodes, node4)
 
@@ -88,13 +95,17 @@ func TestRaft(t *testing.T) {
 		t.Log(anotherInfo)
 	}
 	t.Log("Reach agreement success")
+	rpcServer1.Stop()
+	rpcServer2.Stop()
+	rpcServer3.Stop()
+	rpcServer4.Stop()
 }
 
 func TestMoon_Register(t *testing.T) {
-
 	sunRpc := messenger.NewRpcServer(3260)
 	sun.NewSun(sunRpc)
 	go sunRpc.Run()
+	time.Sleep(1 * time.Second)
 
 	groupInfo := []*node.NodeInfo{
 		node.NewSelfInfo(0x01, "127.0.0.1", 32671),
@@ -115,7 +126,9 @@ func TestMoon_Register(t *testing.T) {
 			rpcServers[i])
 		moons = append(moons, moon)
 		go rpcServers[i].Run()
+		defer rpcServers[i].Stop()
 		go moon.Run()
+		defer moon.Stop()
 	}
 
 	time.Sleep(2 * time.Second)

@@ -86,6 +86,13 @@ func TestNewAlaya(t *testing.T) {
 	a2 := alayas[pipelines[0].RaftId[1]-1]
 	meta2, err := a2.MetaStorage.GetMeta("/volume/bucket/testObj")
 	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
+
+	for i := 0; i < 9; i++ { // for each node
+		server := rpcServers[i]
+		server.Stop()
+		alaya := alayas[i]
+		alaya.Stop()
+	}
 }
 
 func TestAlaya_RecordObjectMeta(t *testing.T) {

@@ -3,19 +3,7 @@ package common
 import (
 	"errors"
 	"os"
-	"syscall"
 )
-
-// GetAvailStorage get available storage (byte) in path
-func GetAvailStorage(path string) uint64 {
-	var stat syscall.Statfs_t
-	err := syscall.Statfs(path, &stat)
-	if err != nil {
-		return 0
-	}
-
-	return stat.Bavail * uint64(stat.Bsize)
-}
 
 // InitPath create path as an empty dir
 func InitPath(path string) error {

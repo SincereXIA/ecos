@@ -10,6 +10,7 @@
       - `Term`：集群状态任期，同一个 Term 期间 `GroupInfo` 保持不变
       - `LeaderInfo`： 作为领导节点的信息
       - `NodesInfo`：提供存储能力的节点信息
+    - `EcosNode`：`NodeInfo`的包装，包含CRUSH算法相关信息
 
 ## 概念
 
@@ -19,9 +20,19 @@
     - `metadata`：用户自定义的元数据信息
   - `block`: 对象分块，`object` 最终落盘存储的最小单位，大文件将会分成多个 `block` 存储
     - `chunk`: 数据流块，对象在网络中传输时的最小单位
-- `pipline`: 数据流组，对象数据多副本放置过程的描述
+- `pipeline`: 数据流组，对象数据多副本放置过程的描述
   - 包含了副本存放的节点信息、数据流的流动顺序
 - `PlaceGroup、PG`：放置组
   - 当客户端提交对象时，通过 `crush` 算法为每个 `block` 计算出一个 `PG`
   - 一个 `edge-node` 会属于多个 `PG`
   - `edge-node` 上数据最终的存储路径为 `/ecos/container/pgid/blockid`
+
+## 一些示例
+
+对于对象存储的各层级来说
+
+```
+key: "path/to/file"
+objectID: "volume/bucket/path/to/file"
+blockID: "fdshf289rufdhjfajklshjf2"
+```

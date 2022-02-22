@@ -56,7 +56,10 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	return nil, errno.PGNotExist
 }
 
-func (a *Alaya) stop() {
+func (a *Alaya) Stop() {
+	for _, raft := range a.PGRaftNode {
+		raft.Stop()
+	}
 	a.cancel()
 }
 

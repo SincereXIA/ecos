@@ -1,0 +1,7 @@
+{
+  "Object": {
+    "BlockSize": 4194304,
+    "ChunkSize": 1048576
+  },
+  "UploadTimeoutMs": 1000
+}
