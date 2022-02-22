@@ -46,7 +46,7 @@ unit-test-job:   # This job runs in the test stage.
     - echo "Running unit tests... This will take about 60 seconds."
     - go mod vendor
     - go mod download
-    - go test ./...
+    - go test ./... -v
   cache:
     key: ecos_go_env
     paths:

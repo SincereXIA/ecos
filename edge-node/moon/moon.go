@@ -21,6 +21,7 @@ type Moon struct {
 	id          uint64 //raft节点的id
 	selfInfo    *node.NodeInfo
 	ctx         context.Context //context
+	cancel      context.CancelFunc
 	InfoStorage node.InfoStorage
 	raftStorage *raft.MemoryStorage //raft需要的内存结构
 	cfg         *raft.Config        //raft需要的配置
@@ -154,7 +155,7 @@ func (m *Moon) Register(sunAddr string) error {
 
 func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 	leaderInfo *node.NodeInfo, groupInfo []*node.NodeInfo, rpcServer *messenger.RpcServer) *Moon {
-	ctx := context.TODO()
+	ctx, cancel := context.WithCancel(context.Background())
 	storage := raft.NewMemoryStorage()
 	infoStorage := node.NewMemoryNodeInfoStorage()
 	raftChan := make(chan raftpb.Message)
@@ -163,6 +164,7 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 		id:          0, // set raft id after register
 		selfInfo:    selfInfo,
 		ctx:         ctx,
+		cancel:      cancel,
 		InfoStorage: infoStorage,
 		raftStorage: storage,
 		cfg:         nil, // set raft cfg after register
@@ -240,6 +242,10 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		glog.Infof("%d send to %v, type %v", m.id, message, message.Type)
 		nodeId := node.ID(message.To)
 		nodeInfo, err := m.InfoStorage.GetNodeInfo(nodeId)
+		if err != nil {
+			logger.Warningf("Get Node Info fail: %v", err)
+			return
+		}
 		port := strconv.FormatUint(nodeInfo.RpcPort, 10)
 		conn, err := grpc.Dial(nodeInfo.IpAddr+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
@@ -280,6 +286,8 @@ func (m *Moon) Run() {
 
 	for {
 		select {
+		case <-m.ctx.Done():
+			return
 		case <-m.ticker:
 			m.raft.Tick()
 		case rd := <-m.raft.Ready():
@@ -301,6 +309,10 @@ func (m *Moon) Run() {
 			glog.Infof("%d status: %v", m.id, m.raft.Status().RaftState)
 		}
 	}
+}
+
+func (m *Moon) Stop() {
+	m.cancel()
 }
 
 func (m *Moon) reportSelfInfo() {

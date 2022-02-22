@@ -76,12 +76,14 @@ func isBlank(value reflect.Value) bool {
 	return reflect.DeepEqual(value.Interface(), reflect.Zero(value.Type()).Interface())
 }
 
-// Register a config interface to confPath
-func Register(conf interface{}, confPath string) {
-	confDefault, _ := copystructure.Copy(conf)
-	confDefaultMap[getConfType(conf)] = confDefault
-	confMap[reflect.TypeOf(conf).Name()] = conf
-	confPathMap[reflect.TypeOf(conf).Name()] = confPath
+// Register a config interface to confPath.
+// Default Value of Config struct is set in defaultConf.
+// User config json file path is confPath.
+func Register(defaultConf interface{}, confPath string) {
+	confDefault, _ := copystructure.Copy(defaultConf)
+	confDefaultMap[getConfType(defaultConf)] = confDefault
+	confMap[reflect.TypeOf(defaultConf).Name()] = defaultConf
+	confPathMap[reflect.TypeOf(defaultConf).Name()] = confPath
 }
 
 func getConfType(conf interface{}) string {
@@ -116,9 +118,9 @@ func ReadAll() {
 }
 
 func Write(conf interface{}) error {
-	if path, ok := confPathMap[getConfType(conf)]; ok {
+	if p, ok := confPathMap[getConfType(conf)]; ok {
 		b, _ := json.Marshal(conf)
-		err := ioutil.WriteFile(path, b, 0644)
+		err := ioutil.WriteFile(p, b, 0644)
 		return err
 	}
 	return errors.New("config not found")
