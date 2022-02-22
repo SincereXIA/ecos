@@ -1,8 +1,9 @@
 syntax = "proto3";
 package messenger;
 
+import "raftpb/raft.proto";
 import "common.proto";
-import "raft/raftpb/raft.proto";
+
 option go_package = "ecos/edge-node/alaya";
 
 service Alaya {

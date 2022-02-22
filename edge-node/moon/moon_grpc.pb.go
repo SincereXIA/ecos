@@ -5,7 +5,7 @@ package moon
 import (
 	context "context"
 	node "ecos/edge-node/node"
-	raftpb "github.com/coreos/etcd/raft/raftpb"
+	raftpb "go.etcd.io/etcd/raft/v3/raftpb"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"

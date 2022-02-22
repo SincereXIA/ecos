@@ -1,7 +1,7 @@
 syntax = "proto3";
 package messenger;
 
-import "raft/raftpb/raft.proto";
+import "raftpb/raft.proto";
 import "node_info.proto";
 import "common.proto";
 
