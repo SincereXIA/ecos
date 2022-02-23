@@ -1,5 +1,4 @@
-image: golang:1.17
-
+image: harbor.sums.top/ecos/rocksdb:6.14
 stages:          # List of stages for jobs, and their order of execution
   - build
   - test
@@ -14,6 +13,9 @@ variables:
 
 before_script:
   - export GOPATH=$GOPATH:/usr/local/${CI_PROJECT_NAME}
+  - export CPLUS_INCLUDE_PATH=${CPLUS_INCLUDE_PATH}:/usr/local/lib/rocksdb
+  - export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/lib
+  - export LIBRARY_PATH=${LIBRARY_PATH}:/usr/local/lib
   - export VERSION=`echo ${CI_COMMIT_TAG} | awk -F"_" '{print $1}'`
   - export GO111MODULE=on
   - export GOPROXY=https://goproxy.cn,direct
@@ -23,6 +25,8 @@ build-job:       # This job runs in the build stage, which runs first.
   stage: build
   script:
     - echo "Compiling the code..."
+    - export CGO_CFLAGS="-I/usr/local/lib"
+    - export CGO_LDFLAGS="-L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd"
     - go mod vendor
     - go mod download
     - go build -o build/bin/ecos
