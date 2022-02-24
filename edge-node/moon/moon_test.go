@@ -5,14 +5,18 @@ import (
 	"ecos/cloud/sun"
 	"ecos/edge-node/node"
 	"ecos/messenger"
-	"github.com/coreos/etcd/raft/raftpb"
-	"go.etcd.io/etcd/raft"
+	"go.etcd.io/etcd/raft/v3"
+	"go.etcd.io/etcd/raft/v3/raftpb"
+	"io/ioutil"
+	"os"
+	"path"
 	"reflect"
 	"testing"
 	"time"
 )
 
 func TestRaft(t *testing.T) {
+	os.MkdirAll("./ecos-data/db/", os.ModePerm)
 
 	// 先起三个节点
 	groupInfo := []*node.NodeInfo{
@@ -99,13 +103,15 @@ func TestRaft(t *testing.T) {
 	rpcServer2.Stop()
 	rpcServer3.Stop()
 	rpcServer4.Stop()
-	for i := 1; i < 4; i++ {
-		ss, _ := nodes[i].raftStorage.Snapshot()
-		fmt.Printf("snapshot %v\n", ss)
-	}
+	//dir, _ := ioutil.ReadDir("./ecos-data/db/")
+	//for _, d := range dir {
+	//	os.RemoveAll(path.Join([]string{"./ecos-data/db/", d.Name()}...))
+	//}
+	os.RemoveAll("./ecos-data/db")
 }
 
 func TestMoon_Register(t *testing.T) {
+	os.MkdirAll("./ecos-data/db/", os.ModePerm)
 	sunRpc := messenger.NewRpcServer(3260)
 	sun.NewSun(sunRpc)
 	go sunRpc.Run()
@@ -151,5 +157,9 @@ func TestMoon_Register(t *testing.T) {
 			break
 		}
 	}
-
+	dir, _ := ioutil.ReadDir("./ecos-data/db/")
+	for _, d := range dir {
+		os.RemoveAll(path.Join([]string{"./ecos-data/db/", d.Name()}...))
+	}
+	os.RemoveAll("./ecos-data/db")
 }
