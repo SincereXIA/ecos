@@ -93,6 +93,8 @@ ecos-docker-build:
     - mv ./build ./Dockerfile
     - mv ./conf ./Dockerfile
     - cd Dockerfile
+    - ls -alh
+    - ls ./build/bin
     - echo "build ecos-cloud docker image"
     - export APP_NAME=ecos-cloud
     - docker build -f ecos-cloud-ci -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
