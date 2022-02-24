@@ -82,7 +82,7 @@ ecos-docker-build:
   variables:
     DOCKER_DRIVER: overlay2
     DOCKER_TLS_CERTDIR: ""
-    DOCKER_HOST: tcp://docker:2375
+    # DOCKER_HOST: tcp://docker:2375
   before_script:
     - docker info
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $DOCKER_REGISTRY
@@ -90,15 +90,18 @@ ecos-docker-build:
   script:
     - ls -alh
     - pwd
+    - mv ./build ./Dockerfile
+    - mv ./conf ./Dockerfile
+    - cd Dockerfile
     - echo "build ecos-cloud docker image"
     - export APP_NAME=ecos-cloud
-    - docker build -f Dockerfile/ecos-cloud-ci -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
+    - docker build -f ecos-cloud-ci -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
     - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
     - docker tag $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
     - docker push $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
     - echo "build ecos-edge-node docker image"
     - export APP_NAME=ecos-edge-node
-    - docker build -f Dockerfile/ecos-edge-node-ci -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
+    - docker build -f ecos-edge-node-ci -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
     - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
     - docker tag $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
     - docker push $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
