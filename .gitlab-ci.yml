@@ -88,6 +88,8 @@ ecos-docker-build:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $DOCKER_REGISTRY
     - export BUILD_NUMBER=${COMMIT_SHA:0:5}
   script:
+    - ls -alh
+    - pwd
     - echo "build ecos-cloud docker image"
     - export APP_NAME=ecos-cloud
     - docker build -f Dockerfile/ecos-cloud-ci -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
