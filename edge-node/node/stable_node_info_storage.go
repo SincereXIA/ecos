@@ -13,7 +13,7 @@ import (
 const term = "Term"
 
 var ( // rocksdb的设置参数
-	ops          = gorocksdb.NewDefaultOptions()
+	opts         = gorocksdb.NewDefaultOptions()
 	readOptions  = gorocksdb.NewDefaultReadOptions()
 	writeOptions = gorocksdb.NewDefaultWriteOptions()
 )
@@ -131,9 +131,9 @@ func (storage *StableNodeInfoStorage) updateTimestamp() {
 	storage.uncommittedGroupInfo.UpdateTimestamp = uint64(time.Now().Unix())
 }
 
-func NewStableNodeInfoStorage() *StableNodeInfoStorage {
-	ops.SetCreateIfMissing(true)
-	db, err := gorocksdb.OpenDb(ops, "nodeinfo")
+func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
+	opts.SetCreateIfMissing(true)
+	db, err := gorocksdb.OpenDb(opts, dataBaseDir)
 	if err != nil {
 		logger.Errorf("open database failed, err:%v\n", err)
 		return nil

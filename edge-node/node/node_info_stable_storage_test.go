@@ -3,11 +3,13 @@ package node
 import (
 	"github.com/google/uuid"
 	"go.etcd.io/etcd/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
 func TestStableNodeInfoStorage(t *testing.T) {
-	storage := NewStableNodeInfoStorage()
+	testDataBaseDir := "./testNodeInfo"
+	storage := NewStableNodeInfoStorage(testDataBaseDir)
 	defer storage.db.Close()
 	t.Run("test init", func(t *testing.T) {
 		groupInfo := storage.GetGroupInfo()
@@ -34,6 +36,7 @@ func TestStableNodeInfoStorage(t *testing.T) {
 		assert.NoError(t, storage.UpdateNodeInfo(&info2))
 		infos := storage.ListAllNodeInfo()
 		assert.Equal(t, len(infos), 2)
+
 		group := storage.GetGroupInfo()
 		assert.Empty(t, group.NodesInfo)
 	})
@@ -63,4 +66,6 @@ func TestStableNodeInfoStorage(t *testing.T) {
 		assert.NotEqual(t, group.Term, term)
 		assert.Equal(t, len(group.NodesInfo), 3)
 	})
+	// 删除测试生成的文件
+	os.RemoveAll(testDataBaseDir)
 }
