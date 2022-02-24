@@ -131,6 +131,10 @@ func (storage *StableNodeInfoStorage) updateTimestamp() {
 	storage.uncommittedGroupInfo.UpdateTimestamp = uint64(time.Now().Unix())
 }
 
+func (storage *StableNodeInfoStorage) Close() {
+	storage.db.Close()
+}
+
 func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
 	opts.SetCreateIfMissing(true)
 	db, err := gorocksdb.OpenDb(opts, dataBaseDir)

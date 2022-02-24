@@ -3,8 +3,8 @@ package moon
 import (
 	"ecos/utils/logger"
 	"encoding/json"
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/tecbot/gorocksdb"
+	"go.etcd.io/etcd/raft/v3/raftpb"
 )
 
 type Storage interface {

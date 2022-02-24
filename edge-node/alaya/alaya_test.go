@@ -7,6 +7,7 @@ import (
 	"ecos/messenger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -22,7 +23,10 @@ const (
 )
 
 func TestNewAlaya(t *testing.T) {
-	infoStorage := node.NewMemoryNodeInfoStorage()
+	nodeInfoDir := "./NodeInfoStorage"
+	os.Mkdir("./NodeInfoStorage", os.ModePerm)
+	infoStorage := node.NewStableNodeInfoStorage(nodeInfoDir)
+	defer infoStorage.Close()
 	groupInfo := node.GroupInfo{
 		Term:            1,
 		LeaderInfo:      nil,
@@ -50,7 +54,10 @@ func TestNewAlaya(t *testing.T) {
 	var alayas []*Alaya
 	for i := 0; i < 9; i++ { // for each node
 		info := groupInfo.NodesInfo[i]
-		metaStorage := NewMemoryMetaStorage()
+		os.Mkdir("./testMetaStorage/", os.ModePerm)
+		dataBaseDir := "./testMetaStorage/" + strconv.FormatUint(info.RaftId, 10)
+		metaStorage := NewStableMetaStorage(dataBaseDir)
+		defer metaStorage.Close()
 		a := NewAlaya(info, infoStorage, metaStorage, &rpcServers[i], pipelines)
 		alayas = append(alayas, a)
 		server := rpcServers[i]
@@ -86,6 +93,12 @@ func TestNewAlaya(t *testing.T) {
 	a2 := alayas[pipelines[0].RaftId[1]-1]
 	meta2, err := a2.MetaStorage.GetMeta("/volume/bucket/testObj")
 	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
+	//dir, _ := ioutil.ReadDir("./testMetaStorage")
+	//for _, d := range dir {
+	//	os.RemoveAll(path.Join([]string{"./testMetaStorage", d.Name()}...))
+	//}
+	os.RemoveAll("./testMetaStorage")
+	os.RemoveAll("./NodeInfoStorage")
 
 	for i := 0; i < 9; i++ { // for each node
 		server := rpcServers[i]

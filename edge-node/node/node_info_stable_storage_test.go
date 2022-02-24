@@ -2,15 +2,16 @@ package node
 
 import (
 	"github.com/google/uuid"
-	"go.etcd.io/etcd/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 )
 
 func TestStableNodeInfoStorage(t *testing.T) {
 	testDataBaseDir := "./testNodeInfo"
+	os.Mkdir(testDataBaseDir, os.ModePerm)
 	storage := NewStableNodeInfoStorage(testDataBaseDir)
-	defer storage.db.Close()
+	defer storage.Close()
 	t.Run("test init", func(t *testing.T) {
 		groupInfo := storage.GetGroupInfo()
 		assert.Equal(t, groupInfo.Term, uint64(0))
