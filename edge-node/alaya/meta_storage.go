@@ -59,12 +59,13 @@ func NewMemoryMetaStorage() *MemoryMetaStorage {
 func (s *StableMetaStorage) RecordMeta(meta *ObjectMeta) error {
 	metaData, err := json.Marshal(*meta)
 	if err != nil {
+		logger.Errorf("Marshal failed")
 		return err
 	}
 	id := meta.ObjId
-	logger.Infof("Marshal success, objectMeta:%s", metaData)
 	err = s.db.Put(writeOptions, []byte(id), metaData)
 	if err != nil {
+		logger.Infof("write database failed, err:%v", err)
 		return err
 	}
 	return nil
@@ -72,13 +73,14 @@ func (s *StableMetaStorage) RecordMeta(meta *ObjectMeta) error {
 
 func (s *StableMetaStorage) GetMeta(objID string) (meta *ObjectMeta, err error) {
 	metaData, err := s.db.Get(readOptions, []byte(objID))
-	defer metaData.Free()
 	if err != nil {
+		logger.Errorf("get metaData failed, err:%v", err)
 		return nil, errno.MetaNotExist
 	}
-	m := ObjectMeta{}
-	json.Unmarshal(metaData.Data(), &m)
-	return &m, nil
+	M := ObjectMeta{}
+	json.Unmarshal(metaData.Data(), &M)
+	metaData.Free()
+	return &M, nil
 }
 
 func (s *StableMetaStorage) GetMetaInPG(pgID uint64, off int, len int) ([]*ObjectMeta, error) {
@@ -94,6 +96,7 @@ func NewStableMetaStorage(dataBaseDir string) *StableMetaStorage {
 	if err != nil {
 		logger.Errorf("open database failed, err:%v", err)
 	}
+	logger.Infof("open database: " + dataBaseDir + " success")
 	return &StableMetaStorage{
 		db: db,
 	}

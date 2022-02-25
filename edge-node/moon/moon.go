@@ -284,7 +284,6 @@ func (m *Moon) process(entry raftpb.Entry) {
 }
 
 func (m *Moon) Run() {
-	defer m.storage.Close()
 	go m.reportSelfInfo()
 
 	for {

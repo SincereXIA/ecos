@@ -24,7 +24,7 @@ const (
 
 func TestNewAlaya(t *testing.T) {
 	nodeInfoDir := "./NodeInfoStorage"
-	os.Mkdir("./NodeInfoStorage", os.ModePerm)
+	os.Mkdir(nodeInfoDir, os.ModePerm)
 	infoStorage := node.NewStableNodeInfoStorage(nodeInfoDir)
 	defer infoStorage.Close()
 	groupInfo := node.GroupInfo{
@@ -52,12 +52,11 @@ func TestNewAlaya(t *testing.T) {
 	}
 
 	var alayas []*Alaya
+	os.Mkdir("./testMetaStorage/", os.ModePerm)
 	for i := 0; i < 9; i++ { // for each node
 		info := groupInfo.NodesInfo[i]
-		os.Mkdir("./testMetaStorage/", os.ModePerm)
 		dataBaseDir := "./testMetaStorage/" + strconv.FormatUint(info.RaftId, 10)
 		metaStorage := NewStableMetaStorage(dataBaseDir)
-		defer metaStorage.Close()
 		a := NewAlaya(info, infoStorage, metaStorage, &rpcServers[i], pipelines)
 		alayas = append(alayas, a)
 		server := rpcServers[i]
@@ -85,20 +84,26 @@ func TestNewAlaya(t *testing.T) {
 		PgId:       pipelines[0].PgId,
 	})
 
+	a.MetaStorage.RecordMeta(&ObjectMeta{
+		ObjId:      "/volume/bucket/testObj",
+		Size:       100,
+		UpdateTime: uint64(time.Now().Unix()),
+		Blocks:     nil,
+		PgId:       pipelines[0].PgId,
+	})
 	assert.NoError(t, err)
 	time.Sleep(time.Second * 1)
 	meta, err := a.MetaStorage.GetMeta("/volume/bucket/testObj")
+
+	if err != nil {
+		t.Errorf("get Meta fail, err:%v", err)
+	}
 	assert.Equal(t, uint64(100), meta.Size, "obj size")
 
 	a2 := alayas[pipelines[0].RaftId[1]-1]
 	meta2, err := a2.MetaStorage.GetMeta("/volume/bucket/testObj")
+
 	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
-	//dir, _ := ioutil.ReadDir("./testMetaStorage")
-	//for _, d := range dir {
-	//	os.RemoveAll(path.Join([]string{"./testMetaStorage", d.Name()}...))
-	//}
-	os.RemoveAll("./testMetaStorage")
-	os.RemoveAll("./NodeInfoStorage")
 
 	for i := 0; i < 9; i++ { // for each node
 		server := rpcServers[i]
@@ -106,6 +111,10 @@ func TestNewAlaya(t *testing.T) {
 		alaya := alayas[i]
 		alaya.Stop()
 	}
+
+	os.RemoveAll("./testMetaStorage")
+	os.RemoveAll("./NodeInfoStorage")
+
 }
 
 func TestAlaya_RecordObjectMeta(t *testing.T) {

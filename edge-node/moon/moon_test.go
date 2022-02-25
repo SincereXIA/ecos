@@ -7,9 +7,7 @@ import (
 	"ecos/messenger"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
-	"io/ioutil"
 	"os"
-	"path"
 	"reflect"
 	"testing"
 	"time"
@@ -99,14 +97,11 @@ func TestRaft(t *testing.T) {
 		t.Log(anotherInfo)
 	}
 	t.Log("Reach agreement success")
-	rpcServer1.Stop()
-	rpcServer2.Stop()
-	rpcServer3.Stop()
-	rpcServer4.Stop()
-	//dir, _ := ioutil.ReadDir("./ecos-data/db/")
-	//for _, d := range dir {
-	//	os.RemoveAll(path.Join([]string{"./ecos-data/db/", d.Name()}...))
-	//}
+	//rpcServer1.Stop()
+	//rpcServer2.Stop()
+	//rpcServer3.Stop()
+	//rpcServer4.Stop()
+
 	os.RemoveAll("./ecos-data/db")
 }
 
@@ -156,10 +151,6 @@ func TestMoon_Register(t *testing.T) {
 			t.Logf("leader: %v", leader+1)
 			break
 		}
-	}
-	dir, _ := ioutil.ReadDir("./ecos-data/db/")
-	for _, d := range dir {
-		os.RemoveAll(path.Join([]string{"./ecos-data/db/", d.Name()}...))
 	}
 	os.RemoveAll("./ecos-data/db")
 }

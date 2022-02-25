@@ -60,7 +60,9 @@ func (a *Alaya) Stop() {
 	for _, raft := range a.PGRaftNode {
 		raft.Stop()
 	}
+	a.MetaStorage.Close()
 	a.cancel()
+
 }
 
 // ApplyNewPipelines use new pipelines info to change raft nodes in Alaya
