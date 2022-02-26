@@ -62,6 +62,16 @@ unit-test-job:   # This job runs in the test stage.
     paths:
       - .mod_cache/
 
+lint-test-job:
+  stage: test
+  image:
+    name: golangci/golangci-lint:v1.44.2-alpine
+    entrypoint: [""]
+  script:
+    - golangci-lint --version
+    - golangci-lint run
+    - ls
+
 sonarqube-check:
   stage: test
   needs: [unit-test-job]
