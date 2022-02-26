@@ -42,7 +42,6 @@ func action(c *cli.Context) error {
 	if err != nil {
 		logger.Errorf("init config fail: %v", err)
 	}
-
 	// init moon node
 	logger.Infof("Start init moon node ...")
 	selfInfo := conf.SelfInfo

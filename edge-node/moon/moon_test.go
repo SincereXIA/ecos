@@ -7,12 +7,14 @@ import (
 	"ecos/messenger"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+	"os"
 	"reflect"
 	"testing"
 	"time"
 )
 
 func TestRaft(t *testing.T) {
+	os.MkdirAll("./ecos-data/db/", os.ModePerm)
 
 	// 先起三个节点
 	groupInfo := []*node.NodeInfo{
@@ -95,13 +97,16 @@ func TestRaft(t *testing.T) {
 		t.Log(anotherInfo)
 	}
 	t.Log("Reach agreement success")
-	rpcServer1.Stop()
-	rpcServer2.Stop()
-	rpcServer3.Stop()
-	rpcServer4.Stop()
+	//rpcServer1.Stop()
+	//rpcServer2.Stop()
+	//rpcServer3.Stop()
+	//rpcServer4.Stop()
+
+	os.RemoveAll("./ecos-data/db")
 }
 
 func TestMoon_Register(t *testing.T) {
+	os.MkdirAll("./ecos-data/db/", os.ModePerm)
 	sunRpc := messenger.NewRpcServer(3260)
 	sun.NewSun(sunRpc)
 	go sunRpc.Run()
@@ -147,5 +152,5 @@ func TestMoon_Register(t *testing.T) {
 			break
 		}
 	}
-
+	os.RemoveAll("./ecos-data/db")
 }

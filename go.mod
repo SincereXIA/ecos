@@ -3,11 +3,11 @@ module ecos
 go 1.16
 
 require (
-	github.com/coreos/etcd v2.3.8+incompatible
+	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
+	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
+	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-playground/validator/v10 v10.10.0 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
@@ -17,9 +17,10 @@ require (
 	github.com/sincerexia/gocrush v0.0.0-20220213012034-a24f00a6eb8e
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
+	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/wxnacy/wgo v1.0.4
-	go.etcd.io/etcd/raft/v3 v3.5.2 // indirect
+	go.etcd.io/etcd/raft/v3 v3.5.2
 	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9

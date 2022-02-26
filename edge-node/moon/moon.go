@@ -8,7 +8,6 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/logger"
 	"encoding/json"
-	"github.com/coreos/etcd/Godeps/_workspace/src/github.com/golang/glog"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/grpc"
@@ -24,7 +23,8 @@ type Moon struct {
 	cancel      context.CancelFunc
 	InfoStorage node.InfoStorage
 	raftStorage *raft.MemoryStorage //raft需要的内存结构
-	cfg         *raft.Config        //raft需要的配置
+	storage     Storage
+	cfg         *raft.Config //raft需要的配置
 	raft        raft.Node
 	ticker      <-chan time.Time //定时器，提供周期时钟源和超时触发能力
 
@@ -159,7 +159,8 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 	storage := raft.NewMemoryStorage()
 	infoStorage := node.NewMemoryNodeInfoStorage()
 	raftChan := make(chan raftpb.Message)
-
+	storagePath := "./ecos-data/db/" + strconv.FormatUint(selfInfo.RaftId, 10)
+	stableStorage := NewStorage(storagePath)
 	m := &Moon{
 		id:          0, // set raft id after register
 		selfInfo:    selfInfo,
@@ -167,6 +168,7 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 		cancel:      cancel,
 		InfoStorage: infoStorage,
 		raftStorage: storage,
+		storage:     stableStorage,
 		cfg:         nil, // set raft cfg after register
 		ticker:      time.Tick(time.Millisecond * 100),
 		raftChan:    raftChan,
@@ -238,8 +240,8 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 
 func (m *Moon) sendByRpc(messages []raftpb.Message) {
 	for _, message := range messages {
-		glog.Infof(raft.DescribeMessage(message, nil))
-		glog.Infof("%d send to %v, type %v", m.id, message, message.Type)
+		logger.Infof(raft.DescribeMessage(message, nil))
+		logger.Infof("%d send to %v, type %v", m.id, message, message.Type)
 		nodeId := node.ID(message.To)
 		nodeInfo, err := m.InfoStorage.GetNodeInfo(nodeId)
 		if err != nil {
@@ -281,7 +283,6 @@ func (m *Moon) process(entry raftpb.Entry) {
 }
 
 func (m *Moon) Run() {
-
 	go m.reportSelfInfo()
 
 	for {
@@ -291,6 +292,13 @@ func (m *Moon) Run() {
 		case <-m.ticker:
 			m.raft.Tick()
 		case rd := <-m.raft.Ready():
+			// 将HardState，entries写入持久化存储中
+			m.storage.Save(rd.HardState, rd.Entries)
+			if !raft.IsEmptySnap(rd.Snapshot) {
+				// 如果快照数据不为空，也需要保存快照数据到持久化存储中
+				m.storage.SaveSnap(rd.Snapshot)
+				m.raftStorage.ApplySnapshot(rd.Snapshot)
+			}
 			_ = m.raftStorage.Append(rd.Entries)
 			//go n.send(rd.Messages)
 			go m.sendByRpc(rd.Messages)
@@ -304,14 +312,15 @@ func (m *Moon) Run() {
 			}
 			m.raft.Advance()
 		case message := <-m.raftChan:
-			glog.Infof("%d got message from %v to %v, type %v", m.id, message.From, message.To, message.Type)
+			logger.Infof("%d got message from %v to %v, type %v", m.id, message.From, message.To, message.Type)
 			_ = m.raft.Step(m.ctx, message)
-			glog.Infof("%d status: %v", m.id, m.raft.Status().RaftState)
+			logger.Infof("%d status: %v", m.id, m.raft.Status().RaftState)
 		}
 	}
 }
 
 func (m *Moon) Stop() {
+	m.storage.Close()
 	m.cancel()
 }
 
