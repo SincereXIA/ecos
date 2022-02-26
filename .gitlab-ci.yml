@@ -52,6 +52,9 @@ unit-test-job:   # This job runs in the test stage.
     - echo "Running unit tests... This will take about 60 seconds."
     - go mod tidy
     - go test ./... -coverprofile=cover.out
+    - golangci-lint --version
+    - golangci-lint run --out-format checkstyle ./... > report.xml || true
+    - ls
   artifacts:
     paths:
       - cover.out
@@ -61,16 +64,6 @@ unit-test-job:   # This job runs in the test stage.
     key: ecos_go_env
     paths:
       - .mod_cache/
-
-lint-test-job:
-  stage: test
-  image:
-    name: golangci/golangci-lint:v1.44.2-alpine
-    entrypoint: [""]
-  script:
-    - golangci-lint --version
-    - golangci-lint run
-    - ls
 
 sonarqube-check:
   stage: test
