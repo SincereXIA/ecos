@@ -3,7 +3,7 @@ package moon
 import (
 	"ecos/utils/logger"
 	"encoding/json"
-	"github.com/tecbot/gorocksdb"
+	gorocksdb "github.com/SUMStudio/grocksdb"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 )
 

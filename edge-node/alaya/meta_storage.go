@@ -4,7 +4,7 @@ import (
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/json"
-	"github.com/tecbot/gorocksdb"
+	gorocksdb "github.com/SUMStudio/grocksdb"
 )
 
 // MetaStorage Store ObjectMeta

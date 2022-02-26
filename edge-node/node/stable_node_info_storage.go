@@ -4,8 +4,8 @@ import (
 	"ecos/utils/logger"
 	"encoding/json"
 	"errors"
+	gorocksdb "github.com/SUMStudio/grocksdb"
 	"github.com/mohae/deepcopy"
-	"github.com/tecbot/gorocksdb"
 	"strconv"
 	"time"
 )
