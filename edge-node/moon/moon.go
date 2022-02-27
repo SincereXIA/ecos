@@ -6,6 +6,7 @@ import (
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/json"
 	"go.etcd.io/etcd/raft/v3"
@@ -36,15 +37,6 @@ type Moon struct {
 }
 
 func (m *Moon) AddNodeToGroup(_ context.Context, info *node.NodeInfo) (*AddNodeReply, error) {
-	//if m.raft.Status().Lead != m.id {
-	//	return &AddNodeReply{
-	//		Result: &common.Result{
-	//			Status:  common.Result_FAIL,
-	//			Message: "I am not leader",
-	//		},
-	//		LeaderInfo: nil,
-	//	}, nil
-	//}
 
 	reply := AddNodeReply{
 		Result: &common.Result{
@@ -125,7 +117,9 @@ func (m *Moon) RequestJoinGroup(leaderInfo *node.NodeInfo) error {
 }
 
 func (m *Moon) Register(sunAddr string) error {
-
+	if sunAddr == "" {
+		return errno.ConnectSunFail
+	}
 	conn, err := grpc.Dial(sunAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
@@ -175,14 +169,12 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 	}
 
 	registerSuccess := false
-	if sunAddr != "" {
-		err := m.Register(sunAddr)
-		if err != nil {
-			logger.Errorf("Register to Sun err: %v", err)
-			registerSuccess = false
-		} else {
-			registerSuccess = true
-		}
+	err := m.Register(sunAddr)
+	if err != nil {
+		logger.Warningf("Register to Sun err: %v", err)
+		registerSuccess = false
+	} else {
+		registerSuccess = true
 	}
 
 	m.id = selfInfo.RaftId
@@ -240,8 +232,7 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 
 func (m *Moon) sendByRpc(messages []raftpb.Message) {
 	for _, message := range messages {
-		logger.Infof(raft.DescribeMessage(message, nil))
-		logger.Infof("%d send to %v, type %v", m.id, message, message.Type)
+		logger.Tracef("%d send to %v, type %v", m.id, message, message.Type)
 		nodeId := node.ID(message.To)
 		nodeInfo, err := m.InfoStorage.GetNodeInfo(nodeId)
 		if err != nil {
@@ -312,9 +303,8 @@ func (m *Moon) Run() {
 			}
 			m.raft.Advance()
 		case message := <-m.raftChan:
-			logger.Infof("%d got message from %v to %v, type %v", m.id, message.From, message.To, message.Type)
+			//logger.Infof("%d got message from %v to %v, type %v", m.id, message.From, message.To, message.Type)
 			_ = m.raft.Step(m.ctx, message)
-			logger.Infof("%d status: %v", m.id, m.raft.Status().RaftState)
 		}
 	}
 }
@@ -325,12 +315,11 @@ func (m *Moon) Stop() {
 }
 
 func (m *Moon) reportSelfInfo() {
-
 	for m.raft.Status().Lead == 0 {
 		time.Sleep(1 * time.Second)
 	}
 
-	logger.Infof("join group success, start report self info")
+	logger.Infof("%v join group success, start report self info", m.id)
 	info := m.selfInfo
 	js, _ := json.Marshal(info)
 	err := m.raft.Propose(m.ctx, js)

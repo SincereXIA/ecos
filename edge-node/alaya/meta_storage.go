@@ -47,7 +47,8 @@ func (s *MemoryMetaStorage) GetMetaInPG(pgID uint64, off int, len int) ([]*Objec
 }
 
 func (s *MemoryMetaStorage) Close() {
-
+	// need do nothing
+	return
 }
 
 func NewMemoryMetaStorage() *MemoryMetaStorage {
