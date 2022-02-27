@@ -137,7 +137,7 @@ func TestMoon_Register(t *testing.T) {
 	for {
 		ok := true
 		for i := 0; i < 3; i++ {
-			if moons[i].raft.Status().Lead < 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != 3 {
+			if moons[i].raft.Status().Lead == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != 3 {
 				ok = false
 			}
 			leader = int(moons[i].raft.Status().Lead)

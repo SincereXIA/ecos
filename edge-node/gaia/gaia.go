@@ -19,9 +19,7 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 	for {
 		r, err := stream.Recv()
 		if err == io.EOF {
-			return stream.SendAndClose(&common.Result{
-				Status: common.Result_OK,
-			})
+			break
 		}
 		if err != nil {
 			return err
@@ -29,7 +27,9 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 		logger.Infof("receive size: %v", len(r.Content))
 		// TODO: 处理接收到的 Block，转发给同组 Node
 	}
-	return nil
+	return stream.SendAndClose(&common.Result{
+		Status: common.Result_OK,
+	})
 }
 
 func NewGaia(rpcServer *messenger.RpcServer) *Gaia {

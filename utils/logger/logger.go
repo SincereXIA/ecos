@@ -19,13 +19,10 @@ func SetLogLevel(level LogLevel) {
 	switch level {
 	case TraceLevel:
 		log.SetLevel(log.TraceLevel)
-		break
 	case DebugLevel:
 		log.SetLevel(log.DebugLevel)
-		break
 	case InfoLevel:
 		log.SetLevel(log.InfoLevel)
-		break
 	}
 }
 

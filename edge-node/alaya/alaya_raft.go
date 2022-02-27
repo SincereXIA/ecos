@@ -35,6 +35,7 @@ func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline,
 
 	ctx, cancel := context.WithCancel(context.Background())
 	raftStorage := raft.NewMemoryStorage()
+	ticker := time.NewTicker(time.Millisecond * 100)
 
 	r := &Raft{
 		pgID:        pgID,
@@ -50,7 +51,7 @@ func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline,
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
 		},
-		ticker:      time.Tick(time.Millisecond * 100),
+		ticker:      ticker.C,
 		raftChan:    raftChan,
 		metaStorage: metaStorage,
 	}
