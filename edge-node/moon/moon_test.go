@@ -135,15 +135,18 @@ func TestMoon_Register(t *testing.T) {
 
 	leader := -1
 	for {
+		ok := true
 		for i := 0; i < 3; i++ {
-			if raft.StateLeader == moons[i].raft.Status().RaftState {
-				leader = i
-				break
+			if moons[i].raft.Status().Lead < 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != 3 {
+				ok = false
 			}
-			time.Sleep(100 * time.Millisecond)
+			leader = int(moons[i].raft.Status().Lead)
 		}
-		if leader >= 0 {
-			t.Logf("leader: %v", leader+1)
+		if !ok {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		} else {
+			t.Logf("leader: %v", leader)
 			break
 		}
 	}

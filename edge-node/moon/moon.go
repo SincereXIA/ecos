@@ -116,19 +116,19 @@ func (m *Moon) RequestJoinGroup(leaderInfo *node.NodeInfo) error {
 
 }
 
-func (m *Moon) Register(sunAddr string) error {
+func (m *Moon) Register(sunAddr string) (leaderInfo *node.NodeInfo, err error) {
 	if sunAddr == "" {
-		return errno.ConnectSunFail
+		return nil, errno.ConnectSunFail
 	}
 	conn, err := grpc.Dial(sunAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer conn.Close()
 	c := sun.NewSunClient(conn)
 	result, err := c.MoonRegister(context.Background(), m.selfInfo)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	m.selfInfo.RaftId = result.RaftId
 
@@ -136,7 +136,7 @@ func (m *Moon) Register(sunAddr string) error {
 		m.InfoStorage.UpdateNodeInfo(result.GroupInfo.LeaderInfo)
 		err := m.RequestJoinGroup(result.GroupInfo.LeaderInfo)
 		if err != nil {
-			return err
+			return result.GroupInfo.LeaderInfo, err
 		}
 	}
 
@@ -144,7 +144,7 @@ func (m *Moon) Register(sunAddr string) error {
 		_ = m.InfoStorage.UpdateNodeInfo(nodeInfo)
 	}
 
-	return nil
+	return result.GroupInfo.LeaderInfo, nil
 }
 
 func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
@@ -168,13 +168,9 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 		raftChan:    raftChan,
 	}
 
-	registerSuccess := false
-	err := m.Register(sunAddr)
+	leaderInfo, err := m.Register(sunAddr)
 	if err != nil {
 		logger.Warningf("Register to Sun err: %v", err)
-		registerSuccess = false
-	} else {
-		registerSuccess = true
 	}
 
 	m.id = selfInfo.RaftId
@@ -192,22 +188,16 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 
 	var peers []raft.Peer
 
+	m.InfoStorage.UpdateNodeInfo(selfInfo)
 	allNodeInfo := m.InfoStorage.ListAllNodeInfo()
-	if len(allNodeInfo) > 0 {
-		logger.Infof("Node: %v Get GroupInfo from leader", m.id)
-	} else {
+	if len(allNodeInfo) == 1 {
 		logger.Infof("Node: %v Get groupInfo form param", m.id)
 		for _, nodeInfo := range groupInfo {
-			info, err := infoStorage.GetNodeInfo(node.ID(nodeInfo.RaftId))
-			if err != nil || info == nil { // node info not in InfoStorage
-				_ = infoStorage.UpdateNodeInfo(nodeInfo)
-			}
+			_ = infoStorage.UpdateNodeInfo(nodeInfo)
 		}
 	}
 
-	m.InfoStorage.UpdateNodeInfo(selfInfo)
 	allNodeInfo = m.InfoStorage.ListAllNodeInfo()
-
 	for _, nodeInfo := range allNodeInfo {
 		if nodeInfo.RaftId != m.id {
 			// 非常奇怪，除了第一个节点之外，其他节点不能有集群的完整信息，否则后续 propose 无法被提交
@@ -218,7 +208,7 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 		}
 	}
 
-	if len(peers) == 0 || registerSuccess == false {
+	if leaderInfo == nil || leaderInfo.RaftId == m.id {
 		// 非常奇怪，还必须得保证在只有一个节点的时候，peers 得加入自身，否则选不出 leader
 		peers = append(peers, raft.Peer{
 			ID:      m.id,
