@@ -42,7 +42,7 @@ func TestPutObject(t *testing.T) {
 	defer rpcServer.Stop()
 	time.Sleep(100 * time.Millisecond) // ensure rpcServer running
 	ClientConfig = *config.DefaultConfig
-	ClientConfig.UploadTimeoutMs = 1000000
+	ClientConfig.UploadTimeoutMs = 1000
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, err := PutObject(tt.args.localFilePath, tt.args.server, tt.args.key)
