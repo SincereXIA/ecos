@@ -3,6 +3,7 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/node"
+	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	"ecos/messenger/common"
@@ -29,7 +30,7 @@ type Alaya struct {
 	MetaStorage MetaStorage
 }
 
-func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *ObjectMeta) (*common.Result, error) {
+func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -77,7 +78,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline) {
 	}
 	// Add raft node new in pipelines
 	for _, p := range pipelines {
-		if -1 == arrays.Contains(p.RaftId, a.NodeID) { // pass when node not in pipline
+		if -1 == arrays.Contains(p.RaftId, a.NodeID) { // pass when node not in pipeline
 			continue
 		}
 		pgID := p.PgId
