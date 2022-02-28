@@ -44,6 +44,7 @@ func (b Block) toChunks() []*gaia.Chunk {
 	return chunks
 }
 
+// Upload provides a way to upload self to a given stream
 func (b Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	chunks := b.toChunks()
 	byteCount := uint64(0)

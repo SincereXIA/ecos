@@ -37,12 +37,14 @@ func NewGaiaClient(serverAddr string) (*UploadClient, error) {
 	return &newClient, err
 }
 
+// NewUploadStream establish the stream connection for Chunk Upload
 func (c *UploadClient) NewUploadStream() error {
 	var err error
 	c.stream, err = c.client.UploadBlockData(c.context)
 	return err
 }
 
+// GetUploadResult return the result of last closed object uploading
 func (c *UploadClient) GetUploadResult() (*common.Result, error) {
 	err := c.stream.CloseSend()
 	if err != nil {
