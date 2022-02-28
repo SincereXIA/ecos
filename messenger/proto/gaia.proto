@@ -5,7 +5,7 @@ import "common.proto";
 option go_package = "ecos/edge-node/gaia";
 
 service Gaia {
-  rpc UploadBlockData(stream Chunk) returns (Result) {}
+  rpc UploadBlockData(stream UploadBlockRequest) returns (Result) {}
 }
 
 message UploadBlockRequest {
@@ -28,9 +28,5 @@ message ControlMessage {
 
 message Chunk {
   bytes content = 1;
-  bool no_more = 2;
-  string object_id = 3;
-  string block_id = 4;
-  string pg_id = 5;
 }
 

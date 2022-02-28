@@ -3,6 +3,7 @@ package messenger;
 
 import "raftpb/raft.proto";
 import "common.proto";
+import "object.proto";
 
 option go_package = "ecos/edge-node/alaya";
 
@@ -13,19 +14,6 @@ service Alaya {
 
 message MetaData {
   map<string, string> attrs = 1;
-}
-
-message ObjectMeta {
-  string obj_id = 1;
-  uint64 size = 2;
-  uint64 update_time = 3;
-  repeated BlockInfo blocks = 4;
-  uint64 pg_id = 5;
-}
-
-message BlockInfo {
-  string block_id = 1;
-  uint64 size = 2;
 }
 
 message PGRaftMessage {

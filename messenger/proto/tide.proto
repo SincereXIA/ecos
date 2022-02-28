@@ -4,35 +4,13 @@ package messenger;
 
 import "google/protobuf/empty.proto";
 import "object.proto";
+import "group_info.proto";
+import "common.proto";
 
-option go_package = "ecos/tide";
-
-message ClusterStatus {
-  enum Status {
-    OFFLINE = 0;
-    ONLINE = 1;
-  }
-  message Node {
-    string UUID = 1;
-    string IpAddr = 2;
-    string StoragePath = 3;
-    uint64 Capacity = 4;
-    Status Status = 5;
-  }
-  repeated Node nodes = 1;
-}
-
-message Result {
-  enum Status {
-    SUCCESS = 0;
-    PENDING = 1;
-    FAIL = -1;
-  }
-  Status status = 1;
-}
+option go_package = "ecos/edge-node/tide";
 
 service NodeTide {
-  rpc GetClusterStatus(google.protobuf.Empty) returns (ClusterStatus) {};
+  rpc GetClusterStatus(google.protobuf.Empty) returns (GroupInfo) {};
   rpc SendBlock(stream Block) returns (Result) {};
-  rpc SendMetaData(ObjectInfo) returns (Result) {};
+  rpc SendMetaData(ObjectMeta) returns (Result) {};
 }

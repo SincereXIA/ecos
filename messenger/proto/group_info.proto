@@ -2,6 +2,7 @@ syntax = "proto3";
 package messenger;
 
 import "node_info.proto";
+import public "google/protobuf/timestamp.proto";
 
 option go_package = "ecos/edge-node/node";
 
@@ -9,5 +10,5 @@ message GroupInfo{
   uint64 term = 1;
   NodeInfo leader_info = 2;
   repeated NodeInfo nodes_info = 3;
-  uint64 update_timestamp = 4;
+  google.protobuf.Timestamp update_timestamp = 4;
 }
