@@ -97,16 +97,13 @@ func TestRaft(t *testing.T) {
 		t.Log(anotherInfo)
 	}
 	t.Log("Reach agreement success")
-	//rpcServer1.Stop()
-	//rpcServer2.Stop()
-	//rpcServer3.Stop()
-	//rpcServer4.Stop()
 
-	os.RemoveAll("./ecos-data/db")
+	defer os.RemoveAll("./ecos-data/db")
 }
 
 func TestMoon_Register(t *testing.T) {
 	os.MkdirAll("./ecos-data/db/", os.ModePerm)
+	defer os.RemoveAll("./ecos-data/db")
 	sunRpc := messenger.NewRpcServer(3260)
 	sun.NewSun(sunRpc)
 	go sunRpc.Run()
@@ -131,26 +128,30 @@ func TestMoon_Register(t *testing.T) {
 			rpcServers[i])
 		moons = append(moons, moon)
 		go rpcServers[i].Run()
-		defer rpcServers[i].Stop()
 		go moon.Run()
-		defer moon.Stop()
 	}
 
-	time.Sleep(2 * time.Second)
+	//time.Sleep(5 * time.Second)
 
 	leader := -1
 	for {
+		ok := true
 		for i := 0; i < 3; i++ {
-			if raft.StateLeader == moons[i].raft.Status().RaftState {
-				leader = i
-				break
+			if moons[i].raft.Status().Lead == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != 3 {
+				ok = false
 			}
-			time.Sleep(100 * time.Millisecond)
+			leader = int(moons[i].raft.Status().Lead)
 		}
-		if leader >= 0 {
-			t.Logf("leader: %v", leader+1)
+		if !ok {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		} else {
+			t.Logf("leader: %v", leader)
 			break
 		}
 	}
-	os.RemoveAll("./ecos-data/db")
+	for i := 0; i < 3; i++ {
+		rpcServers[i].Stop()
+		moons[i].Stop()
+	}
 }

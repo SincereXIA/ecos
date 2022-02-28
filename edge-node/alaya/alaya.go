@@ -69,7 +69,7 @@ func (a *Alaya) Stop() {
 // pipelines must in order (from 1 to n)
 func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline) {
 	// Delete raft node not in new pipelines
-	for pgID, _ := range a.PGRaftNode {
+	for pgID := range a.PGRaftNode {
 		if -1 == arrays.Contains(pipelines[pgID-1], a.NodeID) {
 			delete(a.PGRaftNode, pgID)
 			delete(a.PGMessageChans, pgID)

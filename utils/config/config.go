@@ -93,8 +93,9 @@ func getConfType(conf interface{}) string {
 // GetConf set the config value to conf interface
 // the conf interface must Register() before
 func GetConf(conf interface{}) error {
-	if c, ok := confMap[getConfType(conf)]; ok {
-		conf = c
+	var ok bool
+	if conf, ok = confMap[getConfType(conf)]; ok {
+		return nil
 	}
 	return errors.New("config not found")
 }
@@ -102,8 +103,9 @@ func GetConf(conf interface{}) error {
 // GetDefaultConf set the default config value to conf interface
 // the conf interface must Register() before
 func GetDefaultConf(conf interface{}) error {
-	if c, ok := confDefaultMap[getConfType(conf)]; ok {
-		conf = c
+	var ok bool
+	if conf, ok = confDefaultMap[getConfType(conf)]; ok {
+		return nil
 	}
 	return errors.New("config not found")
 }

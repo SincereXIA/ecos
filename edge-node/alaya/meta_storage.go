@@ -23,7 +23,7 @@ var ( // rocksdb的设置参数
 )
 
 type MemoryMetaStorage struct {
-	metaMap map[string]ObjectMeta
+	metaMap map[string]*ObjectMeta
 }
 
 type StableMetaStorage struct {
@@ -31,13 +31,13 @@ type StableMetaStorage struct {
 }
 
 func (s *MemoryMetaStorage) RecordMeta(meta *ObjectMeta) error {
-	s.metaMap[meta.ObjId] = *meta
+	s.metaMap[meta.ObjId] = meta
 	return nil
 }
 
 func (s *MemoryMetaStorage) GetMeta(objID string) (meta *ObjectMeta, err error) {
 	if m, ok := s.metaMap[objID]; ok {
-		return &m, nil
+		return m, nil
 	}
 	return nil, errno.MetaNotExist
 }
@@ -47,12 +47,12 @@ func (s *MemoryMetaStorage) GetMetaInPG(pgID uint64, off int, len int) ([]*Objec
 }
 
 func (s *MemoryMetaStorage) Close() {
-
+	// need do nothing
 }
 
 func NewMemoryMetaStorage() *MemoryMetaStorage {
 	return &MemoryMetaStorage{
-		metaMap: make(map[string]ObjectMeta),
+		metaMap: make(map[string]*ObjectMeta),
 	}
 }
 
@@ -78,7 +78,10 @@ func (s *StableMetaStorage) GetMeta(objID string) (meta *ObjectMeta, err error) 
 		return nil, errno.MetaNotExist
 	}
 	M := ObjectMeta{}
-	json.Unmarshal(metaData.Data(), &M)
+	err = json.Unmarshal(metaData.Data(), &M)
+	if err != nil {
+		return nil, err
+	}
 	metaData.Free()
 	return &M, nil
 }

@@ -20,9 +20,15 @@ const (
 	CodeMetaNotExist
 )
 
+const (
+	CodeConnectSunFail int = MoonError + iota
+)
+
 var (
 	PGNotExist   = newErr(CodePgNotExist, "place group not exist")
 	MetaNotExist = newErr(CodePgNotExist, "meta data not exist")
+
+	ConnectSunFail = newErr(CodeConnectSunFail, "connect sun fail")
 )
 
 type Errno struct {

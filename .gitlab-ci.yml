@@ -23,12 +23,13 @@ before_script:
 
 build-job:       # This job runs in the build stage, which runs first.
   stage: build
+  before_script:
+    - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct
   script:
     - echo "Compiling the code..."
     - export CGO_CFLAGS="-I/usr/local/lib"
     - export CGO_LDFLAGS="-L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd"
-    - go mod vendor
-    - go mod download
+    - go mod tidy
     - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos
     - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-cloud ecos/cloud
     - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-edge-node ecos/edge-node
@@ -41,26 +42,33 @@ build-job:       # This job runs in the build stage, which runs first.
   cache:
     key: ecos_go_env
     paths:
-      - vendor
-      - /go
+      - .mod_cache/
 
 unit-test-job:   # This job runs in the test stage.
-  stage: test    # It only starts when the job in the build stage completes successfully.
+  stage: test
   needs: []
   script:
+    - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct
     - echo "Running unit tests... This will take about 60 seconds."
-    - go mod vendor
-    - go mod download
-    - go test ./... -v
+    - go mod tidy
+    - go test ./... -coverprofile=cover.out
+    - golangci-lint --version
+    - golangci-lint run --out-format checkstyle ./... > report.xml || true
+    - ls
+  artifacts:
+    paths:
+      - cover.out
+      - report.xml
+    when: always
+    expire_in: 1 weeks
   cache:
     key: ecos_go_env
     paths:
-      - vendor
-      - /go
+      - .mod_cache/
 
 sonarqube-check:
   stage: test
-  needs: []
+  needs: [unit-test-job]
   image: 
     name: sonarsource/sonar-scanner-cli:latest
     entrypoint: [""]
@@ -109,6 +117,7 @@ ecos-docker-build:
 
 deploy-job:      # This job runs in the deploy stage.
   stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
+  when: manual
   image:
     name: bitnami/kubectl:1.22.6-debian-10-r7
     entrypoint: [""]

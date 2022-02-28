@@ -25,7 +25,12 @@ func main() {
 	logger.Infof("Start init Sun ...")
 	rpcServer := messenger.NewRpcServer(3267)
 	s := sun.NewSun(rpcServer)
-	go rpcServer.Run()
+	go func() {
+		err := rpcServer.Run()
+		if err != nil {
+			logger.Errorf("Sun rpc server run err: %v", err)
+		}
+	}()
 
 	Sun = s
 	logger.Infof("Sun init success")
