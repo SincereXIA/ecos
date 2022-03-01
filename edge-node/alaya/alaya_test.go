@@ -3,10 +3,12 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/node"
+	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"strconv"
 	"testing"
@@ -31,7 +33,7 @@ func TestNewAlaya(t *testing.T) {
 		Term:            1,
 		LeaderInfo:      nil,
 		NodesInfo:       []*node.NodeInfo{},
-		UpdateTimestamp: uint64(time.Now().Unix()),
+		UpdateTimestamp: timestamppb.Now(),
 	}
 	for i := 0; i < 9; i++ {
 		info := node.NodeInfo{
@@ -76,10 +78,10 @@ func TestNewAlaya(t *testing.T) {
 
 	a := alayas[pipelines[0].RaftId[0]-1]
 
-	_, err := a.RecordObjectMeta(context.TODO(), &ObjectMeta{
+	_, err := a.RecordObjectMeta(context.TODO(), &object.ObjectMeta{
 		ObjId:      "/volume/bucket/testObj",
 		Size:       100,
-		UpdateTime: uint64(time.Now().Unix()),
+		UpdateTime: timestamppb.Now(),
 		Blocks:     nil,
 		PgId:       pipelines[0].PgId,
 	})

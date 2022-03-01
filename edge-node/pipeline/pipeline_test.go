@@ -3,6 +3,7 @@ package pipeline
 import (
 	"ecos/edge-node/node"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"testing"
 )
 
@@ -19,7 +20,7 @@ func genGroupInfo() *node.GroupInfo {
 		Term:            0,
 		LeaderInfo:      nil,
 		NodesInfo:       []*node.NodeInfo{},
-		UpdateTimestamp: 0,
+		UpdateTimestamp: timestamppb.Now(),
 	}
 	for i := 1; i <= 20; i++ {
 		group.NodesInfo = append(group.NodesInfo, &node.NodeInfo{

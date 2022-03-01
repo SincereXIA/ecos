@@ -3,6 +3,7 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/node"
+	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/utils/logger"
 	"go.etcd.io/etcd/raft/v3"
@@ -125,7 +126,7 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 
 func (r *Raft) process(entry raftpb.Entry) {
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var meta ObjectMeta
+		var meta object.ObjectMeta
 		err := proto.Unmarshal(entry.Data, &meta)
 		if err != nil {
 			logger.Warningf("alaya raft process object meta in entry err: %v", err)
@@ -138,7 +139,7 @@ func (r *Raft) process(entry raftpb.Entry) {
 	}
 }
 
-func (r *Raft) ProposeObjectMeta(meta *ObjectMeta) {
+func (r *Raft) ProposeObjectMeta(meta *object.ObjectMeta) {
 	bytes, _ := proto.Marshal(meta)
 	err := r.raft.Propose(r.ctx, bytes)
 	if err != nil {
