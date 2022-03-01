@@ -12,5 +12,4 @@ option go_package = "ecos/edge-node/tide";
 service NodeTide {
   rpc GetClusterStatus(google.protobuf.Empty) returns (GroupInfo) {};
   rpc SendBlock(stream Block) returns (Result) {};
-  rpc SendMetaData(ObjectMeta) returns (Result) {};
 }
