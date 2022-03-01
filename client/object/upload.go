@@ -4,6 +4,7 @@ import (
 	"context"
 	"ecos/client/config"
 	"ecos/edge-node/gaia"
+	"ecos/edge-node/object"
 	"ecos/messenger/common"
 	"ecos/utils/logger"
 	"google.golang.org/grpc"
@@ -32,8 +33,13 @@ func NewGaiaClient(serverAddr string) (*UploadClient, error) {
 		return nil, err
 	}
 	newClient.client = gaia.NewGaiaClient(conn)
-	newClient.context, newClient.cancel = context.WithTimeout(context.Background(),
-		time.Duration(ClientConfig.UploadTimeoutMs)*time.Millisecond)
+	if configTimeout := ClientConfig.UploadTimeoutMs; configTimeout > 0 {
+		newClient.context, newClient.cancel = context.WithTimeout(context.Background(),
+			time.Duration(ClientConfig.UploadTimeoutMs)*time.Millisecond)
+	} else {
+		newClient.context = context.Background()
+		newClient.cancel = nil
+	}
 	return &newClient, err
 }
 
@@ -63,11 +69,15 @@ func (c *UploadClient) GetUploadResult() (*common.Result, error) {
 	return result, err
 }
 
-func (c *UploadClient) sliceAndUpload(file *os.File, key string) ([]BlockInf, int, error) {
-	var blocks []BlockInf
+func (c *UploadClient) sliceAndUpload(file *os.File, key string) ([]*object.BlockInfo, int, error) {
+	var blocks []*object.BlockInfo
 	filename := file.Name()
 	blockCount := 1
 	for {
+		err := c.NewUploadStream()
+		if err != nil {
+			return nil, 0, err
+		}
 		buffer := make([]byte, ClientConfig.Object.BlockSize)
 		n, err := file.Read(buffer)
 		if n == 0 {
@@ -77,20 +87,19 @@ func (c *UploadClient) sliceAndUpload(file *os.File, key string) ([]BlockInf, in
 				return nil, 0, err
 			}
 		}
-		newBlock := Block{BlockInf: BlockInf{
-			blockId:  GenBlockId("", blockCount),
-			objectId: GenObjectId(key),
-			pgId:     "",
-			size:     uint64(n),
-		},
-			data: buffer[:n],
-		}
-		blocks = append(blocks, newBlock.BlockInf)
-		logger.Infof("Uploading %vth Block of %v", blockCount, filename)
+		newBlock := NewBlock("", blockCount, n, buffer[:n])
+		blocks = append(blocks, &newBlock.BlockInfo)
+		logger.Debugf("Uploading %vth Block of %v", blockCount, filename)
 		err = newBlock.Upload(c.stream)
 		if err != nil {
 			return blocks, blockCount, err
 		}
+		res, err := c.stream.CloseAndRecv()
+		if err != nil {
+			logger.Errorf("Close upload stream failed!: %v", err)
+			return blocks, blockCount, err
+		}
+		logger.Debugf("Upload Result for block %v: %v", blockCount, res.Message)
 		blockCount += 1
 	}
 	defer func(totalBlock int) {
@@ -107,17 +116,17 @@ func (c *UploadClient) sliceAndUpload(file *os.File, key string) ([]BlockInf, in
 //
 // 2. Sending these Chunks through grpc.ClientStream
 //
-// 3. CloseSend then get result from Server
-func PutObject(localFilePath string, server string, key string) ([]BlockInf, int, error) {
+// 3. CloseSend then get result from Server of this Block
+//
+// 4. Repeat Until all Block's have been sent
+func PutObject(localFilePath string, server string, key string) ([]*object.BlockInfo, int, error) {
 	// Step 0
 	client, err := NewGaiaClient(server)
 	if err != nil {
 		return nil, 0, err
 	}
-	defer client.cancel()
-	err = client.NewUploadStream()
-	if err != nil {
-		return nil, 0, err
+	if client.cancel != nil {
+		defer client.cancel()
 	}
 	// Step 1, 2
 	file, err := os.Open(localFilePath)
@@ -129,13 +138,5 @@ func PutObject(localFilePath string, server string, key string) ([]BlockInf, int
 		logger.Warningf("Upload Interrupted with error: %v", err)
 		return blocks, totalBlocks, err
 	}
-	// Step 3
-	result, err := client.GetUploadResult()
-	if err != nil {
-		logger.Warningf("Upload Finished with Result: %v", err)
-		return blocks, totalBlocks, err
-	}
-	logger.Infof("Upload Success! %v -> %v", localFilePath, key)
-	logger.Infof("Upload Result: %v", result.Message)
 	return blocks, totalBlocks, nil
 }
