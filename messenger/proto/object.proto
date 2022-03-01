@@ -13,14 +13,15 @@ message Block {
 message ObjectMeta {
   string obj_id = 1;
   uint64 size = 2;
-  uint64 update_time = 3;
-  repeated BlockInfo blocks = 4;
+  google.protobuf.Timestamp update_time = 3;
+  string obj_hash = 4;
   uint64 pg_id = 5;
-  string obj_hash = 6;
+  repeated BlockInfo blocks = 6;
 }
 
 message BlockInfo {
   string block_id = 1;
   uint64 size = 2;
   string block_hash = 3;
+  uint64 pg_id = 4;
 }
