@@ -1,8 +1,10 @@
 package main
 
 import (
+	"ecos/edge-node/alaya"
 	moonConfig "ecos/edge-node/config"
 	"ecos/edge-node/moon"
+	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/config"
 	"ecos/utils/logger"
@@ -42,12 +44,19 @@ func action(c *cli.Context) error {
 	if err != nil {
 		logger.Errorf("init config fail: %v", err)
 	}
+
 	// init moon node
 	logger.Infof("Start init moon node ...")
+	nodeInfoDir := "./NodeInfoStorage"
+	infoStorage := node.NewStableNodeInfoStorage(nodeInfoDir)
 	selfInfo := conf.SelfInfo
 	rpcServer := messenger.NewRpcServer(conf.RpcPort)
 	m := moon.NewMoon(selfInfo, conf.Moon.SunAddr, nil, nil,
 		rpcServer)
+	//init Alaya
+	metaStorage := alaya.NewStableMetaStorage(nodeInfoDir)
+	a := alaya.NewAlaya(selfInfo)
+
 	go func() {
 		err := rpcServer.Run()
 		if err != nil {
