@@ -1,8 +1,11 @@
 package main
 
 import (
-	moonConfig "ecos/edge-node/config"
+	"ecos/edge-node/alaya"
+	edgeNodeConfig "ecos/edge-node/config"
+	"ecos/edge-node/gaia"
 	"ecos/edge-node/moon"
+	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/config"
 	"ecos/utils/logger"
@@ -10,11 +13,14 @@ import (
 	"github.com/urfave/cli/v2"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"time"
 )
 
 var Moon *moon.Moon
+var Alaya *alaya.Alaya
+var Gaia *gaia.Gaia
 
 func NewRouter() *gin.Engine {
 	router := gin.Default()
@@ -33,29 +39,46 @@ func getGroupInfo(c *gin.Context) {
 func action(c *cli.Context) error {
 	// read config
 	confPath := c.Path("config")
-	conf := moonConfig.DefaultConfig
+	conf := edgeNodeConfig.DefaultConfig
 	conf.Moon.SunAddr = c.String("sun")
 	config.Register(conf, confPath)
 	config.ReadAll()
 	_ = config.GetConf(conf)
-	err := moonConfig.InitConfig(conf)
+	err := edgeNodeConfig.InitConfig(conf)
 	if err != nil {
 		logger.Errorf("init config fail: %v", err)
 	}
+	dbBasePath := path.Join(conf.StoragePath, "/db")
 	// init moon node
 	logger.Infof("Start init moon node ...")
+	nodeInfoDBPath := path.Join(dbBasePath, "/nodeInfo")
+	infoStorage := node.NewStableNodeInfoStorage(nodeInfoDBPath)
 	selfInfo := conf.SelfInfo
 	rpcServer := messenger.NewRpcServer(conf.RpcPort)
-	m := moon.NewMoon(selfInfo, conf.Moon.SunAddr, nil, nil,
+	Moon = moon.NewMoon(selfInfo, conf.Moon.SunAddr, nil, nil,
 		rpcServer)
+
+	//init Alaya
+	logger.Infof("Start init Alaya ...")
+	metaDBPath := path.Join(dbBasePath, "/meta")
+	metaStorage := alaya.NewStableMetaStorage(metaDBPath)
+	Alaya = alaya.NewAlaya(selfInfo, infoStorage, metaStorage, rpcServer, nil)
+	// TODO: alaya don't have pipelines, haven't init raft node
+
+	//init Gaia
+	logger.Infof("Start init Gaia ...")
+	Gaia = gaia.NewGaia(rpcServer)
+
+	// Run
 	go func() {
 		err := rpcServer.Run()
 		if err != nil {
 			logger.Errorf("RPC server run error: %v", err)
 		}
 	}()
-	go m.Run()
-	Moon = m
+	go Moon.Run()
+	go Alaya.Run()
+
 	logger.Infof("moon node init success")
 
 	// init Gin
