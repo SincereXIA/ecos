@@ -1,6 +1,7 @@
 package node
 
 import (
+	"ecos/utils/common"
 	"ecos/utils/logger"
 	"encoding/json"
 	"errors"
@@ -137,6 +138,11 @@ func (storage *StableNodeInfoStorage) Close() {
 }
 
 func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
+	err := common.InitPath(dataBaseDir)
+	if err != nil {
+		logger.Errorf("mkdir err: %v", err)
+		return nil
+	}
 	opts.SetCreateIfMissing(true)
 	db, err := gorocksdb.OpenDb(opts, dataBaseDir)
 	if err != nil {

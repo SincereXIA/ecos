@@ -154,10 +154,10 @@ func (m *Moon) Register(sunAddr string) (leaderInfo *node.NodeInfo, err error) {
 }
 
 func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
-	leaderInfo *node.NodeInfo, groupInfo []*node.NodeInfo, rpcServer *messenger.RpcServer) *Moon {
+	leaderInfo *node.NodeInfo, groupInfo []*node.NodeInfo, rpcServer *messenger.RpcServer,
+	infoStorage node.InfoStorage) *Moon {
 	ctx, cancel := context.WithCancel(context.Background())
 	storage := raft.NewMemoryStorage()
-	infoStorage := node.NewMemoryNodeInfoStorage()
 	raftChan := make(chan raftpb.Message)
 	storagePath := "./ecos-data/db/" + strconv.FormatUint(selfInfo.RaftId, 10)
 	stableStorage := NewStorage(storagePath)

@@ -56,7 +56,7 @@ func action(c *cli.Context) error {
 	selfInfo := conf.SelfInfo
 	rpcServer := messenger.NewRpcServer(conf.RpcPort)
 	Moon = moon.NewMoon(selfInfo, conf.Moon.SunAddr, nil, nil,
-		rpcServer)
+		rpcServer, infoStorage)
 
 	//init Alaya
 	logger.Infof("Start init Alaya ...")
