@@ -2,21 +2,26 @@ syntax = "proto3";
 
 package messenger;
 
-option go_package = "ecos/client";
+option go_package = "ecos/edge-node/object";
+
+import public "google/protobuf/timestamp.proto";
 
 message Block {
   repeated bytes data = 1;
 }
 
-message BlockInfo {
-  string filename = 1;
-  string hash = 2;
-  uint64 size = 3;
+message ObjectMeta {
+  string obj_id = 1;
+  uint64 size = 2;
+  google.protobuf.Timestamp update_time = 3;
+  string obj_hash = 4;
+  uint64 pg_id = 5;
+  repeated BlockInfo blocks = 6;
 }
 
-message ObjectInfo {
-  string objId = 1;
-  string contentHash = 2;
-  uint64 updateTime = 3;
-  repeated BlockInfo blocks = 4;
+message BlockInfo {
+  string block_id = 1;
+  uint64 size = 2;
+  string block_hash = 3;
+  uint64 pg_id = 4;
 }

@@ -40,7 +40,7 @@ func (c *gaiaClient) UploadBlockData(ctx context.Context, opts ...grpc.CallOptio
 }
 
 type Gaia_UploadBlockDataClient interface {
-	Send(*Chunk) error
+	Send(*UploadBlockRequest) error
 	CloseAndRecv() (*common.Result, error)
 	grpc.ClientStream
 }
@@ -49,7 +49,7 @@ type gaiaUploadBlockDataClient struct {
 	grpc.ClientStream
 }
 
-func (x *gaiaUploadBlockDataClient) Send(m *Chunk) error {
+func (x *gaiaUploadBlockDataClient) Send(m *UploadBlockRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -98,7 +98,7 @@ func _Gaia_UploadBlockData_Handler(srv interface{}, stream grpc.ServerStream) er
 
 type Gaia_UploadBlockDataServer interface {
 	SendAndClose(*common.Result) error
-	Recv() (*Chunk, error)
+	Recv() (*UploadBlockRequest, error)
 	grpc.ServerStream
 }
 
@@ -110,8 +110,8 @@ func (x *gaiaUploadBlockDataServer) SendAndClose(m *common.Result) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *gaiaUploadBlockDataServer) Recv() (*Chunk, error) {
-	m := new(Chunk)
+func (x *gaiaUploadBlockDataServer) Recv() (*UploadBlockRequest, error) {
+	m := new(UploadBlockRequest)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}

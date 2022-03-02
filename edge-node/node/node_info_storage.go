@@ -3,6 +3,7 @@ package node
 import (
 	"errors"
 	"github.com/mohae/deepcopy"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 )
 
@@ -89,13 +90,13 @@ func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {
 			Term:            0,
 			LeaderInfo:      nil,
 			NodesInfo:       nil,
-			UpdateTimestamp: uint64(time.Now().UnixNano()),
+			UpdateTimestamp: timestamppb.Now(),
 		},
 		uncommittedGroupInfo: &GroupInfo{
 			Term:            uint64(time.Now().UnixNano()),
 			LeaderInfo:      nil,
 			NodesInfo:       nil,
-			UpdateTimestamp: uint64(time.Now().UnixNano()),
+			UpdateTimestamp: timestamppb.Now(),
 		},
 	}
 }
@@ -108,5 +109,5 @@ func map2Slice(input map[ID]NodeInfo) (output []*NodeInfo) {
 }
 
 func (storage *MemoryNodeInfoStorage) updateTimestamp() {
-	storage.uncommittedGroupInfo.UpdateTimestamp = uint64(time.Now().Unix())
+	storage.uncommittedGroupInfo.UpdateTimestamp = timestamppb.Now()
 }

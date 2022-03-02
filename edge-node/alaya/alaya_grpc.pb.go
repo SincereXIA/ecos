@@ -4,6 +4,7 @@ package alaya
 
 import (
 	context "context"
+	object "ecos/edge-node/object"
 	common "ecos/messenger/common"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -19,7 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AlayaClient interface {
-	RecordObjectMeta(ctx context.Context, in *ObjectMeta, opts ...grpc.CallOption) (*common.Result, error)
+	RecordObjectMeta(ctx context.Context, in *object.ObjectMeta, opts ...grpc.CallOption) (*common.Result, error)
 	SendRaftMessage(ctx context.Context, in *PGRaftMessage, opts ...grpc.CallOption) (*PGRaftMessage, error)
 }
 
@@ -31,7 +32,7 @@ func NewAlayaClient(cc grpc.ClientConnInterface) AlayaClient {
 	return &alayaClient{cc}
 }
 
-func (c *alayaClient) RecordObjectMeta(ctx context.Context, in *ObjectMeta, opts ...grpc.CallOption) (*common.Result, error) {
+func (c *alayaClient) RecordObjectMeta(ctx context.Context, in *object.ObjectMeta, opts ...grpc.CallOption) (*common.Result, error) {
 	out := new(common.Result)
 	err := c.cc.Invoke(ctx, "/messenger.Alaya/RecordObjectMeta", in, out, opts...)
 	if err != nil {
@@ -53,7 +54,7 @@ func (c *alayaClient) SendRaftMessage(ctx context.Context, in *PGRaftMessage, op
 // All implementations must embed UnimplementedAlayaServer
 // for forward compatibility
 type AlayaServer interface {
-	RecordObjectMeta(context.Context, *ObjectMeta) (*common.Result, error)
+	RecordObjectMeta(context.Context, *object.ObjectMeta) (*common.Result, error)
 	SendRaftMessage(context.Context, *PGRaftMessage) (*PGRaftMessage, error)
 	mustEmbedUnimplementedAlayaServer()
 }
@@ -62,7 +63,7 @@ type AlayaServer interface {
 type UnimplementedAlayaServer struct {
 }
 
-func (UnimplementedAlayaServer) RecordObjectMeta(context.Context, *ObjectMeta) (*common.Result, error) {
+func (UnimplementedAlayaServer) RecordObjectMeta(context.Context, *object.ObjectMeta) (*common.Result, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RecordObjectMeta not implemented")
 }
 func (UnimplementedAlayaServer) SendRaftMessage(context.Context, *PGRaftMessage) (*PGRaftMessage, error) {
@@ -82,7 +83,7 @@ func RegisterAlayaServer(s grpc.ServiceRegistrar, srv AlayaServer) {
 }
 
 func _Alaya_RecordObjectMeta_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ObjectMeta)
+	in := new(object.ObjectMeta)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func _Alaya_RecordObjectMeta_Handler(srv interface{}, ctx context.Context, dec f
 		FullMethod: "/messenger.Alaya/RecordObjectMeta",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AlayaServer).RecordObjectMeta(ctx, req.(*ObjectMeta))
+		return srv.(AlayaServer).RecordObjectMeta(ctx, req.(*object.ObjectMeta))
 	}
 	return interceptor(ctx, in, info, handler)
 }

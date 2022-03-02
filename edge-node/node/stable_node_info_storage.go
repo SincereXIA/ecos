@@ -6,6 +6,7 @@ import (
 	"errors"
 	gorocksdb "github.com/SUMStudio/grocksdb"
 	"github.com/mohae/deepcopy"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"strconv"
 	"time"
 )
@@ -128,7 +129,7 @@ func (storage *StableNodeInfoStorage) SetLeader(nodeId ID) error {
 }
 
 func (storage *StableNodeInfoStorage) updateTimestamp() {
-	storage.uncommittedGroupInfo.UpdateTimestamp = uint64(time.Now().Unix())
+	storage.uncommittedGroupInfo.UpdateTimestamp = timestamppb.Now()
 }
 
 func (storage *StableNodeInfoStorage) Close() {
@@ -149,13 +150,13 @@ func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
 			Term:            0,
 			LeaderInfo:      nil,
 			NodesInfo:       nil,
-			UpdateTimestamp: uint64(time.Now().UnixNano()),
+			UpdateTimestamp: timestamppb.Now(),
 		},
 		uncommittedGroupInfo: &GroupInfo{
 			Term:            uint64(time.Now().UnixNano()),
 			LeaderInfo:      nil,
 			NodesInfo:       nil,
-			UpdateTimestamp: uint64(time.Now().UnixNano()),
+			UpdateTimestamp: timestamppb.Now(),
 		},
 	}
 }

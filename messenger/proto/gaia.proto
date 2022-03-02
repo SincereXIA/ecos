@@ -2,14 +2,15 @@ syntax = "proto3";
 package messenger;
 
 import "common.proto";
+import "object.proto";
 option go_package = "ecos/edge-node/gaia";
 
 service Gaia {
-  rpc UploadBlockData(stream Chunk) returns (Result) {}
+  rpc UploadBlockData(stream UploadBlockRequest) returns (Result) {}
 }
 
 message UploadBlockRequest {
-  oneof type {
+  oneof payload {
     Chunk chunk= 1;
     ControlMessage message = 2;
   }
@@ -21,16 +22,10 @@ message ControlMessage {
     EOF = 1;
   }
   Code code = 1;
-  string object_id = 2;
-  string block_id = 3;
-  string pg_id = 4;
+  BlockInfo block = 2;
 }
 
 message Chunk {
   bytes content = 1;
-  bool no_more = 2;
-  string object_id = 3;
-  string block_id = 4;
-  string pg_id = 5;
 }
 
