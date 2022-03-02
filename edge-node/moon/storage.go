@@ -1,6 +1,7 @@
 package moon
 
 import (
+	"ecos/utils/common"
 	"ecos/utils/logger"
 	"encoding/json"
 	gorocksdb "github.com/SUMStudio/grocksdb"
@@ -71,6 +72,11 @@ func (s *RocksdbStorage) Close() {
 }
 
 func NewStorage(dataBaseDir string) Storage {
+	err := common.InitPath(dataBaseDir)
+	if err != nil {
+		logger.Errorf("mkdir err: %v", err)
+		return nil
+	}
 	opts.SetCreateIfMissing(true)
 	db, err := gorocksdb.OpenDb(opts, dataBaseDir)
 	if err != nil {

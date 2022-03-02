@@ -159,7 +159,7 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 	ctx, cancel := context.WithCancel(context.Background())
 	storage := raft.NewMemoryStorage()
 	raftChan := make(chan raftpb.Message)
-	storagePath := "./ecos-data/db/" + strconv.FormatUint(selfInfo.RaftId, 10)
+	storagePath := "./ecos-data/db/raftinfo/" + strconv.FormatUint(selfInfo.RaftId, 10)
 	stableStorage := NewStorage(storagePath)
 	m := &Moon{
 		id:          0, // set raft id after register

@@ -109,7 +109,7 @@ func TestRaft(t *testing.T) {
 }
 
 func TestMoon_Register(t *testing.T) {
-	dbBasePath := "./ecos-data/db/"
+	dbBasePath := "./ecos-data/db/nodeinfo/"
 	defer os.RemoveAll(dbBasePath)
 	sunRpc := messenger.NewRpcServer(3260)
 	sun.NewSun(sunRpc)
@@ -133,8 +133,7 @@ func TestMoon_Register(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		dbPath := path.Join(dbBasePath, "/"+strconv.Itoa(i))
 		infoStorage := node.NewStableNodeInfoStorage(dbPath)
-		moon := NewMoon(groupInfo[i], "127.0.0.1:3260", nil, nil,
-			rpcServers[i], infoStorage)
+		moon := NewMoon(groupInfo[i], "127.0.0.1:3260", nil, nil, rpcServers[i], infoStorage)
 		moons = append(moons, moon)
 		go rpcServers[i].Run()
 		go moon.Run()
