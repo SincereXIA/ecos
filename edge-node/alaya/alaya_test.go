@@ -8,6 +8,7 @@ import (
 	"ecos/messenger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/wxnacy/wgo/arrays"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"strconv"
@@ -70,6 +71,20 @@ func TestNewAlaya(t *testing.T) {
 		a.Run()
 	}
 	time.Sleep(time.Second * 5)
+
+	for i := 0; i < 9; i++ { // test of whether the first node of pg is leader
+		a := alayas[i]
+		for _, p := range pipelines {
+			if -1 == arrays.Contains(p.RaftId, a.NodeID) { // pass when node not in pipline
+				continue
+			}
+			pgID := p.PgId
+			if p.RaftId[0] == a.NodeID {
+				a.PGRaftNode[pgID].raft.Status()
+				assert.Equal(t, a.PGRaftNode[pgID].raft.Status().Lead, a.NodeID, "first node of pg is leader")
+			}
+		}
+	}
 
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]

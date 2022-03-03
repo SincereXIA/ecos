@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -29,6 +30,8 @@ type Raft struct {
 
 	metaStorage MetaStorage
 }
+
+var onceWaitForRpc sync.Once
 
 func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline,
 	infoStorage node.InfoStorage, metaStorage MetaStorage,
@@ -146,4 +149,27 @@ func (r *Raft) ProposeObjectMeta(meta *object.ObjectMeta) {
 	if err != nil {
 		logger.Warningf("raft propose err: %v", err)
 	}
+}
+
+func (r *Raft) AskForLeader() {
+	onceWaitForRpc.Do(func() {
+		time.Sleep(5 * time.Second) // wait for init RPC
+	})
+	for {
+		if (r.raft.Status().Lead == uint64(0)) || (r.raft.Status().Lead == r.raftCfg.ID) {
+			time.Sleep(1 * time.Second)
+			continue
+		} else {
+			logger.Infof("node%v askForLeader", r.raftCfg.ID)
+			msg := []raftpb.Message{
+				raftpb.Message{
+					From: r.raftCfg.ID,
+					To:   r.raft.Status().Lead,
+					Type: raftpb.MsgTransferLeader,
+				},
+			}
+			r.sendMsgByRpc(msg)
+		}
+	}
+
 }

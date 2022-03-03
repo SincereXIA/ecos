@@ -111,6 +111,11 @@ func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage
 		pgID := p.PgId
 		a.PGMessageChans[pgID] = make(chan raftpb.Message)
 		a.PGRaftNode[pgID] = NewAlayaRaft(selfInfo.RaftId, pgID, p, infoStorage, metaStorage, a.PGMessageChans[pgID])
+		if p.RaftId[0] == selfInfo.RaftId {
+			//logger.Infof("pgLeaderID: %v", selfInfo.RaftId)
+			go a.PGRaftNode[pgID].AskForLeader()
+		}
+
 	}
 	return &a
 }
