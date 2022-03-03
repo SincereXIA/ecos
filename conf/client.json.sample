@@ -1,7 +1,10 @@
 {
   "Object": {
     "BlockSize": 4194304,
-    "ChunkSize": 1048576
+    "ChunkSize": 1048576,
+    "BlockHash": true,
+    "ObjectHash": false
   },
-  "UploadTimeoutMs": 1000
+  "UploadTimeoutMs": 1000,
+  "UploadBuffer": 33554432
 }
