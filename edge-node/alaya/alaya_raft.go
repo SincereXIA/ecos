@@ -147,3 +147,23 @@ func (r *Raft) ProposeObjectMeta(meta *object.ObjectMeta) {
 		logger.Warningf("raft propose err: %v", err)
 	}
 }
+
+func (r *Raft) RunAskForLeader() {
+	for {
+		if (r.raft.Status().Lead == uint64(0)) || (r.raft.Status().Lead == r.raftCfg.ID) {
+			time.Sleep(1 * time.Second)
+			continue
+		} else {
+			logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
+			msg := []raftpb.Message{
+				raftpb.Message{
+					From: r.raftCfg.ID,
+					To:   r.raft.Status().Lead,
+					Type: raftpb.MsgTransferLeader,
+				},
+			}
+			r.sendMsgByRpc(msg)
+		}
+	}
+
+}
