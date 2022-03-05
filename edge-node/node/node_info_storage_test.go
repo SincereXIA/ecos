@@ -3,11 +3,24 @@ package node
 import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
+	"time"
 )
 
 func TestMemoryNodeInfoStorage(t *testing.T) {
 	storage := NewMemoryNodeInfoStorage()
+	testStorage(storage, t)
+
+	testDataBaseDir := "./testNodeInfo"
+	os.Mkdir(testDataBaseDir, os.ModePerm)
+	stableStorage := NewStableNodeInfoStorage(testDataBaseDir)
+	defer stableStorage.Close()
+	testStorage(stableStorage, t)
+	os.RemoveAll(testDataBaseDir)
+}
+
+func testStorage(storage InfoStorage, t *testing.T) {
 	t.Run("test init", func(t *testing.T) {
 		groupInfo := storage.GetGroupInfo()
 		assert.Equal(t, groupInfo.GroupTerm.Term, uint64(0))
@@ -40,7 +53,13 @@ func TestMemoryNodeInfoStorage(t *testing.T) {
 		assert.NoError(t, storage.SetLeader(1))
 	})
 	t.Run("test info commit", func(t *testing.T) {
-		storage.Commit()
+		storage.Commit(uint64(time.Now().UnixNano()))
+		// TODO:  rocksdb 的 infoStorage 完成后，取消下面注释
+		//group := storage.GetGroupInfo()
+		//assert.Empty(t, group.NodesInfo)
+	})
+	t.Run("test info apply", func(t *testing.T) {
+		storage.Apply()
 		group := storage.GetGroupInfo()
 		assert.NotEmpty(t, group.NodesInfo)
 		t.Logf("Old term: %v, new term: %v", 0, group.GroupTerm.Term)
@@ -56,7 +75,10 @@ func TestMemoryNodeInfoStorage(t *testing.T) {
 		assert.NoError(t, storage.UpdateNodeInfo(&info3))
 		group = storage.GetGroupInfo()
 		assert.Equal(t, len(group.NodesInfo), 2)
-		storage.Commit()
+		storage.Commit(uint64(time.Now().UnixNano()))
+		// TODO:  rocksdb 的 infoStorage 完成后，取消下面注释
+		//assert.Equal(t, len(group.NodesInfo), 2)
+		storage.Apply()
 		group = storage.GetGroupInfo()
 		t.Logf("Old term: %v, new term: %v", term, group.GroupTerm.Term)
 		assert.NotEqual(t, group.GroupTerm.Term, term)

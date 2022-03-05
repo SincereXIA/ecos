@@ -25,6 +25,8 @@ type StableNodeInfoStorage struct {
 	nowInfoMap           map[ID]NodeInfo
 	nowGroupInfo         *GroupInfo
 	uncommittedGroupInfo *GroupInfo
+
+	onGroupApplyHookFunc func(info *GroupInfo)
 }
 
 func (storage *StableNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
@@ -92,7 +94,7 @@ func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]NodeInfo {
 	return NodeInfoMap
 }
 
-func (storage *StableNodeInfoStorage) Commit() {
+func (storage *StableNodeInfoStorage) Commit(nextTerm uint64) {
 	storage.nowInfoMap = storage.ListAllNodeInfo()
 	cpy := deepcopy.Copy(storage.uncommittedGroupInfo)
 	storage.nowGroupInfo = cpy.(*GroupInfo)
@@ -110,6 +112,12 @@ func (storage *StableNodeInfoStorage) Commit() {
 		if err != nil {
 			logger.Errorf("save Term failed, err:%v\n", err)
 		}
+	}
+}
+func (storage *StableNodeInfoStorage) Apply() {
+	// TODO: (qiutb) 在 apply 时 使得 已经 commit 的 info 生效
+	if storage.onGroupApplyHookFunc != nil {
+		storage.onGroupApplyHookFunc(storage.GetGroupInfo())
 	}
 }
 
@@ -135,6 +143,10 @@ func (storage *StableNodeInfoStorage) updateTimestamp() {
 
 func (storage *StableNodeInfoStorage) Close() {
 	storage.db.Close()
+}
+
+func (storage *StableNodeInfoStorage) SetOnGroupApply(hookFunc func(info *GroupInfo)) {
+	storage.onGroupApplyHookFunc = hookFunc
 }
 
 func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
