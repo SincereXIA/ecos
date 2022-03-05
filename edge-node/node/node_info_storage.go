@@ -21,6 +21,8 @@ type InfoStorage interface {
 	ListAllNodeInfo() map[ID]NodeInfo
 	// GetGroupInfo 用于为 Crush 算法提供集群信息
 	GetGroupInfo() *GroupInfo
+
+	Close()
 }
 
 type MemoryNodeInfoStorage struct {
@@ -80,6 +82,10 @@ func (storage *MemoryNodeInfoStorage) SetLeader(nodeId ID) error {
 		return errors.New("leader not found")
 	}
 	return nil
+}
+
+func (storage *MemoryNodeInfoStorage) Close() {
+	// do nothing
 }
 
 func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {

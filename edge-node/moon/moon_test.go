@@ -1,12 +1,12 @@
 package moon
 
 import (
-	"context"
 	"ecos/cloud/sun"
 	"ecos/edge-node/node"
 	"ecos/messenger"
+	"ecos/utils/common"
+	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/raft/v3"
-	"go.etcd.io/etcd/raft/v3/raftpb"
 	"os"
 	"path"
 	"reflect"
@@ -16,47 +16,29 @@ import (
 )
 
 func TestRaft(t *testing.T) {
-	os.MkdirAll("./ecos-data/db/", os.ModePerm)
+	basePath := "./ecos-data/db/moon"
+	moons, rpcServers, err := createMoons(3, "", basePath)
+	assert.NoError(t, err)
 
 	// 先起三个节点
-	groupInfo := []*node.NodeInfo{
-		node.NewSelfInfo(0x01, "127.0.0.1", 32671),
-		node.NewSelfInfo(0x02, "127.0.0.1", 32672),
-		node.NewSelfInfo(0x03, "127.0.0.1", 32673),
+	var nodeInfos []*node.NodeInfo
+	for i := 0; i < 3; i++ {
+		index := i
+		nodeInfos = append(nodeInfos, moons[i].selfInfo)
+		go func() {
+			err := rpcServers[index].Run()
+			if err != nil {
+				t.Errorf("Run rpcServer err: %v", err)
+			}
+		}()
+		go moons[i].Run()
 	}
-
-	rpcServer1 := messenger.NewRpcServer(32671)
-	rpcServer2 := messenger.NewRpcServer(32672)
-	rpcServer3 := messenger.NewRpcServer(32673)
-
-	var infoStorages []node.InfoStorage
-	for i := 0; i < 4; i++ {
-		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
-	}
-
-	node1 := NewMoon(groupInfo[0], "", nil, groupInfo, rpcServer1, infoStorages[0])
-	go rpcServer1.Run()
-	go node1.Run()
-	defer node1.Stop()
-	defer rpcServer1.Stop()
-	node2 := NewMoon(groupInfo[1], "", nil, groupInfo, rpcServer2, infoStorages[1])
-	go rpcServer2.Run()
-	go node2.Run()
-	defer node2.Stop()
-	defer rpcServer2.Stop()
-	node3 := NewMoon(groupInfo[2], "", nil, groupInfo, rpcServer3, infoStorages[2])
-	go rpcServer3.Run()
-	go node3.Run()
-	defer node3.Stop()
-	defer rpcServer3.Stop()
-
-	nodes := []*Moon{node1, node2, node3}
 
 	// 等待选主
 	leader := -1
 	for {
 		for i := 0; i < 3; i++ {
-			if raft.StateLeader == nodes[i].raft.Status().RaftState {
+			if moons[i].raft != nil && raft.StateLeader == moons[i].raft.Status().RaftState {
 				leader = i
 				break
 			}
@@ -70,34 +52,26 @@ func TestRaft(t *testing.T) {
 
 	// Node4
 	node4Info := node.NewSelfInfo(0x04, "127.0.0.1", 32674)
-	nodes[leader].AddNodeToGroup(context.TODO(), node4Info)
 	rpcServer4 := messenger.NewRpcServer(32674)
-	node4 := NewMoon(node4Info, "", nil, groupInfo, rpcServer4, infoStorages[3])
+	node4 := NewMoon(node4Info, "", nil, nodeInfos, rpcServer4, node.NewMemoryNodeInfoStorage(),
+		NewStorage(path.Join(basePath, "/raft", "/4")))
+	moons = append(moons, node4)
+	rpcServers = append(rpcServers, rpcServer4)
 	go rpcServer4.Run()
 
+	// 启动 Node4
 	// 集群提交增加节点请求
-	_ = node1.raft.ProposeConfChange(node1.ctx, raftpb.ConfChange{
-		Type:    raftpb.ConfChangeAddNode,
-		NodeID:  0x04,
-		Context: nil,
-	})
+	go node4.Run()
+	node4.RequestJoinGroup(moons[leader].selfInfo)
 
 	// 等待共识
 	time.Sleep(2 * time.Second)
 
-	// 启动 Node4
-	go node4.Run()
-	defer node4.Stop()
-
-	nodes = append(nodes, node4)
-
-	time.Sleep(2 * time.Second)
-
 	// 判断集群是否达成共识
-	info := nodes[0].InfoStorage.ListAllNodeInfo()
+	info := moons[0].InfoStorage.ListAllNodeInfo()
 	t.Log(info)
 	for i := 1; i < 4; i++ {
-		anotherInfo := nodes[i].InfoStorage.ListAllNodeInfo()
+		anotherInfo := moons[i].InfoStorage.ListAllNodeInfo()
 		if !reflect.DeepEqual(info, anotherInfo) {
 			t.Errorf("Node Info Not Equal")
 		}
@@ -105,38 +79,30 @@ func TestRaft(t *testing.T) {
 	}
 	t.Log("Reach agreement success")
 
-	defer os.RemoveAll("./ecos-data/db")
+	for i := 0; i < 4; i++ {
+		rpcServers[i].Stop()
+		moons[i].Stop()
+	}
+
+	defer os.RemoveAll(basePath)
 }
 
 func TestMoon_Register(t *testing.T) {
-	dbBasePath := "./ecos-data/db/nodeinfo/"
+	dbBasePath := "./ecos-data/db/moon/"
+	moonNum := 5
+
 	defer os.RemoveAll(dbBasePath)
 	sunRpc := messenger.NewRpcServer(3260)
 	sun.NewSun(sunRpc)
 	go sunRpc.Run()
 	time.Sleep(1 * time.Second)
 
-	groupInfo := []*node.NodeInfo{
-		node.NewSelfInfo(0x01, "127.0.0.1", 32671),
-		node.NewSelfInfo(0x02, "127.0.0.1", 32672),
-		node.NewSelfInfo(0x03, "127.0.0.1", 32673),
-	}
+	moons, rpcServers, err := createMoons(moonNum, "127.0.0.1:3260", dbBasePath)
+	assert.NoError(t, err)
 
-	rpcServers := []*messenger.RpcServer{
-		messenger.NewRpcServer(32671),
-		messenger.NewRpcServer(32672),
-		messenger.NewRpcServer(32673),
-	}
-
-	var moons []*Moon
-
-	for i := 0; i < 3; i++ {
-		dbPath := path.Join(dbBasePath, "/"+strconv.Itoa(i))
-		infoStorage := node.NewStableNodeInfoStorage(dbPath)
-		moon := NewMoon(groupInfo[i], "127.0.0.1:3260", nil, nil, rpcServers[i], infoStorage)
-		moons = append(moons, moon)
+	for i := 0; i < moonNum; i++ {
 		go rpcServers[i].Run()
-		go moon.Run()
+		go moons[i].Run()
 	}
 
 	//time.Sleep(5 * time.Second)
@@ -144,8 +110,12 @@ func TestMoon_Register(t *testing.T) {
 	leader := -1
 	for {
 		ok := true
-		for i := 0; i < 3; i++ {
-			if moons[i].raft.Status().Lead == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != 3 {
+		for i := 0; i < moonNum; i++ {
+			if moons[i].raft == nil {
+				ok = false
+				break
+			}
+			if moons[i].raft.Status().Lead == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != moonNum {
 				ok = false
 			}
 			leader = int(moons[i].raft.Status().Lead)
@@ -158,8 +128,40 @@ func TestMoon_Register(t *testing.T) {
 			break
 		}
 	}
-	for i := 0; i < 3; i++ {
+	for i := 0; i < moonNum; i++ {
 		rpcServers[i].Stop()
 		moons[i].Stop()
 	}
+}
+
+func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenger.RpcServer, error) {
+	err := common.InitAndClearPath(basePath)
+	if err != nil {
+		return nil, nil, err
+	}
+	var infoStorages []node.InfoStorage
+	var stableStorages []Storage
+	var rpcServers []*messenger.RpcServer
+	var moons []*Moon
+	var nodeInfos []*node.NodeInfo
+
+	for i := 0; i < num; i++ {
+		raftID := uint64(i + 1)
+		infoStorages = append(infoStorages,
+			node.NewStableNodeInfoStorage(path.Join(basePath, "/nodeInfo", strconv.Itoa(i+1))))
+		stableStorages = append(stableStorages, NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
+		rpcServers = append(rpcServers, messenger.NewRpcServer(32670+raftID))
+		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", 32670+raftID))
+	}
+
+	for i := 0; i < num; i++ {
+		if sunAddr != "" {
+			moons = append(moons, NewMoon(nodeInfos[i], sunAddr, nil, nil, rpcServers[i], infoStorages[i],
+				stableStorages[i]))
+		} else {
+			moons = append(moons, NewMoon(nodeInfos[i], sunAddr, nil, nodeInfos, rpcServers[i], infoStorages[i],
+				stableStorages[i]))
+		}
+	}
+	return moons, rpcServers, nil
 }

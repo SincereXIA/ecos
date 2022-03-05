@@ -49,14 +49,16 @@ func action(c *cli.Context) error {
 		logger.Errorf("init config fail: %v", err)
 	}
 	dbBasePath := path.Join(conf.StoragePath, "/db")
+
 	// init moon node
 	logger.Infof("Start init moon node ...")
 	nodeInfoDBPath := path.Join(dbBasePath, "/nodeInfo")
 	infoStorage := node.NewStableNodeInfoStorage(nodeInfoDBPath)
 	selfInfo := conf.SelfInfo
 	rpcServer := messenger.NewRpcServer(conf.RpcPort)
+	stableStorage := moon.NewStorage(path.Join(dbBasePath, "/raft/moon"))
 	Moon = moon.NewMoon(selfInfo, conf.Moon.SunAddr, nil, nil,
-		rpcServer, infoStorage)
+		rpcServer, infoStorage, stableStorage)
 
 	//init Alaya
 	logger.Infof("Start init Alaya ...")

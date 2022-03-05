@@ -25,3 +25,12 @@ func InitPath(path string) error {
 	}
 	return nil
 }
+
+func InitAndClearPath(path string) error {
+	err := InitPath(path)
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll(path)
+	return err
+}
