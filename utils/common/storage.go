@@ -1,6 +1,7 @@
 package common
 
 import (
+	"ecos/utils/logger"
 	"errors"
 	"os"
 )
@@ -12,6 +13,7 @@ func InitPath(path string) error {
 		if os.IsExist(err) { //
 			return err // path 存在，且不是目录
 		}
+		logger.Infof("Path: %v not exist, create it", path)
 		err = os.MkdirAll(path, 0777) // 目录不存在，创建空目录
 		if err != nil {
 			return err
@@ -22,4 +24,13 @@ func InitPath(path string) error {
 		return errors.New("path exist and not a dir")
 	}
 	return nil
+}
+
+func InitAndClearPath(path string) error {
+	err := InitPath(path)
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll(path)
+	return err
 }

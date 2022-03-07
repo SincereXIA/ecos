@@ -23,7 +23,6 @@ func NewRpcServer(listenPort uint64) *RpcServer {
 }
 
 func (server *RpcServer) Run() error {
-	// 监听本地的8972端口
 	lis, err := net.Listen("tcp", ":"+strconv.FormatUint(server.listenPort, 10))
 	server.listen = lis
 	if err != nil {

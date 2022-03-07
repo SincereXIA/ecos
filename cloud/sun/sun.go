@@ -30,12 +30,12 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*Registe
 
 	// Check Leader info
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.leaderInfo == nil { // This is new leader
 		hasLeader = false
 		s.leaderInfo = nodeInfo
 		s.groupInfo.LeaderInfo = s.leaderInfo
 	}
-	s.mu.Unlock()
 
 	if info, ok := s.cachedInfo[nodeInfo.Uuid]; ok {
 		return &RegisterResult{

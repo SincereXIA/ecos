@@ -1,6 +1,7 @@
 package moon
 
 import (
+	"ecos/utils/common"
 	"ecos/utils/logger"
 	"encoding/json"
 	gorocksdb "github.com/SUMStudio/grocksdb"
@@ -8,10 +9,10 @@ import (
 )
 
 type Storage interface {
-	// Save function saves ents and state to the underlying stable storage.
-	// Save MUST block until st and ents are on stable storage.
+	// Save function saves ents and state to the underlying stable stableStorage.
+	// Save MUST block until st and ents are on stable stableStorage.
 	Save(st raftpb.HardState, ents []raftpb.Entry) error
-	// SaveSnap function saves snapshot to the underlying stable storage.
+	// SaveSnap function saves snapshot to the underlying stable stableStorage.
 	SaveSnap(snap raftpb.Snapshot) error
 
 	Close()
@@ -71,6 +72,11 @@ func (s *RocksdbStorage) Close() {
 }
 
 func NewStorage(dataBaseDir string) Storage {
+	err := common.InitPath(dataBaseDir)
+	if err != nil {
+		logger.Errorf("mkdir err: %v", err)
+		return nil
+	}
 	opts.SetCreateIfMissing(true)
 	db, err := gorocksdb.OpenDb(opts, dataBaseDir)
 	if err != nil {

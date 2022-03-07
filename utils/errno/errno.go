@@ -22,6 +22,7 @@ const (
 
 const (
 	CodeConnectSunFail int = MoonError + iota
+	CodeMoonRaftNotReady
 )
 
 var (
@@ -29,6 +30,8 @@ var (
 	MetaNotExist = newErr(CodePgNotExist, "meta data not exist")
 
 	ConnectSunFail = newErr(CodeConnectSunFail, "connect sun fail")
+
+	MoonRaftNotReady = newErr(CodeMoonRaftNotReady, "moon raft not ready")
 )
 
 type Errno struct {

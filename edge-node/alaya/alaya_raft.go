@@ -101,6 +101,10 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 	for _, message := range messages {
 		nodeId := node.ID(message.To)
 		nodeInfo, err := r.InfoStorage.GetNodeInfo(nodeId)
+		if err != nil {
+			logger.Errorf("Get nodeInfo: %v fail: %v", nodeId, err)
+			return
+		}
 		port := strconv.FormatUint(nodeInfo.RpcPort, 10)
 		// TODO: save grpc connection
 		conn, err := grpc.Dial(nodeInfo.IpAddr+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -150,13 +154,13 @@ func (r *Raft) ProposeObjectMeta(meta *object.ObjectMeta) {
 
 func (r *Raft) RunAskForLeader() {
 	for {
-		if (r.raft.Status().Lead == uint64(0)) || (r.raft.Status().Lead == r.raftCfg.ID) {
+		if (r.raft == nil || r.raft.Status().Lead == uint64(0)) || (r.raft.Status().Lead == r.raftCfg.ID) {
 			time.Sleep(1 * time.Second)
 			continue
 		} else {
 			logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
 			msg := []raftpb.Message{
-				raftpb.Message{
+				{
 					From: r.raftCfg.ID,
 					To:   r.raft.Status().Lead,
 					Type: raftpb.MsgTransferLeader,
