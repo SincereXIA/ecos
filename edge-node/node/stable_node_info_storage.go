@@ -7,6 +7,7 @@ import (
 	"errors"
 	gorocksdb "github.com/SUMStudio/grocksdb"
 	"github.com/mohae/deepcopy"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"strconv"
 	"time"
@@ -29,7 +30,7 @@ type StableNodeInfoStorage struct {
 
 func (storage *StableNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
 	nodeId := strconv.FormatUint(info.RaftId, 10)
-	nodeInfoData, err := json.Marshal(info)
+	nodeInfoData, err := proto.Marshal(info)
 	if err != nil {
 		return nil
 	}
@@ -56,15 +57,15 @@ func (storage *StableNodeInfoStorage) GetNodeInfo(nodeId ID) (*NodeInfo, error) 
 	id := strconv.FormatUint(uint64(nodeId), 10)
 	nodeInfoData, err := storage.db.Get(readOptions, []byte(id))
 	defer nodeInfoData.Free()
-	if err != nil {
+	if !nodeInfoData.Exists() {
 		return nil, errors.New("node not found")
 	}
-	nodeInfo := NodeInfo{}
-	err = json.Unmarshal(nodeInfoData.Data(), &nodeInfo)
+	nodeInfo := &NodeInfo{}
+	proto.Unmarshal(nodeInfoData.Data(), nodeInfo)
 	if err != nil {
 		return nil, err
 	}
-	return &nodeInfo, nil
+	return nodeInfo, nil
 }
 
 func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]NodeInfo {
@@ -81,7 +82,7 @@ func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]NodeInfo {
 		value := it.Value()
 		valueData := value.Data()
 		nodeinfo := NodeInfo{}
-		err = json.Unmarshal(valueData, &nodeinfo)
+		err = proto.Unmarshal(valueData, &nodeinfo)
 		if err != nil {
 			return nil
 		}
