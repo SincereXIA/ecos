@@ -3,7 +3,6 @@ package node
 import (
 	"ecos/utils/common"
 	"ecos/utils/logger"
-	"encoding/json"
 	"errors"
 	gorocksdb "github.com/SUMStudio/grocksdb"
 	"github.com/mohae/deepcopy"
@@ -98,12 +97,12 @@ func (storage *StableNodeInfoStorage) Commit() {
 	cpy := deepcopy.Copy(storage.uncommittedGroupInfo)
 	storage.nowGroupInfo = cpy.(*GroupInfo)
 	storage.nowGroupInfo.NodesInfo = map2Slice(storage.nowInfoMap)
-	oldTerm := storage.uncommittedGroupInfo.Term
-	storage.uncommittedGroupInfo.Term = uint64(time.Now().UnixNano())
+	oldTerm := storage.uncommittedGroupInfo.GroupTerm.Term
+	storage.uncommittedGroupInfo.GroupTerm.Term = uint64(time.Now().UnixNano())
 	// prevent commit too quick let term equal
-	if storage.uncommittedGroupInfo.Term == oldTerm {
-		storage.uncommittedGroupInfo.Term += 1
-		termData, err := json.Marshal(storage.uncommittedGroupInfo.Term)
+	if storage.uncommittedGroupInfo.GroupTerm.Term == oldTerm {
+		storage.uncommittedGroupInfo.GroupTerm.Term += 1
+		termData, err := proto.Marshal(storage.uncommittedGroupInfo.GroupTerm)
 		if err != nil {
 			logger.Errorf("Marshal Term failed, err:%v\n", err)
 		}
@@ -154,13 +153,17 @@ func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
 		db:         db,
 		nowInfoMap: make(map[ID]NodeInfo),
 		nowGroupInfo: &GroupInfo{
-			Term:            0,
+			GroupTerm: &Term{
+				Term: 0,
+			},
 			LeaderInfo:      nil,
 			NodesInfo:       nil,
 			UpdateTimestamp: timestamppb.Now(),
 		},
 		uncommittedGroupInfo: &GroupInfo{
-			Term:            uint64(time.Now().UnixNano()),
+			GroupTerm: &Term{
+				Term: uint64(time.Now().UnixNano()),
+			},
 			LeaderInfo:      nil,
 			NodesInfo:       nil,
 			UpdateTimestamp: timestamppb.Now(),

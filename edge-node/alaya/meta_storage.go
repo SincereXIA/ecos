@@ -4,8 +4,8 @@ import (
 	"ecos/edge-node/object"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
-	"encoding/json"
 	gorocksdb "github.com/SUMStudio/grocksdb"
+	"google.golang.org/protobuf/proto"
 )
 
 // MetaStorage Store ObjectMeta
@@ -58,7 +58,7 @@ func NewMemoryMetaStorage() *MemoryMetaStorage {
 }
 
 func (s *StableMetaStorage) RecordMeta(meta *object.ObjectMeta) error {
-	metaData, err := json.Marshal(*meta)
+	metaData, err := proto.Marshal(meta)
 	if err != nil {
 		logger.Errorf("Marshal failed")
 		return err
@@ -79,7 +79,7 @@ func (s *StableMetaStorage) GetMeta(objID string) (meta *object.ObjectMeta, err 
 		return nil, errno.MetaNotExist
 	}
 	M := object.ObjectMeta{}
-	err = json.Unmarshal(metaData.Data(), &M)
+	err = proto.Unmarshal(metaData.Data(), &M)
 	if err != nil {
 		return nil, err
 	}

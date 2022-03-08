@@ -35,7 +35,7 @@ type RocksdbStorage struct {
 }
 
 func (s *RocksdbStorage) Save(st raftpb.HardState, ents []raftpb.Entry) error {
-	hardstateData, err := json.Marshal(st)
+	hardstateData, err := st.Marshal()
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (s *RocksdbStorage) Save(st raftpb.HardState, ents []raftpb.Entry) error {
 }
 
 func (s *RocksdbStorage) SaveSnap(snap raftpb.Snapshot) error {
-	snapData, err := json.Marshal(snap)
+	snapData, err := snap.Marshal()
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func LoadSnap(dataBaseDir string) (snap raftpb.Snapshot) {
 	if err != nil {
 		logger.Errorf("load snapshot failed, err:%v\n", err)
 	}
-	json.Unmarshal(snapData.Data(), &snap)
+	snap.Unmarshal(snapData.Data())
 	return
 }
 
@@ -115,12 +115,13 @@ func ReadState(dataBaseDir string) (st raftpb.HardState, ents []raftpb.Entry) {
 	if err != nil {
 		logger.Errorf("load hardstate info failed, err:%v\n", err)
 	}
-	json.Unmarshal(stData.Data(), &st)
+	st.Unmarshal(stData.Data())
 	entsData, err := db.Get(readOptions, []byte(entris))
 	defer entsData.Free()
 	if err != nil {
 		logger.Errorf("load ents info failed, err:%v\n", err)
 	}
 	json.Unmarshal(entsData.Data(), &ents)
+
 	return
 }

@@ -17,7 +17,9 @@ func TestGenPipelines(t *testing.T) {
 
 func genGroupInfo() *node.GroupInfo {
 	group := node.GroupInfo{
-		Term:            0,
+		GroupTerm: &node.Term{
+			Term: 0,
+		},
 		LeaderInfo:      nil,
 		NodesInfo:       []*node.NodeInfo{},
 		UpdateTimestamp: timestamppb.Now(),
