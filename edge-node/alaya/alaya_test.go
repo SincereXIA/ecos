@@ -2,15 +2,18 @@ package alaya
 
 import (
 	"context"
+	"ecos/edge-node/moon"
 	"ecos/edge-node/node"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
+	"ecos/utils/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/wxnacy/wgo/arrays"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
+	"path"
 	"strconv"
 	"testing"
 	"time"
@@ -129,6 +132,50 @@ func TestNewAlaya(t *testing.T) {
 
 }
 
+func TestAlaya_UpdatePipeline(t *testing.T) {
+	var infoStorages []node.InfoStorage
+	var nodeInfos []node.NodeInfo
+	var rpcServers []*messenger.RpcServer
+	term := uint64(1)
+
+	for i := 0; i < 9; i++ {
+		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
+		nodeInfos = append(nodeInfos, node.NodeInfo{
+			RaftId:   uint64(i + 1),
+			Uuid:     uuid.New().String(),
+			IpAddr:   "127.0.0.1",
+			RpcPort:  uint64(32770 + i + 1),
+			Capacity: 10,
+		})
+		rpcServers = append(rpcServers, messenger.NewRpcServer(uint64(32770+i+1)))
+		infoStorages[i].UpdateNodeInfo(&nodeInfos[i])
+		infoStorages[i].Commit(term)
+		infoStorages[i].Apply()
+	}
+
+	// UP 6 Alaya
+	var alayas []*Alaya
+	for i := 0; i < 6; i++ {
+		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i], nil))
+		go rpcServers[i].Run()
+		go alayas[i].Run()
+	}
+	time.Sleep(time.Second * 1)
+	term = 2
+	for i := 0; i < 6; i++ {
+		for j := 0; j < 6; j++ {
+			infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+		}
+		infoStorages[i].Commit(term)
+	}
+	for i := 0; i < 6; i++ {
+		t.Logf("Apply new groupInfo for: %v", i+1)
+		go infoStorages[i].Apply()
+	}
+
+	time.Sleep(time.Second * 30)
+}
+
 func TestAlaya_RecordObjectMeta(t *testing.T) {
 	tree := makeStrawTree()
 	nodes := gocrush.Select(tree, 868, 3, NODE, nil)
@@ -152,7 +199,6 @@ func checkUnique(t *testing.T, nodes []gocrush.Node) {
 }
 
 func makeStrawTree() *gocrush.TestingNode {
-
 	var parent = new(gocrush.TestingNode)
 	parent.Id = "ROOT"
 	parent.Type = ROOT
@@ -170,4 +216,36 @@ func makeStrawTree() *gocrush.TestingNode {
 	}
 	parent.Selector = gocrush.NewStrawSelector(parent)
 	return parent
+}
+
+func createMoons(num int, sunAddr string, basePath string) ([]*moon.Moon, []*messenger.RpcServer, error) {
+	err := common.InitAndClearPath(basePath)
+	if err != nil {
+		return nil, nil, err
+	}
+	var infoStorages []node.InfoStorage
+	var stableStorages []moon.Storage
+	var rpcServers []*messenger.RpcServer
+	var moons []*moon.Moon
+	var nodeInfos []*node.NodeInfo
+
+	for i := 0; i < num; i++ {
+		raftID := uint64(i + 1)
+		infoStorages = append(infoStorages,
+			node.NewStableNodeInfoStorage(path.Join(basePath, "/nodeInfo", strconv.Itoa(i+1))))
+		stableStorages = append(stableStorages, moon.NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
+		rpcServers = append(rpcServers, messenger.NewRpcServer(32670+raftID))
+		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", 32670+raftID))
+	}
+
+	for i := 0; i < num; i++ {
+		if sunAddr != "" {
+			moons = append(moons, moon.NewMoon(nodeInfos[i], sunAddr, nil, nil, rpcServers[i], infoStorages[i],
+				stableStorages[i]))
+		} else {
+			moons = append(moons, moon.NewMoon(nodeInfos[i], sunAddr, nil, nodeInfos, rpcServers[i], infoStorages[i],
+				stableStorages[i]))
+		}
+	}
+	return moons, rpcServers, nil
 }

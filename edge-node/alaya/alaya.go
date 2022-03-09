@@ -63,15 +63,21 @@ func (a *Alaya) Stop() {
 	}
 	a.MetaStorage.Close()
 	a.cancel()
+}
 
+func (a *Alaya) ApplyNewGroupInfo(groupInfo *node.GroupInfo) {
+	// TODO: (zhang) make pgNum configurable
+	p := pipeline.GenPipelines(groupInfo, 10, 3)
+	a.ApplyNewPipelines(p)
 }
 
 // ApplyNewPipelines use new pipelines info to change raft nodes in Alaya
 // pipelines must in order (from 1 to n)
 func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline) {
 	// Delete raft node not in new pipelines
-	for pgID := range a.PGRaftNode {
+	for pgID, raftNode := range a.PGRaftNode {
 		if -1 == arrays.Contains(pipelines[pgID-1], a.NodeID) {
+			raftNode.Stop()
 			delete(a.PGRaftNode, pgID)
 			delete(a.PGMessageChans, pgID)
 		}
@@ -87,7 +93,9 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline) {
 		}
 		// Add new raft node
 		a.PGMessageChans[pgID] = make(chan raftpb.Message)
-		a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, a.InfoStorage, a.MetaStorage, a.PGMessageChans[pgID])
+		raft := a.MakeAlayaRaftInPipeline(pgID, p)
+		// TODO: check if should run
+		raft.Run()
 	}
 }
 
@@ -110,13 +118,9 @@ func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage
 		}
 		pgID := p.PgId
 		a.PGMessageChans[pgID] = make(chan raftpb.Message)
-		a.PGRaftNode[pgID] = NewAlayaRaft(selfInfo.RaftId, pgID, p, infoStorage, metaStorage, a.PGMessageChans[pgID])
-		if p.RaftId[0] == selfInfo.RaftId {
-			//logger.Infof("pgLeaderID: %v", selfInfo.RaftId)
-			go a.PGRaftNode[pgID].RunAskForLeader()
-		}
-
+		a.MakeAlayaRaftInPipeline(pgID, p)
 	}
+	infoStorage.SetOnGroupApply(a.ApplyNewGroupInfo)
 	return &a
 }
 
@@ -131,4 +135,17 @@ func (a *Alaya) printPipelineInfo() {
 	for pgID, raftNode := range a.PGRaftNode {
 		logger.Infof("PGID: %v, leader: %v", pgID, raftNode.raft.Status().Lead)
 	}
+}
+
+func (a *Alaya) MakeAlayaRaftInPipeline(pgID uint64, p *pipeline.Pipeline) *Raft {
+	c, ok := a.PGMessageChans[pgID]
+	if !ok {
+		a.PGMessageChans[pgID] = make(chan raftpb.Message)
+		c = a.PGMessageChans[pgID]
+	}
+	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, a.InfoStorage, a.MetaStorage, c)
+	if p.RaftId[0] == a.NodeID {
+		go a.PGRaftNode[pgID].RunAskForLeader()
+	}
+	return a.PGRaftNode[pgID]
 }
