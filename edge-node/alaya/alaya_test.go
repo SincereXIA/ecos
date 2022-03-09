@@ -31,7 +31,9 @@ func TestNewAlaya(t *testing.T) {
 	infoStorage := node.NewStableNodeInfoStorage(nodeInfoDir)
 	defer infoStorage.Close()
 	groupInfo := node.GroupInfo{
-		Term:            1,
+		GroupTerm: &node.Term{
+			Term: 1,
+		},
 		LeaderInfo:      nil,
 		NodesInfo:       []*node.NodeInfo{},
 		UpdateTimestamp: timestamppb.Now(),

@@ -6,11 +6,12 @@ import (
 	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/logger"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/raft/v3"
+	"google.golang.org/protobuf/testing/protocmp"
 	"os"
 	"path"
-	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -77,9 +78,11 @@ func TestRaft(t *testing.T) {
 	t.Log(info)
 	for i := 1; i < 4; i++ {
 		anotherInfo := moons[i].InfoStorage.ListAllNodeInfo()
-		if !reflect.DeepEqual(info, anotherInfo) {
+
+		if diff := cmp.Diff(info, anotherInfo, protocmp.Transform()); diff != "" {
 			t.Errorf("Node Info Not Equal")
 		}
+
 		t.Log(anotherInfo)
 	}
 	t.Log("Reach agreement success")

@@ -62,11 +62,11 @@ func (storage *MemoryNodeInfoStorage) Commit() {
 	cpy := deepcopy.Copy(storage.uncommittedGroupInfo)
 	storage.nowGroupInfo = cpy.(*GroupInfo)
 	storage.nowGroupInfo.NodesInfo = map2Slice(storage.nowInfoMap)
-	oldTerm := storage.uncommittedGroupInfo.Term
-	storage.uncommittedGroupInfo.Term = uint64(time.Now().UnixNano())
+	oldTerm := storage.uncommittedGroupInfo.GroupTerm.Term
+	storage.uncommittedGroupInfo.GroupTerm.Term = uint64(time.Now().UnixNano())
 	// prevent commit too quick let term equal
-	if storage.uncommittedGroupInfo.Term == oldTerm {
-		storage.uncommittedGroupInfo.Term += 1
+	if storage.uncommittedGroupInfo.GroupTerm.Term == oldTerm {
+		storage.uncommittedGroupInfo.GroupTerm.Term += 1
 	}
 }
 
@@ -93,13 +93,17 @@ func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {
 		uncommittedInfoMap: make(map[ID]NodeInfo),
 		nowInfoMap:         make(map[ID]NodeInfo),
 		nowGroupInfo: &GroupInfo{
-			Term:            0,
+			GroupTerm: &Term{
+				Term: 0,
+			},
 			LeaderInfo:      nil,
 			NodesInfo:       nil,
 			UpdateTimestamp: timestamppb.Now(),
 		},
 		uncommittedGroupInfo: &GroupInfo{
-			Term:            uint64(time.Now().UnixNano()),
+			GroupTerm: &Term{
+				Term: uint64(time.Now().UnixNano()),
+			},
 			LeaderInfo:      nil,
 			NodesInfo:       nil,
 			UpdateTimestamp: timestamppb.Now(),

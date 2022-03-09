@@ -14,7 +14,7 @@ func TestStableNodeInfoStorage(t *testing.T) {
 	defer storage.Close()
 	t.Run("test init", func(t *testing.T) {
 		groupInfo := storage.GetGroupInfo()
-		assert.Equal(t, groupInfo.Term, uint64(0))
+		assert.Equal(t, groupInfo.GroupTerm.Term, uint64(0))
 		_, err := storage.GetNodeInfo(0)
 		assert.NotNil(t, err)
 	})
@@ -48,9 +48,9 @@ func TestStableNodeInfoStorage(t *testing.T) {
 		storage.Commit()
 		group := storage.GetGroupInfo()
 		assert.NotEmpty(t, group.NodesInfo)
-		t.Logf("Old term: %v, new term: %v", 0, group.Term)
-		assert.NotEqual(t, group.Term, uint64(0))
-		term := group.Term
+		t.Logf("Old term: %v, new term: %v", 0, group.GroupTerm.Term)
+		assert.NotEqual(t, group.GroupTerm.Term, uint64(0))
+		term := group.GroupTerm.Term
 		info3 := NodeInfo{
 			RaftId:   3,
 			Uuid:     uuid.New().String(),
@@ -63,8 +63,8 @@ func TestStableNodeInfoStorage(t *testing.T) {
 		assert.Equal(t, len(group.NodesInfo), 2)
 		storage.Commit()
 		group = storage.GetGroupInfo()
-		t.Logf("Old term: %v, new term: %v", term, group.Term)
-		assert.NotEqual(t, group.Term, term)
+		t.Logf("Old term: %v, new term: %v", term, group.GroupTerm.Term)
+		assert.NotEqual(t, group.GroupTerm.Term, term)
 		assert.Equal(t, len(group.NodesInfo), 3)
 	})
 	// 删除测试生成的文件
