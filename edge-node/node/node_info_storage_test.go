@@ -21,11 +21,15 @@ func TestMemoryNodeInfoStorage(t *testing.T) {
 }
 
 func testStorage(storage InfoStorage, t *testing.T) {
+	hookInfoNum := 0
 	t.Run("test init", func(t *testing.T) {
 		groupInfo := storage.GetGroupInfo()
 		assert.Equal(t, groupInfo.GroupTerm.Term, uint64(0))
 		_, err := storage.GetNodeInfo(0)
 		assert.NotNil(t, err)
+		storage.SetOnGroupApply(func(info *GroupInfo) {
+			hookInfoNum = len(info.NodesInfo)
+		})
 	})
 	t.Run("test add node info", func(t *testing.T) {
 		info1 := NodeInfo{
@@ -83,5 +87,8 @@ func testStorage(storage InfoStorage, t *testing.T) {
 		t.Logf("Old term: %v, new term: %v", term, group.GroupTerm.Term)
 		assert.NotEqual(t, group.GroupTerm.Term, term)
 		assert.Equal(t, len(group.NodesInfo), 3)
+	})
+	t.Run("test hook", func(t *testing.T) {
+		assert.Equal(t, 3, hookInfoNum)
 	})
 }
