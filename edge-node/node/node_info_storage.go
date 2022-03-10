@@ -143,8 +143,9 @@ func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {
 }
 
 func map2Slice(input map[ID]NodeInfo) (output []*NodeInfo) {
-	for _, value := range input {
-		output = append(output, &value)
+	for _, info := range input {
+		r := info
+		output = append(output, &r)
 	}
 	return
 }

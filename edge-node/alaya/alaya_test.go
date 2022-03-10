@@ -173,7 +173,52 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		go infoStorages[i].Apply()
 	}
 
-	time.Sleep(time.Second * 30)
+	time.Sleep(time.Second * 5)
+
+	for i := 0; i < 6; i++ { // for each node
+		a := alayas[i]
+		a.printPipelineInfo()
+	}
+
+	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(), 10, 3))
+
+	// UP 3 Alaya
+	for i := 6; i < 9; i++ {
+		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i], nil))
+		go rpcServers[i].Run()
+		go alayas[i].Run()
+	}
+	time.Sleep(time.Second * 1)
+	term = 3
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 9; j++ {
+			infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+		}
+		infoStorages[i].Commit(term)
+	}
+	for i := 0; i < 9; i++ {
+		t.Logf("Apply new groupInfo for: %v", i+1)
+		go infoStorages[i].Apply()
+	}
+	time.Sleep(time.Second * 5)
+	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(), 10, 3))
+}
+
+func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipeline) {
+	for i := 0; i < len(alayas); i++ {
+		a := alayas[i]
+		for _, p := range pipelines {
+			if -1 == arrays.Contains(p.RaftId, a.NodeID) { // pass when node not in pipline
+				continue
+			}
+			pgID := p.PgId
+			if p.RaftId[0] == a.NodeID {
+				// test of whether the first node of pg is leader
+				a.PGRaftNode[pgID].raft.Status()
+				assert.Equal(t, a.PGRaftNode[pgID].raft.Status().Lead, a.NodeID, "first node of pg is leader")
+			}
+		}
+	}
 }
 
 func TestAlaya_RecordObjectMeta(t *testing.T) {

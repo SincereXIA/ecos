@@ -11,6 +11,7 @@ import (
 	"ecos/utils/logger"
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+	"sync"
 )
 
 // Alaya process record & inquire object Mata request
@@ -23,12 +24,24 @@ type Alaya struct {
 	cancel context.CancelFunc
 
 	NodeID         uint64
-	PGMessageChans map[uint64]chan raftpb.Message
+	PGMessageChans sync.Map
 	PGRaftNode     map[uint64]*Raft
 
 	InfoStorage node.InfoStorage
 	MetaStorage MetaStorage
+
+	state State
 }
+
+type State int
+
+const (
+	INIT State = iota
+	READY
+	RUNNING
+	UPDATING
+	STOPPED
+)
 
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
 	select {
@@ -47,8 +60,8 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 
 func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (*PGRaftMessage, error) {
 	pgID := pgMessage.PgId
-	if msgChan, ok := a.PGMessageChans[pgID]; ok {
-		msgChan <- *pgMessage.Message
+	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
+		msgChan.(chan raftpb.Message) <- *pgMessage.Message
 		return &PGRaftMessage{
 			PgId:    pgMessage.PgId,
 			Message: &raftpb.Message{},
@@ -67,19 +80,27 @@ func (a *Alaya) Stop() {
 
 func (a *Alaya) ApplyNewGroupInfo(groupInfo *node.GroupInfo) {
 	// TODO: (zhang) make pgNum configurable
+	a.state = UPDATING
 	p := pipeline.GenPipelines(groupInfo, 10, 3)
 	a.ApplyNewPipelines(p)
+	a.state = RUNNING
 }
 
 // ApplyNewPipelines use new pipelines info to change raft nodes in Alaya
 // pipelines must in order (from 1 to n)
 func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline) {
+	//
 	// Delete raft node not in new pipelines
 	for pgID, raftNode := range a.PGRaftNode {
 		if -1 == arrays.Contains(pipelines[pgID-1], a.NodeID) {
-			raftNode.Stop()
-			delete(a.PGRaftNode, pgID)
-			delete(a.PGMessageChans, pgID)
+			go func() {
+				err := raftNode.Leave()
+				if err != nil {
+					logger.Errorf("Alaya raftNode leave fail, PG: %v, err: %v", pgID)
+				}
+				delete(a.PGRaftNode, pgID)
+				a.PGMessageChans.Delete(pgID)
+			}()
 		}
 	}
 	// Add raft node new in pipelines
@@ -88,14 +109,14 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline) {
 			continue
 		}
 		pgID := p.PgId
-		if _, ok := a.PGMessageChans[pgID]; ok {
+		if _, ok := a.PGMessageChans.Load(pgID); ok {
 			continue // raft node already exist
 		}
 		// Add new raft node
-		a.PGMessageChans[pgID] = make(chan raftpb.Message)
 		raft := a.MakeAlayaRaftInPipeline(pgID, p)
-		// TODO: check if should run
-		raft.Run()
+		if a.state == UPDATING {
+			go raft.Run()
+		}
 	}
 }
 
@@ -105,22 +126,17 @@ func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage
 	a := Alaya{
 		ctx:            ctx,
 		cancel:         cancel,
-		PGMessageChans: make(map[uint64]chan raftpb.Message),
+		PGMessageChans: sync.Map{},
 		PGRaftNode:     make(map[uint64]*Raft),
 		NodeID:         selfInfo.RaftId,
 		InfoStorage:    infoStorage,
 		MetaStorage:    metaStorage,
+		state:          INIT,
 	}
 	RegisterAlayaServer(rpcServer, &a)
-	for _, p := range pipelines {
-		if -1 == arrays.Contains(p.RaftId, selfInfo.RaftId) { // pass when node not in pipline
-			continue
-		}
-		pgID := p.PgId
-		a.PGMessageChans[pgID] = make(chan raftpb.Message)
-		a.MakeAlayaRaftInPipeline(pgID, p)
-	}
+	a.ApplyNewPipelines(pipelines)
 	infoStorage.SetOnGroupApply(a.ApplyNewGroupInfo)
+	a.state = READY
 	return &a
 }
 
@@ -128,24 +144,25 @@ func (a *Alaya) Run() {
 	for _, raftNode := range a.PGRaftNode {
 		go raftNode.Run()
 	}
+	a.state = RUNNING
 }
 
 func (a *Alaya) printPipelineInfo() {
-	logger.Infof("AlayaID: %v", a.NodeID)
 	for pgID, raftNode := range a.PGRaftNode {
-		logger.Infof("PGID: %v, leader: %v", pgID, raftNode.raft.Status().Lead)
+		logger.Infof("Alaya: %v, PG: %v, leader: %v", a.NodeID, pgID, raftNode.raft.Status().Lead)
 	}
 }
 
 func (a *Alaya) MakeAlayaRaftInPipeline(pgID uint64, p *pipeline.Pipeline) *Raft {
-	c, ok := a.PGMessageChans[pgID]
+	c, ok := a.PGMessageChans.Load(pgID)
 	if !ok {
-		a.PGMessageChans[pgID] = make(chan raftpb.Message)
-		c = a.PGMessageChans[pgID]
+		c = make(chan raftpb.Message)
+		a.PGMessageChans.Store(pgID, c)
 	}
-	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, a.InfoStorage, a.MetaStorage, c)
+	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, a.InfoStorage, a.MetaStorage, c.(chan raftpb.Message))
 	if p.RaftId[0] == a.NodeID {
 		go a.PGRaftNode[pgID].RunAskForLeader()
 	}
+	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.NodeID, pgID)
 	return a.PGRaftNode[pgID]
 }

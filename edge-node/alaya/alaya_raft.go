@@ -72,6 +72,7 @@ func (r *Raft) Run() {
 	for {
 		select {
 		case <-r.ctx.Done():
+			r.raft.Stop()
 			return
 		case <-r.ticker:
 			r.raft.Tick()
@@ -84,12 +85,42 @@ func (r *Raft) Run() {
 					var cc raftpb.ConfChange
 					_ = cc.Unmarshal(entry.Data)
 					r.raft.ApplyConfChange(cc)
+					r.CheckConfChange(&cc)
 				}
 			}
 			r.raft.Advance()
 		case message := <-r.raftChan:
 			_ = r.raft.Step(r.ctx, message)
 		}
+	}
+}
+
+func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
+	if change.ID != r.raftCfg.ID {
+		return
+	}
+	if change.Type == raftpb.ConfChangeRemoveNode {
+		r.Stop()
+	}
+}
+
+func (r *Raft) Leave() error {
+	err := r.raft.ProposeConfChange(r.ctx, raftpb.ConfChangeV2{
+		Transition: raftpb.ConfChangeTransitionAuto,
+		Changes: []raftpb.ConfChangeSingle{
+			{
+				Type:   raftpb.ConfChangeRemoveNode,
+				NodeID: r.raftCfg.ID,
+			},
+		},
+		Context: nil,
+	})
+	if err != nil {
+		return err
+	}
+	select {
+	case <-r.ctx.Done():
+		return nil
 	}
 }
 
