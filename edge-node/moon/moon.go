@@ -13,6 +13,7 @@ import (
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"strconv"
 	"sync"
 	"time"
@@ -97,6 +98,13 @@ func (m *Moon) AddNodeToGroup(_ context.Context, info *node.NodeInfo) (*AddNodeR
 func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raftpb.Message, error) {
 	m.raftChan <- *message
 	return &raftpb.Message{}, nil
+}
+
+// GetGroupInfo is the RPC interface for Client and other modules to call
+//
+// It's simple and obvious. BUT DO **NOT** DELETE IT!
+func (m *Moon) GetGroupInfo(context.Context, *emptypb.Empty) (*node.GroupInfo, error) {
+	return m.InfoStorage.GetGroupInfo(), nil
 }
 
 func (m *Moon) RequestJoinGroup(leaderInfo *node.NodeInfo) error {
