@@ -151,7 +151,6 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 			Capacity: 10,
 		})
 		rpcServers = append(rpcServers, messenger.NewRpcServer(uint64(32760+i+1)))
-		infoStorages[i].UpdateNodeInfo(&nodeInfos[i])
 	}
 
 	// UP 6 Alaya
@@ -173,7 +172,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		go infoStorages[i].Apply()
 	}
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 8)
 
 	for i := 0; i < 6; i++ { // for each node
 		a := alayas[i]
@@ -182,6 +181,13 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 
 	//assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
 
+	for i := 6; i < 9; i++ {
+		for j := 0; j < 6; j++ {
+			infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+		}
+		infoStorages[i].Commit(term)
+		infoStorages[i].Apply()
+	}
 	// UP 3 Alaya
 	for i := 6; i < 9; i++ {
 		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i]))

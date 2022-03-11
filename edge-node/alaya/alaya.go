@@ -13,6 +13,7 @@ import (
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"sync"
+	"time"
 )
 
 // Alaya process record & inquire object Mata request
@@ -112,10 +113,12 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 		// if this node is leader, add new pipelines node first
 		p := pipelines[pgID-1]
 		needAdd, needRemove := calDiff(p.RaftId, oldPipelines[pgID-1].RaftId)
-		err := raftNode.ProposeNewNodes(needAdd)
-		if err != nil {
-			logger.Errorf("Alaya propose new nodes in PG: %v fail, err: %v", pgID, err)
-		}
+		go func(node *Raft) {
+			err := node.ProposeNewNodes(needAdd)
+			if err != nil {
+				logger.Errorf("Alaya propose new nodes in PG: %v fail, err: %v", pgID, err)
+			}
+		}(raftNode)
 		go func(node *Raft) {
 			err := node.ProposeRemoveNodes(needRemove)
 			if err != nil {
@@ -136,12 +139,15 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 		// Add new raft node
 		var raft *Raft
 		if oldPipelines != nil {
-			raft = a.MakeAlayaRaftInPipeline(pgID, p, oldPipelines[pgID-1].RaftId[0])
+			raft = a.MakeAlayaRaftInPipeline(pgID, p, oldPipelines[pgID-1])
 		} else {
-			raft = a.MakeAlayaRaftInPipeline(pgID, p, 0)
+			raft = a.MakeAlayaRaftInPipeline(pgID, p, nil)
 		}
 		if a.state == UPDATING {
-			go raft.Run()
+			go func(raft *Raft) {
+				time.Sleep(time.Second * 2)
+				raft.Run()
+			}(raft)
 		}
 	}
 }
@@ -186,13 +192,13 @@ func (a *Alaya) printPipelineInfo() {
 // 2. New an alaya raft node **but not run it**
 //
 // when leaderID is not zero, it while add to an existed raft group
-func (a *Alaya) MakeAlayaRaftInPipeline(pgID uint64, p *pipeline.Pipeline, leaderID uint64) *Raft {
+func (a *Alaya) MakeAlayaRaftInPipeline(pgID uint64, p *pipeline.Pipeline, oldP *pipeline.Pipeline) *Raft {
 	c, ok := a.PGMessageChans.Load(pgID)
 	if !ok {
 		c = make(chan raftpb.Message)
 		a.PGMessageChans.Store(pgID, c)
 	}
-	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, leaderID, a.InfoStorage, a.MetaStorage, c.(chan raftpb.Message))
+	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, oldP, a.InfoStorage, a.MetaStorage, c.(chan raftpb.Message))
 	if p.RaftId[0] == a.NodeID {
 		go a.PGRaftNode[pgID].RunAskForLeader()
 	}

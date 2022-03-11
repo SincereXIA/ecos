@@ -28,9 +28,18 @@ type Raft struct {
 	raftChan chan raftpb.Message
 
 	metaStorage MetaStorage
+
+	pipeline    *pipeline.Pipeline
+	controlChan chan ControlMsg
 }
 
-func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline, leaderID uint64,
+type ControlMsg int
+
+const (
+	AddNodeFinish ControlMsg = iota
+)
+
+func NewAlayaRaft(raftID uint64, pgID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
 	infoStorage node.InfoStorage, metaStorage MetaStorage,
 	raftChan chan raftpb.Message) *Raft {
 
@@ -55,20 +64,26 @@ func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline, leader
 		ticker:      ticker.C,
 		raftChan:    raftChan,
 		metaStorage: metaStorage,
+
+		controlChan: make(chan ControlMsg),
+		pipeline:    nowPipe,
 	}
 
 	var peers []raft.Peer
-	if leaderID > 0 && leaderID != raftID {
-		peers = append(peers, raft.Peer{
-			ID: leaderID,
-		})
-	} else {
-		for _, id := range pipline.RaftId {
+	if oldP != nil {
+		for _, id := range oldP.RaftId {
 			peers = append(peers, raft.Peer{
 				ID: id,
 			})
 		}
+
 	}
+	for _, id := range nowPipe.RaftId {
+		peers = append(peers, raft.Peer{
+			ID: id,
+		})
+	}
+
 	r.raft = raft.StartNode(r.raftCfg, peers)
 	return r
 }
@@ -101,7 +116,7 @@ func (r *Raft) Run() {
 }
 
 func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
-	if change.ID != r.raftCfg.ID {
+	if change.NodeID != r.raftCfg.ID {
 		return
 	}
 	if change.Type == raftpb.ConfChangeRemoveNode {
@@ -113,40 +128,44 @@ func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 	if len(NodeIDs) == 0 {
 		return nil
 	}
-	var changes []raftpb.ConfChangeSingle
 	for _, id := range NodeIDs {
-		changes = append(changes, raftpb.ConfChangeSingle{
-			Type:   raftpb.ConfChangeAddNode,
-			NodeID: id,
+		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raftCfg.ID, r.pgID, NodeIDs)
+		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
+			Type:    raftpb.ConfChangeAddNode,
+			NodeID:  id,
+			Context: nil,
 		})
+		time.Sleep(time.Millisecond * 200)
 	}
-	err := r.raft.ProposeConfChange(r.ctx, raftpb.ConfChangeV2{
-		Transition: raftpb.ConfChangeTransitionAuto,
-		Changes:    changes,
-		Context:    nil,
-	})
-	return err
+	// TODO: wait add new nodes ok
+	r.controlChan <- AddNodeFinish
+	return nil
 }
 
 func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
+	select {
+	case <-r.ctx.Done():
+		return nil
+	case msg := <-r.controlChan:
+		if msg == AddNodeFinish {
+			break
+		}
+		r.controlChan <- msg
+	}
 	if len(NodeIDs) == 0 {
 		return nil
 	}
-	var changes []raftpb.ConfChangeSingle
+	time.Sleep(time.Second * 3)
 	for _, id := range NodeIDs {
-		changes = append(changes, raftpb.ConfChangeSingle{
-			Type:   raftpb.ConfChangeRemoveNode,
-			NodeID: id,
+		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raftCfg.ID, r.pgID, id)
+		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
+			Type:    raftpb.ConfChangeRemoveNode,
+			NodeID:  id,
+			Context: nil,
 		})
+		time.Sleep(time.Millisecond * 200)
 	}
-	// TODO: wait add new nodes ok
-	time.Sleep(time.Second)
-	err := r.raft.ProposeConfChange(r.ctx, raftpb.ConfChangeV2{
-		Transition: raftpb.ConfChangeTransitionAuto,
-		Changes:    changes,
-		Context:    nil,
-	})
-	return err
+	return nil
 }
 
 func (r *Raft) Leave() error {
@@ -196,7 +215,7 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 			}
 		}(conn)
 		c := NewAlayaClient(conn)
-		_, err = c.SendRaftMessage(r.ctx, &PGRaftMessage{
+		_, err = c.SendRaftMessage(context.TODO(), &PGRaftMessage{ // 这里不用当前 ctx 发送，否则当节点停止之后，最后的确认信息无法发送
 			PgId:    r.pgID,
 			Message: &message,
 		})
@@ -230,15 +249,15 @@ func (r *Raft) ProposeObjectMeta(meta *object.ObjectMeta) {
 }
 
 func (r *Raft) RunAskForLeader() {
-	return
 	for {
 		select {
 		case <-r.ctx.Done():
+			logger.Infof("PG: %v, node%v Stop askForLeader", r.pgID, r.raftCfg.ID)
 			return
 		default:
 		}
-		if (r.raft == nil || r.raft.Status().Lead == uint64(0)) || (r.raft.Status().Lead == r.raftCfg.ID) {
-			time.Sleep(1 * time.Second)
+		time.Sleep(1 * time.Second)
+		if r.raft == nil || r.raft.Status().Lead == uint64(0) || r.raft.Status().Lead == r.raftCfg.ID {
 			continue
 		} else {
 			logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
