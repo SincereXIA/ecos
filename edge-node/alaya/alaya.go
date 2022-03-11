@@ -9,7 +9,6 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
-	mapset "github.com/deckarep/golang-set"
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"sync"
@@ -112,19 +111,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 		}
 		// if this node is leader, add new pipelines node first
 		p := pipelines[pgID-1]
-		needAdd, needRemove := calDiff(p.RaftId, oldPipelines[pgID-1].RaftId)
-		go func(node *Raft) {
-			err := node.ProposeNewNodes(needAdd)
-			if err != nil {
-				logger.Errorf("Alaya propose new nodes in PG: %v fail, err: %v", pgID, err)
-			}
-		}(raftNode)
-		go func(node *Raft) {
-			err := node.ProposeRemoveNodes(needRemove)
-			if err != nil {
-				logger.Errorf("Alaya propose remove nodes in PG: %v fail, err: %v", pgID, err)
-			}
-		}(raftNode)
+		raftNode.ProposeNewPipeline(p, oldPipelines[pgID-1])
 	}
 
 	// start run raft node new in pipelines
@@ -199,27 +186,6 @@ func (a *Alaya) MakeAlayaRaftInPipeline(pgID uint64, p *pipeline.Pipeline, oldP 
 		a.PGMessageChans.Store(pgID, c)
 	}
 	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, oldP, a.InfoStorage, a.MetaStorage, c.(chan raftpb.Message))
-	if p.RaftId[0] == a.NodeID {
-		go a.PGRaftNode[pgID].RunAskForLeader()
-	}
 	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.NodeID, pgID)
 	return a.PGRaftNode[pgID]
-}
-
-func calDiff(a []uint64, b []uint64) (da []uint64, db []uint64) {
-	setA := mapset.NewSet()
-	for _, n := range a {
-		setA.Add(n)
-	}
-	setB := mapset.NewSet()
-	for _, n := range b {
-		setB.Add(n)
-	}
-	for num := range setA.Difference(setB).Iter() {
-		da = append(da, num.(uint64))
-	}
-	for num := range setB.Difference(setA).Iter() {
-		db = append(db, num.(uint64))
-	}
-	return
 }

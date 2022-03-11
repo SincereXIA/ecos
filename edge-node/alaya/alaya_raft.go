@@ -6,6 +6,7 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/utils/logger"
+	mapset "github.com/deckarep/golang-set"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/grpc"
@@ -89,6 +90,7 @@ func NewAlayaRaft(raftID uint64, pgID uint64, nowPipe *pipeline.Pipeline, oldP *
 }
 
 func (r *Raft) Run() {
+	go r.RunAskForLeader()
 	for {
 		select {
 		case <-r.ctx.Done():
@@ -124,12 +126,27 @@ func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 	}
 }
 
+func (r *Raft) ProposeNewPipeline(newP *pipeline.Pipeline, oldP *pipeline.Pipeline) {
+	r.pipeline = newP
+	go func() {
+		needAdd, needRemove := calDiff(newP.RaftId, oldP.RaftId)
+		err := r.ProposeNewNodes(needAdd)
+		if err != nil {
+			logger.Errorf("Alaya propose new nodes in PG: %v fail, err: %v", r.pgID, err)
+		}
+		err = r.ProposeRemoveNodes(needRemove)
+		if err != nil {
+			logger.Errorf("Alaya propose remove nodes in PG: %v fail, err: %v", r.pgID, err)
+		}
+	}()
+}
+
 func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 	if len(NodeIDs) == 0 {
 		return nil
 	}
 	for _, id := range NodeIDs {
-		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raftCfg.ID, r.pgID, NodeIDs)
+		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raftCfg.ID, id, NodeIDs)
 		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeAddNode,
 			NodeID:  id,
@@ -138,7 +155,6 @@ func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 		time.Sleep(time.Millisecond * 200)
 	}
 	// TODO: wait add new nodes ok
-	r.controlChan <- AddNodeFinish
 	return nil
 }
 
@@ -146,11 +162,7 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 	select {
 	case <-r.ctx.Done():
 		return nil
-	case msg := <-r.controlChan:
-		if msg == AddNodeFinish {
-			break
-		}
-		r.controlChan <- msg
+	default:
 	}
 	if len(NodeIDs) == 0 {
 		return nil
@@ -252,12 +264,13 @@ func (r *Raft) RunAskForLeader() {
 	for {
 		select {
 		case <-r.ctx.Done():
-			logger.Infof("PG: %v, node%v Stop askForLeader", r.pgID, r.raftCfg.ID)
+			logger.Debugf("PG: %v, node%v Stop askForLeader", r.pgID, r.raftCfg.ID)
 			return
 		default:
 		}
 		time.Sleep(1 * time.Second)
-		if r.raft == nil || r.raft.Status().Lead == uint64(0) || r.raft.Status().Lead == r.raftCfg.ID {
+		if r.raft == nil || r.raft.Status().Lead == uint64(0) || r.raft.Status().Lead == r.raftCfg.ID ||
+			r.raftCfg.ID != r.pipeline.RaftId[0] {
 			continue
 		} else {
 			logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
@@ -271,4 +284,21 @@ func (r *Raft) RunAskForLeader() {
 			r.sendMsgByRpc(msg)
 		}
 	}
+}
+func calDiff(a []uint64, b []uint64) (da []uint64, db []uint64) {
+	setA := mapset.NewSet()
+	for _, n := range a {
+		setA.Add(n)
+	}
+	setB := mapset.NewSet()
+	for _, n := range b {
+		setB.Add(n)
+	}
+	for num := range setA.Difference(setB).Iter() {
+		da = append(da, num.(uint64))
+	}
+	for num := range setB.Difference(setA).Iter() {
+		db = append(db, num.(uint64))
+	}
+	return
 }
