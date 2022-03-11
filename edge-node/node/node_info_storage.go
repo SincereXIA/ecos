@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"errors"
+	"github.com/gogo/protobuf/sortkeys"
 	"github.com/mohae/deepcopy"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -17,7 +18,7 @@ type InfoStorage interface {
 	GetNodeInfo(nodeId ID) (*NodeInfo, error)
 	SetLeader(nodeId ID) error
 	// Commit 提交缓存区的节点信息，至此该 term 无法再变化，但提交尚未生效
-	Commit(nextTerm uint64)
+	Commit(newTerm uint64)
 	// Apply 使得已经 Commit 的节点信息马上生效
 	Apply()
 
@@ -25,14 +26,18 @@ type InfoStorage interface {
 	ListAllNodeInfo() map[ID]NodeInfo
 	// GetGroupInfo 用于为 Crush 算法提供集群信息
 	// 默认
-	GetGroupInfo() *GroupInfo
+	GetGroupInfo(term uint64) *GroupInfo
 
 	SetOnGroupApply(hookFunc func(info *GroupInfo))
 
+	GetTermNow() uint64
+	GetTermList() []uint64
 	Close()
 }
 
 type MemoryNodeInfoStorage struct {
+	history map[uint64]*GroupInfo
+
 	nowState         *InfoStorageState
 	committedState   *InfoStorageState
 	uncommittedState *InfoStorageState
@@ -74,31 +79,35 @@ func (storage *MemoryNodeInfoStorage) ListAllNodeInfo() map[ID]NodeInfo {
 	return storage.uncommittedState.InfoMap
 }
 
-func (storage *MemoryNodeInfoStorage) Commit(nextTerm uint64) {
+func (storage *MemoryNodeInfoStorage) Commit(newTerm uint64) {
 	// copy from uncommittedInfoMap
+	storage.uncommittedState.Term = newTerm
 	cpy := deepcopy.Copy(storage.uncommittedState)
 	storage.committedState = cpy.(*InfoStorageState)
-	// set nextTerm
-	storage.uncommittedState.Term = nextTerm
 }
 
 func (storage *MemoryNodeInfoStorage) Apply() {
 	// Apply
 	cpy := deepcopy.Copy(storage.committedState)
+
+	storage.history[storage.nowState.Term] = storage.GetGroupInfo(0)
 	storage.nowState = cpy.(*InfoStorageState)
 	if storage.onGroupApplyHookFunc != nil {
-		storage.onGroupApplyHookFunc(storage.GetGroupInfo())
+		storage.onGroupApplyHookFunc(storage.GetGroupInfo(0))
 	}
 }
 
-func (storage *MemoryNodeInfoStorage) GetGroupInfo() *GroupInfo {
-	leaderInfo := storage.nowState.InfoMap[storage.nowState.LeaderID]
-	return &GroupInfo{
-		Term:            storage.nowState.Term,
-		LeaderInfo:      &leaderInfo,
-		NodesInfo:       map2Slice(storage.nowState.InfoMap),
-		UpdateTimestamp: storage.nowState.UpdateTimeStamp,
+func (storage *MemoryNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
+	if term == 0 {
+		leaderInfo := storage.nowState.InfoMap[storage.nowState.LeaderID]
+		return &GroupInfo{
+			Term:            storage.nowState.Term,
+			LeaderInfo:      &leaderInfo,
+			NodesInfo:       map2Slice(storage.nowState.InfoMap),
+			UpdateTimestamp: storage.nowState.UpdateTimeStamp,
+		}
 	}
+	return storage.history[term]
 }
 
 func (storage *MemoryNodeInfoStorage) SetLeader(nodeId ID) error {
@@ -113,6 +122,19 @@ func (storage *MemoryNodeInfoStorage) SetLeader(nodeId ID) error {
 
 func (storage *MemoryNodeInfoStorage) SetOnGroupApply(hookFunc func(info *GroupInfo)) {
 	storage.onGroupApplyHookFunc = hookFunc
+}
+
+func (storage *MemoryNodeInfoStorage) GetTermNow() uint64 {
+	return storage.nowState.Term
+}
+
+func (storage *MemoryNodeInfoStorage) GetTermList() []uint64 {
+	keys := make([]uint64, 0, len(storage.history))
+	for key := range storage.history {
+		keys = append(keys, key)
+	}
+	sortkeys.Uint64s(keys)
+	return keys
 }
 
 func (storage *MemoryNodeInfoStorage) Close() {
@@ -139,6 +161,7 @@ func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {
 			InfoMap:         make(map[ID]NodeInfo),
 			UpdateTimeStamp: timestamppb.Now(),
 		},
+		history: map[uint64]*GroupInfo{},
 	}
 }
 

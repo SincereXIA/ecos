@@ -30,7 +30,7 @@ type Raft struct {
 	metaStorage MetaStorage
 }
 
-func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline,
+func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline, leaderID uint64,
 	infoStorage node.InfoStorage, metaStorage MetaStorage,
 	raftChan chan raftpb.Message) *Raft {
 
@@ -58,11 +58,16 @@ func NewAlayaRaft(raftID uint64, pgID uint64, pipline *pipeline.Pipeline,
 	}
 
 	var peers []raft.Peer
-	for _, id := range pipline.RaftId {
+	if leaderID > 0 && leaderID != raftID {
 		peers = append(peers, raft.Peer{
-			ID:      id,
-			Context: nil,
+			ID: leaderID,
 		})
+	} else {
+		for _, id := range pipline.RaftId {
+			peers = append(peers, raft.Peer{
+				ID: id,
+			})
+		}
 	}
 	r.raft = raft.StartNode(r.raftCfg, peers)
 	return r
@@ -104,6 +109,46 @@ func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 	}
 }
 
+func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
+	if len(NodeIDs) == 0 {
+		return nil
+	}
+	var changes []raftpb.ConfChangeSingle
+	for _, id := range NodeIDs {
+		changes = append(changes, raftpb.ConfChangeSingle{
+			Type:   raftpb.ConfChangeAddNode,
+			NodeID: id,
+		})
+	}
+	err := r.raft.ProposeConfChange(r.ctx, raftpb.ConfChangeV2{
+		Transition: raftpb.ConfChangeTransitionAuto,
+		Changes:    changes,
+		Context:    nil,
+	})
+	return err
+}
+
+func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
+	if len(NodeIDs) == 0 {
+		return nil
+	}
+	var changes []raftpb.ConfChangeSingle
+	for _, id := range NodeIDs {
+		changes = append(changes, raftpb.ConfChangeSingle{
+			Type:   raftpb.ConfChangeRemoveNode,
+			NodeID: id,
+		})
+	}
+	// TODO: wait add new nodes ok
+	time.Sleep(time.Second)
+	err := r.raft.ProposeConfChange(r.ctx, raftpb.ConfChangeV2{
+		Transition: raftpb.ConfChangeTransitionAuto,
+		Changes:    changes,
+		Context:    nil,
+	})
+	return err
+}
+
 func (r *Raft) Leave() error {
 	err := r.raft.ProposeConfChange(r.ctx, raftpb.ConfChangeV2{
 		Transition: raftpb.ConfChangeTransitionAuto,
@@ -125,6 +170,7 @@ func (r *Raft) Leave() error {
 }
 
 func (r *Raft) Stop() {
+	logger.Infof("=========STOP: node: %v, PG: %v ===========", r.raft.Status().ID, r.pgID)
 	r.cancel()
 }
 
@@ -184,7 +230,13 @@ func (r *Raft) ProposeObjectMeta(meta *object.ObjectMeta) {
 }
 
 func (r *Raft) RunAskForLeader() {
+	return
 	for {
+		select {
+		case <-r.ctx.Done():
+			return
+		default:
+		}
 		if (r.raft == nil || r.raft.Status().Lead == uint64(0)) || (r.raft.Status().Lead == r.raftCfg.ID) {
 			time.Sleep(1 * time.Second)
 			continue
@@ -200,5 +252,4 @@ func (r *Raft) RunAskForLeader() {
 			r.sendMsgByRpc(msg)
 		}
 	}
-
 }
