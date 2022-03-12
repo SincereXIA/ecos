@@ -34,7 +34,7 @@ type Raft struct {
 	pipeline *pipeline.Pipeline
 }
 
-func NewAlayaRaft(raftID uint64, pgID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
+func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
 	infoStorage node.InfoStorage, metaStorage MetaStorage,
 	raftChan chan raftpb.Message, stopChan chan uint64) *Raft {
 
@@ -43,7 +43,7 @@ func NewAlayaRaft(raftID uint64, pgID uint64, nowPipe *pipeline.Pipeline, oldP *
 	ticker := time.NewTicker(time.Millisecond * 100)
 
 	r := &Raft{
-		pgID:        pgID,
+		pgID:        nowPipe.PgId,
 		ctx:         ctx,
 		cancel:      cancel,
 		InfoStorage: infoStorage,

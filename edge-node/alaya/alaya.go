@@ -127,9 +127,9 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 		// Add new raft node
 		var raft *Raft
 		if oldPipelines != nil {
-			raft = a.MakeAlayaRaftInPipeline(pgID, p, oldPipelines[pgID-1])
+			raft = a.MakeAlayaRaftInPipeline(p, oldPipelines[pgID-1])
 		} else {
-			raft = a.MakeAlayaRaftInPipeline(pgID, p, nil)
+			raft = a.MakeAlayaRaftInPipeline(p, nil)
 		}
 		if a.state == UPDATING {
 			go func(raft *Raft) {
@@ -188,13 +188,14 @@ func (a *Alaya) printPipelineInfo() {
 // 2. New an alaya raft node **but not run it**
 //
 // when leaderID is not zero, it while add to an existed raft group
-func (a *Alaya) MakeAlayaRaftInPipeline(pgID uint64, p *pipeline.Pipeline, oldP *pipeline.Pipeline) *Raft {
+func (a *Alaya) MakeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pipeline) *Raft {
+	pgID := p.PgId
 	c, ok := a.PGMessageChans.Load(pgID)
 	if !ok {
 		c = make(chan raftpb.Message)
 		a.PGMessageChans.Store(pgID, c)
 	}
-	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, oldP, a.InfoStorage, a.MetaStorage,
+	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, p, oldP, a.InfoStorage, a.MetaStorage,
 		c.(chan raftpb.Message), a.raftNodeStopChan)
 	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.NodeID, pgID)
 	return a.PGRaftNode[pgID]
