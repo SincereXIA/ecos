@@ -27,6 +27,7 @@ type Raft struct {
 	ticker      <-chan time.Time //定时器，提供周期时钟源和超时触发能力
 
 	raftChan chan raftpb.Message
+	stopChan chan uint64
 
 	metaStorage MetaStorage
 
@@ -42,7 +43,7 @@ const (
 
 func NewAlayaRaft(raftID uint64, pgID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
 	infoStorage node.InfoStorage, metaStorage MetaStorage,
-	raftChan chan raftpb.Message) *Raft {
+	raftChan chan raftpb.Message, stopChan chan uint64) *Raft {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	raftStorage := raft.NewMemoryStorage()
@@ -203,6 +204,7 @@ func (r *Raft) Leave() error {
 func (r *Raft) Stop() {
 	logger.Infof("=========STOP: node: %v, PG: %v ===========", r.raft.Status().ID, r.pgID)
 	r.cancel()
+	r.stopChan <- r.pgID
 }
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {

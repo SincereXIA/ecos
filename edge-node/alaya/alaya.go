@@ -24,9 +24,10 @@ type Alaya struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	NodeID         uint64
-	PGMessageChans sync.Map
-	PGRaftNode     map[uint64]*Raft
+	NodeID           uint64
+	PGMessageChans   sync.Map
+	PGRaftNode       map[uint64]*Raft
+	raftNodeStopChan chan uint64 // 内部 raft node 主动退出时，使用该 chan 通知 alaya
 
 	InfoStorage node.InfoStorage
 	MetaStorage MetaStorage
@@ -75,7 +76,7 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 
 func (a *Alaya) Stop() {
 	for _, raft := range a.PGRaftNode {
-		raft.Stop()
+		go raft.Stop()
 	}
 	a.MetaStorage.Close()
 	a.cancel()
@@ -143,14 +144,15 @@ func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage
 	rpcServer *messenger.RpcServer) *Alaya {
 	ctx, cancel := context.WithCancel(context.Background())
 	a := Alaya{
-		ctx:            ctx,
-		cancel:         cancel,
-		PGMessageChans: sync.Map{},
-		PGRaftNode:     make(map[uint64]*Raft),
-		NodeID:         selfInfo.RaftId,
-		InfoStorage:    infoStorage,
-		MetaStorage:    metaStorage,
-		state:          INIT,
+		ctx:              ctx,
+		cancel:           cancel,
+		PGMessageChans:   sync.Map{},
+		PGRaftNode:       make(map[uint64]*Raft),
+		NodeID:           selfInfo.RaftId,
+		InfoStorage:      infoStorage,
+		MetaStorage:      metaStorage,
+		state:            INIT,
+		raftNodeStopChan: make(chan uint64),
 	}
 	RegisterAlayaServer(rpcServer, &a)
 	a.ApplyNewGroupInfo(infoStorage.GetGroupInfo(0))
@@ -164,6 +166,13 @@ func (a *Alaya) Run() {
 		go raftNode.Run()
 	}
 	a.state = RUNNING
+	select {
+	case pgID := <-a.raftNodeStopChan:
+		a.PGMessageChans.Delete(pgID)
+		delete(a.PGRaftNode, pgID)
+	case <-a.ctx.Done():
+		return
+	}
 }
 
 func (a *Alaya) printPipelineInfo() {
@@ -185,7 +194,8 @@ func (a *Alaya) MakeAlayaRaftInPipeline(pgID uint64, p *pipeline.Pipeline, oldP 
 		c = make(chan raftpb.Message)
 		a.PGMessageChans.Store(pgID, c)
 	}
-	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, oldP, a.InfoStorage, a.MetaStorage, c.(chan raftpb.Message))
+	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, pgID, p, oldP, a.InfoStorage, a.MetaStorage,
+		c.(chan raftpb.Message), a.raftNodeStopChan)
 	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.NodeID, pgID)
 	return a.PGRaftNode[pgID]
 }

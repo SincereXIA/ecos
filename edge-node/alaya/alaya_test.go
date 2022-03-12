@@ -10,7 +10,6 @@ import (
 	"ecos/utils/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/wxnacy/wgo/arrays"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"path"
@@ -76,7 +75,7 @@ func TestNewAlaya(t *testing.T) {
 	t.Log("Alayas init done, start run")
 	for i := 0; i < 9; i++ {
 		a := alayas[i]
-		a.Run()
+		go a.Run()
 	}
 	time.Sleep(time.Second * 5)
 	assertAlayasOK(t, alayas, pipelines)
@@ -111,10 +110,10 @@ func TestNewAlaya(t *testing.T) {
 	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
 
 	for i := 0; i < 9; i++ { // for each node
-		server := rpcServers[i]
-		server.Stop()
 		alaya := alayas[i]
 		alaya.Stop()
+		server := rpcServers[i]
+		server.Stop()
 	}
 
 	os.RemoveAll("./testMetaStorage")
@@ -208,18 +207,17 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 }
 
 func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipeline) {
-	for i := 0; i < len(alayas); i++ {
-		a := alayas[i]
-		for _, p := range pipelines {
-			if -1 == arrays.Contains(p.RaftId, a.NodeID) { // pass when node not in pipline
-				continue
-			}
-			pgID := p.PgId
-			if p.RaftId[0] == a.NodeID {
-				// test of whether the first node of pg is leader
-				a.PGRaftNode[pgID].raft.Status()
-				assert.Equal(t, a.NodeID, a.PGRaftNode[pgID].raft.Status().Lead, "first node of pg is leader")
-			}
+	// 判断 每个 pg 第一个 节点是否为 leader
+	for _, p := range pipelines {
+		leaderID := p.RaftId[0]
+		pgID := p.PgId
+		a := alayas[leaderID-1]
+		assert.Equal(t, leaderID, a.PGRaftNode[pgID].raft.Status().Lead)
+	}
+	// 判断 每个 alaya 的每个 raft node 是否都成功加入 PG
+	for _, a := range alayas {
+		for _, r := range a.PGRaftNode {
+			assert.NotZero(t, r.raft.Status().Lead)
 		}
 	}
 }
