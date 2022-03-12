@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 )
-import "github.com/sincerexia/gocrush"
 
 const (
 	ROOT        = 0
@@ -204,6 +203,12 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		a := alayas[i]
 		a.printPipelineInfo()
 	}
+
+	pipelines := pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3)
+	for _, p := range pipelines {
+		t.Logf("PG: %v, id: %v, %v, %v", p.PgId, p.RaftId[0], p.RaftId[1], p.RaftId[2])
+	}
+
 	// TODO: 某些 pipeline 节点数目不为三，需要进一步修正
 
 	for i := 0; i < 9; i++ { // for each node
@@ -228,46 +233,4 @@ func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipelin
 			assert.NotZero(t, r.raft.Status().Lead)
 		}
 	}
-}
-
-func TestAlaya_RecordObjectMeta(t *testing.T) {
-	tree := makeStrawTree()
-	nodes := gocrush.Select(tree, 868, 3, NODE, nil)
-	for _, n := range nodes {
-		t.Logf("node: %v", n.GetId())
-	}
-	checkUnique(t, nodes)
-	nodes = gocrush.Select(tree, 11, 3, NODE, nil)
-	for _, n := range nodes {
-		t.Logf("node: %v", n.GetId())
-	}
-	checkUnique(t, nodes)
-}
-
-func checkUnique(t *testing.T, nodes []gocrush.Node) {
-	m := make(map[string]int)
-	for _, n := range nodes {
-		m[n.GetId()] = 1
-	}
-	assert.Equal(t, len(m), len(nodes))
-}
-
-func makeStrawTree() *gocrush.TestingNode {
-	var parent = new(gocrush.TestingNode)
-	parent.Id = "ROOT"
-	parent.Type = ROOT
-	parent.Weight = 0
-	parent.Children = make([]gocrush.Node, 50)
-	for dc := 0; dc < 50; dc++ {
-		var node = new(gocrush.TestingNode)
-		node.Parent = parent
-		node.Weight = 10
-		node.Type = NODE
-		node.Id = parent.Id + ":NODE" + strconv.Itoa(dc)
-
-		parent.Children[dc] = node
-		node.Selector = gocrush.NewStrawSelector(node)
-	}
-	parent.Selector = gocrush.NewStrawSelector(parent)
-	return parent
 }
