@@ -29,6 +29,24 @@ type StableNodeInfoStorage struct {
 	onGroupApplyHookFunc func(info *GroupInfo)
 }
 
+func (storage *StableNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
+	//TODO implement me
+	if term == 0 {
+		return storage.nowGroupInfo
+	}
+	panic("implement me")
+}
+
+func (storage *StableNodeInfoStorage) GetTermNow() uint64 {
+	//TODO implement me
+	return storage.nowGroupInfo.Term
+}
+
+func (storage *StableNodeInfoStorage) GetTermList() []uint64 {
+	//TODO implement me
+	return nil
+}
+
 func (storage *StableNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
 	nodeId := strconv.FormatUint(info.RaftId, 10)
 	nodeInfoData, err := proto.Marshal(info)
@@ -117,12 +135,8 @@ func (storage *StableNodeInfoStorage) Commit(nextTerm uint64) {
 func (storage *StableNodeInfoStorage) Apply() {
 	// TODO: (qiutb) 在 apply 时 使得 已经 commit 的 info 生效
 	if storage.onGroupApplyHookFunc != nil {
-		storage.onGroupApplyHookFunc(storage.GetGroupInfo())
+		storage.onGroupApplyHookFunc(storage.GetGroupInfo(0))
 	}
-}
-
-func (storage *StableNodeInfoStorage) GetGroupInfo() *GroupInfo {
-	return storage.nowGroupInfo
 }
 
 func (storage *StableNodeInfoStorage) SetLeader(nodeId ID) error {
