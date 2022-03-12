@@ -31,15 +31,8 @@ type Raft struct {
 
 	metaStorage MetaStorage
 
-	pipeline    *pipeline.Pipeline
-	controlChan chan ControlMsg
+	pipeline *pipeline.Pipeline
 }
-
-type ControlMsg int
-
-const (
-	AddNodeFinish ControlMsg = iota
-)
 
 func NewAlayaRaft(raftID uint64, pgID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
 	infoStorage node.InfoStorage, metaStorage MetaStorage,
@@ -67,8 +60,8 @@ func NewAlayaRaft(raftID uint64, pgID uint64, nowPipe *pipeline.Pipeline, oldP *
 		raftChan:    raftChan,
 		metaStorage: metaStorage,
 
-		controlChan: make(chan ControlMsg),
-		pipeline:    nowPipe,
+		pipeline: nowPipe,
+		stopChan: stopChan,
 	}
 
 	var peers []raft.Peer
@@ -78,7 +71,6 @@ func NewAlayaRaft(raftID uint64, pgID uint64, nowPipe *pipeline.Pipeline, oldP *
 				ID: id,
 			})
 		}
-
 	}
 	for _, id := range nowPipe.RaftId {
 		peers = append(peers, raft.Peer{
@@ -155,7 +147,6 @@ func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 		})
 		time.Sleep(time.Millisecond * 200)
 	}
-	// TODO: wait add new nodes ok
 	return nil
 }
 
@@ -169,7 +160,13 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 		return nil
 	}
 	time.Sleep(time.Second * 3)
+	// TODO: do it by new leader
+	removeSelf := false
 	for _, id := range NodeIDs {
+		if id == r.raft.Status().ID {
+			removeSelf = true
+			break
+		}
 		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raftCfg.ID, r.pgID, id)
 		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeRemoveNode,
@@ -178,27 +175,15 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 		})
 		time.Sleep(time.Millisecond * 200)
 	}
+	if removeSelf {
+		logger.Infof("raft: %v PG: %v propose conf change remove self", r.raftCfg.ID, r.pgID)
+		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
+			Type:    raftpb.ConfChangeRemoveNode,
+			NodeID:  r.raft.Status().ID,
+			Context: nil,
+		})
+	}
 	return nil
-}
-
-func (r *Raft) Leave() error {
-	err := r.raft.ProposeConfChange(r.ctx, raftpb.ConfChangeV2{
-		Transition: raftpb.ConfChangeTransitionAuto,
-		Changes: []raftpb.ConfChangeSingle{
-			{
-				Type:   raftpb.ConfChangeRemoveNode,
-				NodeID: r.raftCfg.ID,
-			},
-		},
-		Context: nil,
-	})
-	if err != nil {
-		return err
-	}
-	select {
-	case <-r.ctx.Done():
-		return nil
-	}
 }
 
 func (r *Raft) Stop() {

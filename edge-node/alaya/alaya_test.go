@@ -2,7 +2,6 @@ package alaya
 
 import (
 	"context"
-	"ecos/edge-node/moon"
 	"ecos/edge-node/node"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -12,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
-	"path"
 	"strconv"
 	"testing"
 	"time"
@@ -29,7 +27,7 @@ const (
 
 func TestNewAlaya(t *testing.T) {
 	nodeInfoDir := "./NodeInfoStorage"
-	os.Mkdir(nodeInfoDir, os.ModePerm)
+	_ = common.InitAndClearPath(nodeInfoDir)
 	//infoStorage := node.NewStableNodeInfoStorage(nodeInfoDir)
 	infoStorage := node.NewMemoryNodeInfoStorage()
 	defer infoStorage.Close()
@@ -49,7 +47,7 @@ func TestNewAlaya(t *testing.T) {
 			RpcPort:  uint64(32771 + i),
 			Capacity: 1,
 		}
-		infoStorage.UpdateNodeInfo(&info)
+		_ = infoStorage.UpdateNodeInfo(&info)
 		groupInfo.NodesInfo = append(groupInfo.NodesInfo, &info)
 	}
 	infoStorage.Commit(1)
@@ -116,16 +114,15 @@ func TestNewAlaya(t *testing.T) {
 		server.Stop()
 	}
 
-	os.RemoveAll("./testMetaStorage")
-	os.RemoveAll("./NodeInfoStorage")
-
+	_ = os.RemoveAll("./testMetaStorage")
+	_ = os.RemoveAll("./NodeInfoStorage")
 }
 
 func TestAlaya_UpdatePipeline(t *testing.T) {
 	var infoStorages []node.InfoStorage
 	var nodeInfos []node.NodeInfo
 	var rpcServers []*messenger.RpcServer
-	term := uint64(1)
+	var term uint64
 
 	for i := 0; i < 9; i++ {
 		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
@@ -144,11 +141,16 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 	term = 2
 	for i := 0; i < 6; i++ {
 		for j := 0; j < 6; j++ {
-			infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
 		}
 		infoStorages[i].Commit(term)
 		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i]))
-		go rpcServers[i].Run()
+		go func(server *messenger.RpcServer) {
+			err := server.Run()
+			if err != nil {
+				t.Errorf("Run rpc server at port: %v fail", nodeInfos[i].RpcPort)
+			}
+		}(rpcServers[i])
 		go alayas[i].Run()
 	}
 	time.Sleep(time.Second * 1)
@@ -168,7 +170,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 
 	for i := 6; i < 9; i++ {
 		for j := 0; j < 6; j++ {
-			infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
 		}
 		infoStorages[i].Commit(term)
 		infoStorages[i].Apply()
@@ -176,14 +178,19 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 	// UP 3 Alaya
 	for i := 6; i < 9; i++ {
 		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i]))
-		go rpcServers[i].Run()
+		go func(server *messenger.RpcServer) {
+			err := server.Run()
+			if err != nil {
+				t.Errorf("Run rpc server at port: %v fail", nodeInfos[i].RpcPort)
+			}
+		}(rpcServers[i])
 		go alayas[i].Run()
 	}
 	time.Sleep(time.Second * 1)
 	term = 3
 	for i := 0; i < 9; i++ {
 		for j := 0; j < 9; j++ {
-			infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
 		}
 		infoStorages[i].Commit(term)
 	}
@@ -197,6 +204,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		a := alayas[i]
 		a.printPipelineInfo()
 	}
+	// TODO: 某些 pipeline 节点数目不为三，需要进一步修正
 
 	for i := 0; i < 9; i++ { // for each node
 		server := rpcServers[i]
@@ -262,36 +270,4 @@ func makeStrawTree() *gocrush.TestingNode {
 	}
 	parent.Selector = gocrush.NewStrawSelector(parent)
 	return parent
-}
-
-func createMoons(num int, sunAddr string, basePath string) ([]*moon.Moon, []*messenger.RpcServer, error) {
-	err := common.InitAndClearPath(basePath)
-	if err != nil {
-		return nil, nil, err
-	}
-	var infoStorages []node.InfoStorage
-	var stableStorages []moon.Storage
-	var rpcServers []*messenger.RpcServer
-	var moons []*moon.Moon
-	var nodeInfos []*node.NodeInfo
-
-	for i := 0; i < num; i++ {
-		raftID := uint64(i + 1)
-		//infoStorages = append(infoStorages,
-		//	node.NewStableNodeInfoStorage(path.Join(basePath, "/nodeInfo", strconv.Itoa(i+1))))
-		stableStorages = append(stableStorages, moon.NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
-		rpcServers = append(rpcServers, messenger.NewRpcServer(32670+raftID))
-		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", 32670+raftID))
-	}
-
-	for i := 0; i < num; i++ {
-		if sunAddr != "" {
-			moons = append(moons, moon.NewMoon(nodeInfos[i], sunAddr, nil, nil, rpcServers[i], infoStorages[i],
-				stableStorages[i]))
-		} else {
-			moons = append(moons, moon.NewMoon(nodeInfos[i], sunAddr, nil, nodeInfos, rpcServers[i], infoStorages[i],
-				stableStorages[i]))
-		}
-	}
-	return moons, rpcServers, nil
 }

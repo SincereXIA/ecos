@@ -22,7 +22,7 @@ var ( // rocksdb的设置参数
 
 type StableNodeInfoStorage struct {
 	db                   *gorocksdb.DB
-	nowInfoMap           map[ID]NodeInfo
+	nowInfoMap           map[ID]*NodeInfo
 	nowGroupInfo         *GroupInfo
 	uncommittedGroupInfo *GroupInfo
 
@@ -87,8 +87,8 @@ func (storage *StableNodeInfoStorage) GetNodeInfo(nodeId ID) (*NodeInfo, error) 
 	return nodeInfo, nil
 }
 
-func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]NodeInfo {
-	NodeInfoMap := make(map[ID]NodeInfo)
+func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]*NodeInfo {
+	NodeInfoMap := make(map[ID]*NodeInfo)
 	iterator := storage.db.NewIterator(readOptions) //迭代器，遍历数据库
 	defer iterator.Close()
 	iterator.SeekToFirst()
@@ -105,7 +105,7 @@ func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]NodeInfo {
 		if err != nil {
 			return nil
 		}
-		NodeInfoMap[ID(keyData)] = nodeinfo
+		NodeInfoMap[ID(keyData)] = &nodeinfo
 		key.Free()
 		value.Free()
 	}
@@ -177,7 +177,7 @@ func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
 	}
 	return &StableNodeInfoStorage{
 		db:         db,
-		nowInfoMap: make(map[ID]NodeInfo),
+		nowInfoMap: make(map[ID]*NodeInfo),
 		nowGroupInfo: &GroupInfo{
 			GroupTerm: &Term{
 				Term: 0,

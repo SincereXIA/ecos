@@ -1,6 +1,7 @@
 package node
 
 import (
+	"ecos/utils/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -13,11 +14,11 @@ func TestMemoryNodeInfoStorage(t *testing.T) {
 	testStorage(storage, t)
 
 	testDataBaseDir := "./testNodeInfo"
-	os.Mkdir(testDataBaseDir, os.ModePerm)
+	_ = common.InitAndClearPath(testDataBaseDir)
 	stableStorage := NewStableNodeInfoStorage(testDataBaseDir)
 	defer stableStorage.Close()
 	testStorage(stableStorage, t)
-	os.RemoveAll(testDataBaseDir)
+	_ = os.RemoveAll(testDataBaseDir)
 }
 
 func testStorage(storage InfoStorage, t *testing.T) {

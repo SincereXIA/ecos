@@ -1,7 +1,6 @@
 package node
 
 import (
-	"context"
 	"errors"
 	"github.com/gogo/protobuf/sortkeys"
 	"github.com/mohae/deepcopy"
@@ -23,7 +22,7 @@ type InfoStorage interface {
 	Apply()
 
 	// ListAllNodeInfo 用于节点间通信时获取节点信息
-	ListAllNodeInfo() map[ID]NodeInfo
+	ListAllNodeInfo() map[ID]*NodeInfo
 	// GetGroupInfo 用于为 Crush 算法提供集群信息
 	// 默认
 	GetGroupInfo(term uint64) *GroupInfo
@@ -42,21 +41,19 @@ type MemoryNodeInfoStorage struct {
 	committedState   *InfoStorageState
 	uncommittedState *InfoStorageState
 
-	ctx context.Context
-
 	onGroupApplyHookFunc func(info *GroupInfo)
 }
 
 type InfoStorageState struct {
 	Term            uint64
 	LeaderID        ID
-	InfoMap         map[ID]NodeInfo
+	InfoMap         map[ID]*NodeInfo
 	UpdateTimeStamp *Timestamp
 }
 
 func (storage *MemoryNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
 	nodeId := info.RaftId
-	storage.uncommittedState.InfoMap[ID(nodeId)] = *info
+	storage.uncommittedState.InfoMap[ID(nodeId)] = info
 	storage.updateTimestamp()
 	return nil
 }
@@ -69,13 +66,13 @@ func (storage *MemoryNodeInfoStorage) DeleteNodeInfo(nodeId ID) error {
 
 func (storage *MemoryNodeInfoStorage) GetNodeInfo(nodeId ID) (*NodeInfo, error) {
 	if nodeInfo, ok := storage.uncommittedState.InfoMap[nodeId]; ok {
-		return &nodeInfo, nil
+		return nodeInfo, nil
 	}
 	return nil, errors.New("node not found")
 
 }
 
-func (storage *MemoryNodeInfoStorage) ListAllNodeInfo() map[ID]NodeInfo {
+func (storage *MemoryNodeInfoStorage) ListAllNodeInfo() map[ID]*NodeInfo {
 	return storage.uncommittedState.InfoMap
 }
 
@@ -104,7 +101,7 @@ func (storage *MemoryNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
 			GroupTerm: &Term{
 				Term: storage.nowState.Term,
 			},
-			LeaderInfo:      &leaderInfo,
+			LeaderInfo:      leaderInfo,
 			NodesInfo:       map2Slice(storage.nowState.InfoMap),
 			UpdateTimestamp: storage.nowState.UpdateTimeStamp,
 		}
@@ -148,29 +145,28 @@ func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {
 		nowState: &InfoStorageState{
 			Term:            0,
 			LeaderID:        0,
-			InfoMap:         make(map[ID]NodeInfo),
+			InfoMap:         make(map[ID]*NodeInfo),
 			UpdateTimeStamp: timestamppb.Now(),
 		},
 		committedState: &InfoStorageState{
 			Term:            0,
 			LeaderID:        0,
-			InfoMap:         make(map[ID]NodeInfo),
+			InfoMap:         make(map[ID]*NodeInfo),
 			UpdateTimeStamp: timestamppb.Now(),
 		},
 		uncommittedState: &InfoStorageState{
 			Term:            1,
 			LeaderID:        0,
-			InfoMap:         make(map[ID]NodeInfo),
+			InfoMap:         make(map[ID]*NodeInfo),
 			UpdateTimeStamp: timestamppb.Now(),
 		},
 		history: map[uint64]*GroupInfo{},
 	}
 }
 
-func map2Slice(input map[ID]NodeInfo) (output []*NodeInfo) {
+func map2Slice(input map[ID]*NodeInfo) (output []*NodeInfo) {
 	for _, info := range input {
-		r := info
-		output = append(output, &r)
+		output = append(output, info)
 	}
 	return
 }
