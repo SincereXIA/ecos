@@ -165,7 +165,7 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 	for _, id := range NodeIDs {
 		if id == r.raft.Status().ID {
 			removeSelf = true
-			break
+			continue
 		}
 		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raftCfg.ID, r.pgID, id)
 		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
