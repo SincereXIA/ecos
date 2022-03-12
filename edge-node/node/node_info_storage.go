@@ -101,7 +101,9 @@ func (storage *MemoryNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
 	if term == 0 {
 		leaderInfo := storage.nowState.InfoMap[storage.nowState.LeaderID]
 		return &GroupInfo{
-			Term:            storage.nowState.Term,
+			GroupTerm: &Term{
+				Term: storage.nowState.Term,
+			},
 			LeaderInfo:      &leaderInfo,
 			NodesInfo:       map2Slice(storage.nowState.InfoMap),
 			UpdateTimestamp: storage.nowState.UpdateTimeStamp,

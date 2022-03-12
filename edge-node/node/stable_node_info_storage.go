@@ -39,7 +39,7 @@ func (storage *StableNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
 
 func (storage *StableNodeInfoStorage) GetTermNow() uint64 {
 	//TODO implement me
-	return storage.nowGroupInfo.Term
+	return storage.nowGroupInfo.GroupTerm.GetTerm()
 }
 
 func (storage *StableNodeInfoStorage) GetTermList() []uint64 {
