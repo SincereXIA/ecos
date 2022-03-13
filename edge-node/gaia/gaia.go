@@ -23,12 +23,10 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 		case *UploadBlockRequest_Message:
 			msg := payload.Message
 			code := msg.Code
+			//p := msg.Pipeline
 			switch code {
 			case ControlMessage_BEGIN:
 				// TODO: 建立与同组 Node 的连接，准备转发
-				return stream.SendAndClose(&common.Result{
-					Status: common.Result_OK,
-				})
 			case ControlMessage_EOF:
 				// TODO: 确认转发成功，关闭连接
 				return stream.SendAndClose(&common.Result{
@@ -42,9 +40,7 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 			}
 		case *UploadBlockRequest_Chunk:
 			// TODO: 处理接收到的 Block，转发给同组 Node
-			return stream.SendAndClose(&common.Result{
-				Status: common.Result_OK,
-			})
+			//chunk := payload.Chunk.Content
 		case nil:
 			// The field is not set.
 			logger.Warningf("Received blank Payload")

@@ -1,6 +1,7 @@
 package messenger
 
 import (
+	"ecos/edge-node/node"
 	"ecos/messenger/demo"
 	"ecos/utils/logger"
 	"google.golang.org/grpc"
@@ -51,4 +52,10 @@ func GetRpcConn(addr string, port uint64) (*grpc.ClientConn, error) {
 	strPort := strconv.FormatUint(port, 10)
 	conn, err := grpc.Dial(addr+":"+strPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	return conn, err
+}
+
+func GetRpcConnByInfo(info *node.NodeInfo) (*grpc.ClientConn, error) {
+	addr := info.IpAddr
+	port := info.RpcPort
+	return GetRpcConn(addr, port)
 }
