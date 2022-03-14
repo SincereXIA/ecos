@@ -25,6 +25,7 @@ message ControlMessage {
   Code code = 1;
   BlockInfo block = 2;
   Pipeline pipeline = 3;
+  uint64 term = 4;
 }
 
 message Chunk {

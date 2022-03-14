@@ -9,6 +9,6 @@ message Result {
     FAIL = 1;
   }
   Status status = 1;
-  uint64 code = 2;
+  int32 code = 2;
   string message = 3;
 }

@@ -92,7 +92,7 @@ func (storage *MemoryNodeInfoStorage) Apply() {
 }
 
 func (storage *MemoryNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
-	if term == 0 {
+	if term == 0 || term == storage.nowState.Term {
 		leaderInfo := storage.nowState.InfoMap[storage.nowState.LeaderID]
 		return &GroupInfo{
 			GroupTerm: &Term{
