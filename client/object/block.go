@@ -4,43 +4,57 @@ import (
 	"crypto/sha256"
 	"ecos/client/user"
 	"ecos/edge-node/gaia"
-	"ecos/edge-node/node"
 	"ecos/edge-node/object"
-	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"io"
 )
 
-type BlockStatus int
-
-const (
-	READING BlockStatus = iota
-	UPLOADING
-	FAILED
-	FINISHED
-)
-
 type Block struct {
 	object.BlockInfo
+	data []byte
+}
 
-	// status describes current status of block
-	status BlockStatus
+// NewBlock Creates new Block with BlockInfo
+//
+// The BlockHash is CALCULATED from data
+//
+// object: ObjectId of current Block
+//
+// blockCount: ordinal number of the Block in Object
+//
+// size: size of Block data field
+//
+// data: content of Block
+func NewBlock(objectId string, blockCount int, size int, data []byte) *Block {
+	ret := &Block{BlockInfo: object.BlockInfo{
+		BlockId:   GenBlockId(objectId, blockCount),
+		BlockSize: uint64(size),
+	},
+		data: data,
+	}
+	ret.PgId = GenBlockPG(&ret.BlockInfo)
+	ret.genBlockHash()
+	return ret
+}
 
-	chunks []*localChunk
-
-	// These infos are for BlockInfo
-	key        string
-	groupInfo  *node.GroupInfo
-	blockCount int
-	needHash   bool
-
-	// These are for Upload and Release
-	uploadCount int
-	delFunc     func(*Block)
+func (b *Block) toChunks() []*gaia.Chunk {
+	chunkSize := ClientConfig.Object.ChunkSize
+	var chunks []*gaia.Chunk
+	offset := uint64(0)
+	for offset < b.BlockSize {
+		nextOffset := offset + chunkSize
+		if nextOffset > b.BlockSize {
+			nextOffset = b.BlockSize
+		}
+		chunks = append(chunks, &gaia.Chunk{
+			Content: b.data[offset:nextOffset],
+		})
+		offset = nextOffset
+	}
+	return chunks
 }
 
 // Upload provides a way to upload self to a given stream
@@ -59,20 +73,19 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 		logger.Errorf("uploadBlock error: %v", err)
 		return err
 	}
+	chunks := b.toChunks()
 	byteCount := uint64(0)
-	for _, chunk := range b.chunks {
+	for _, chunk := range chunks {
 		err = stream.Send(&gaia.UploadBlockRequest{
-			Payload: &gaia.UploadBlockRequest_Chunk{
-				Chunk: &gaia.Chunk{Content: chunk.data},
-			},
+			Payload: &gaia.UploadBlockRequest_Chunk{Chunk: chunk},
 		})
 		if err != nil && err != io.EOF {
 			logger.Errorf("uploadBlock error: %v", err)
 			return err
 		}
-		byteCount += uint64(len(chunk.data))
+		byteCount += uint64(len(chunk.Content))
 	}
-	if byteCount != b.Size {
+	if byteCount != b.BlockSize {
 		logger.Errorf("Incompatible size: Chunks: %v, Block: %v", byteCount, b.Size)
 		return errors.New("incompatible upload size")
 	}
@@ -95,98 +108,10 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 }
 
 // genBlockHash Block.genBlockHash uses SHA256 to calc the hash value of block content
-func (b *Block) genBlockHash() error {
-	if b.status != UPLOADING {
-		return errno.IllegalStatus
-	}
-	if !b.needHash {
-		b.BlockHash = ""
-		return nil
-	}
+func (b *Block) genBlockHash() {
 	sha256h := sha256.New()
-	for _, chunk := range b.chunks {
-		sha256h.Write(chunk.data)
-	}
+	sha256h.Write(b.data)
 	b.BlockHash = hex.EncodeToString(sha256h.Sum(nil))
-	return nil
-}
-
-func minSize(i int, i2 int) int {
-	if i < i2 {
-		return i
-	}
-	return i2
-}
-
-func (b *Block) updateBlockInfo() error {
-	b.BlockInfo.BlockId = GenBlockId(b.key, b.blockCount)
-	b.BlockInfo.Size = 0
-	for _, chunk := range b.chunks {
-		b.BlockInfo.Size += uint64(len(chunk.data))
-	}
-	err := b.genBlockHash()
-	if err != nil {
-		return err
-	}
-	// TODO: Calculate Place Group from Block Info and GroupInfo
-	b.BlockInfo.PgId = GenBlockPG(&b.BlockInfo)
-	return nil
-}
-
-func (b *Block) getUploadStream() (*UploadClient, error) {
-	var serverAddr string
-	for _, nodeInfo := range b.groupInfo.NodesInfo {
-		if b.PgId == nodeInfo.RaftId {
-			serverAddr = fmt.Sprintf("%v:%v", nodeInfo.IpAddr, nodeInfo.RpcPort)
-			break
-		}
-	}
-	client, err := NewGaiaClient(serverAddr)
-	if err != nil {
-		logger.Errorf("Unable to start Gaia Client: %v", err)
-		return nil, err
-	}
-	err = client.NewUploadStream()
-	if err != nil {
-		logger.Errorf("Unable to start upload stream: %v", err)
-		return nil, err
-	}
-	return client, nil
-}
-
-func (b *Block) Close() error {
-	if b.status != READING {
-		return errno.RepeatedClose
-	}
-	b.status = UPLOADING
-	err := b.updateBlockInfo()
-	if err != nil {
-		return err
-	}
-	client, err := b.getUploadStream()
-	if err != nil {
-		return err
-	}
-	go func() {
-		// TODO: Should We make this go routine repeating when a upload is failed?
-		if client.cancel != nil {
-			defer client.cancel()
-		}
-		err = b.Upload(client.stream)
-		if err != nil {
-			b.status = FAILED
-			return
-		} else {
-			_, err := client.GetUploadResult()
-			if err != nil {
-				b.status = FAILED
-				return
-			}
-			b.status = FINISHED
-			defer b.delFunc(b)
-		}
-	}()
-	return nil
 }
 
 // GenObjectId Generates ObjectId for a given object
