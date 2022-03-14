@@ -40,17 +40,16 @@ type EcosWriter struct {
 	blocks         map[int]*Block
 	curBlock       *Block
 	blockCount     int
-	blockHash      bool
 	finishedBlocks chan *Block
 
-	meta     *object.ObjectMeta
-	needHash bool
-	objHash  hash.Hash
+	meta    *object.ObjectMeta
+	objHash hash.Hash
 }
 
 // getCurBlock ensures to return with a Block can put new Chunk in
 func (w *EcosWriter) getCurBlock() *Block {
-	if w.curBlock != nil && len(w.curBlock.chunks) == 4 {
+	if w.curBlock != nil && len(w.curBlock.chunks) ==
+		int(w.config.Object.BlockSize/w.config.Object.ChunkSize) {
 		w.commitCurBlock()
 	}
 	if w.curBlock == nil {
@@ -61,7 +60,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 			key:         w.key,
 			groupInfo:   w.groupInfo,
 			blockCount:  w.blockCount,
-			needHash:    w.blockHash,
+			needHash:    w.config.Object.BlockHash,
 			uploadCount: 0,
 			delFunc: func(self *Block) {
 				// Release Chunks
@@ -142,7 +141,7 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 	}
 	// Update ObjectMeta of EcosWriter.meta.ObjHash
 	w.meta.Size += uint64(offset)
-	if w.needHash {
+	if w.config.Object.ObjectHash {
 		w.objHash.Write(p[:offset])
 	}
 	if offset != lenP {
@@ -157,7 +156,7 @@ func (w *EcosWriter) commitMeta() error {
 	w.meta.ObjId = GenObjectId(w.key)
 	// w.meta.Size has been set in EcosWriter.Write
 	w.meta.UpdateTime = timestamppb.Now()
-	if w.needHash {
+	if w.config.Object.ObjectHash {
 		w.meta.ObjHash = hex.EncodeToString(w.objHash.Sum(nil))
 	} else {
 		w.meta.ObjHash = ""
@@ -243,20 +242,13 @@ func (f *EcosWriterFactory) GetEcosWriter(key string) EcosWriter {
 	maxChunk := uint(f.config.UploadBuffer / f.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(f.newLocalChunk, maxChunk, int(maxChunk))
 	return EcosWriter{
-		groupInfo:      f.groupInfo,
-		key:            key,
-		config:         f.config,
-		Status:         READING,
-		chunks:         chunkPool,
-		curChunk:       nil,
-		chunkCount:     0,
-		blocks:         map[int]*Block{},
-		curBlock:       nil,
-		blockCount:     0,
-		blockHash:      config.Config.Object.BlockHash,
-		finishedBlocks: make(chan *Block, maxChunk/4),
-		meta:           &object.ObjectMeta{},
-		needHash:       config.Config.Object.ObjectHash,
-		objHash:        sha256.New(),
+		groupInfo: f.groupInfo,
+		key:       key,
+		config:    f.config,
+		Status:    READING,
+		chunks:    chunkPool,
+		blocks:    map[int]*Block{},
+		meta:      &object.ObjectMeta{},
+		objHash:   sha256.New(),
 	}
 }
