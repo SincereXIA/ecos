@@ -6,9 +6,9 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
+	"ecos/utils/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/wxnacy/wgo/arrays"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"strconv"
@@ -27,8 +27,9 @@ const (
 
 func TestNewAlaya(t *testing.T) {
 	nodeInfoDir := "./NodeInfoStorage"
-	os.Mkdir(nodeInfoDir, os.ModePerm)
-	infoStorage := node.NewStableNodeInfoStorage(nodeInfoDir)
+	_ = common.InitAndClearPath(nodeInfoDir)
+	//infoStorage := node.NewStableNodeInfoStorage(nodeInfoDir)
+	infoStorage := node.NewMemoryNodeInfoStorage()
 	defer infoStorage.Close()
 	groupInfo := node.GroupInfo{
 		GroupTerm: &node.Term{
@@ -46,10 +47,12 @@ func TestNewAlaya(t *testing.T) {
 			RpcPort:  uint64(32771 + i),
 			Capacity: 1,
 		}
-		infoStorage.UpdateNodeInfo(&info)
+		_ = infoStorage.UpdateNodeInfo(&info)
 		groupInfo.NodesInfo = append(groupInfo.NodesInfo, &info)
 	}
-	pipelines := pipeline.GenPipelines(&groupInfo, 9, 3)
+	infoStorage.Commit(1)
+	infoStorage.Apply()
+	pipelines := pipeline.GenPipelines(&groupInfo, 10, 3)
 	var rpcServers []messenger.RpcServer
 	for _, info := range groupInfo.NodesInfo {
 		server := messenger.NewRpcServer(info.RpcPort)
@@ -62,7 +65,7 @@ func TestNewAlaya(t *testing.T) {
 		info := groupInfo.NodesInfo[i]
 		dataBaseDir := "./testMetaStorage/" + strconv.FormatUint(info.RaftId, 10)
 		metaStorage := NewStableMetaStorage(dataBaseDir)
-		a := NewAlaya(info, infoStorage, metaStorage, &rpcServers[i], pipelines)
+		a := NewAlaya(info, infoStorage, metaStorage, &rpcServers[i])
 		alayas = append(alayas, a)
 		server := rpcServers[i]
 		go server.Run()
@@ -70,23 +73,10 @@ func TestNewAlaya(t *testing.T) {
 	t.Log("Alayas init done, start run")
 	for i := 0; i < 9; i++ {
 		a := alayas[i]
-		a.Run()
+		go a.Run()
 	}
 	time.Sleep(time.Second * 5)
-
-	for i := 0; i < 9; i++ { // test of whether the first node of pg is leader
-		a := alayas[i]
-		for _, p := range pipelines {
-			if -1 == arrays.Contains(p.RaftId, a.NodeID) { // pass when node not in pipline
-				continue
-			}
-			pgID := p.PgId
-			if p.RaftId[0] == a.NodeID {
-				a.PGRaftNode[pgID].raft.Status()
-				assert.Equal(t, a.PGRaftNode[pgID].raft.Status().Lead, a.NodeID, "first node of pg is leader")
-			}
-		}
-	}
+	assertAlayasOK(t, alayas, pipelines)
 
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]
@@ -118,15 +108,126 @@ func TestNewAlaya(t *testing.T) {
 	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
 
 	for i := 0; i < 9; i++ { // for each node
+		alaya := alayas[i]
+		alaya.Stop()
+		server := rpcServers[i]
+		server.Stop()
+	}
+
+	_ = os.RemoveAll("./testMetaStorage")
+	_ = os.RemoveAll("./NodeInfoStorage")
+}
+
+func TestAlaya_UpdatePipeline(t *testing.T) {
+	var infoStorages []node.InfoStorage
+	var nodeInfos []node.NodeInfo
+	var rpcServers []*messenger.RpcServer
+	var term uint64
+
+	for i := 0; i < 9; i++ {
+		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
+		nodeInfos = append(nodeInfos, node.NodeInfo{
+			RaftId:   uint64(i + 1),
+			Uuid:     uuid.New().String(),
+			IpAddr:   "127.0.0.1",
+			RpcPort:  uint64(32760 + i + 1),
+			Capacity: 10,
+		})
+		rpcServers = append(rpcServers, messenger.NewRpcServer(uint64(32760+i+1)))
+	}
+
+	// UP 6 Alaya
+	var alayas []*Alaya
+	term = 2
+	for i := 0; i < 6; i++ {
+		for j := 0; j < 6; j++ {
+			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+		}
+		infoStorages[i].Commit(term)
+		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i]))
+		go func(server *messenger.RpcServer) {
+			err := server.Run()
+			if err != nil {
+				t.Errorf("Run rpc server at port: %v fail", nodeInfos[i].RpcPort)
+			}
+		}(rpcServers[i])
+		go alayas[i].Run()
+	}
+	time.Sleep(time.Second * 1)
+	for i := 0; i < 6; i++ {
+		t.Logf("Apply new groupInfo for: %v", i+1)
+		go infoStorages[i].Apply()
+	}
+
+	time.Sleep(time.Second * 5)
+
+	for i := 0; i < 6; i++ { // for each node
+		a := alayas[i]
+		a.printPipelineInfo()
+	}
+
+	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
+
+	for i := 6; i < 9; i++ {
+		for j := 0; j < 6; j++ {
+			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+		}
+		infoStorages[i].Commit(term)
+		infoStorages[i].Apply()
+	}
+	// UP 3 Alaya
+	for i := 6; i < 9; i++ {
+		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i]))
+		go func(server *messenger.RpcServer) {
+			err := server.Run()
+			if err != nil {
+				t.Errorf("Run rpc server at port: %v fail", nodeInfos[i].RpcPort)
+			}
+		}(rpcServers[i])
+		go alayas[i].Run()
+	}
+	time.Sleep(time.Second * 1)
+	term = 3
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 9; j++ {
+			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+		}
+		infoStorages[i].Commit(term)
+	}
+	for i := 0; i < 9; i++ {
+		t.Logf("Apply new groupInfo for: %v", i+1)
+		go infoStorages[i].Apply()
+	}
+	time.Sleep(time.Second * 10)
+	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
+	for i := 0; i < 9; i++ { // for each node
+		a := alayas[i]
+		a.printPipelineInfo()
+	}
+	// TODO: 某些 pipeline 节点数目不为三，需要进一步修正
+
+	for i := 0; i < 9; i++ { // for each node
 		server := rpcServers[i]
 		server.Stop()
 		alaya := alayas[i]
 		alaya.Stop()
 	}
+}
 
-	os.RemoveAll("./testMetaStorage")
-	os.RemoveAll("./NodeInfoStorage")
-
+func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipeline) {
+	// 判断 每个 pg 第一个 节点是否为 leader
+	for _, p := range pipelines {
+		leaderID := p.RaftId[0]
+		pgID := p.PgId
+		a := alayas[leaderID-1]
+		assert.Equal(t, leaderID, a.PGRaftNode[pgID].raft.Status().Lead)
+	}
+	// 判断 每个 alaya 的每个 raft node 是否都成功加入 PG
+	for _, a := range alayas {
+		for _, r := range a.PGRaftNode {
+			assert.NotZero(t, r.raft.Status().Lead)
+		}
+	}
 }
 
 func TestAlaya_RecordObjectMeta(t *testing.T) {
@@ -152,7 +253,6 @@ func checkUnique(t *testing.T, nodes []gocrush.Node) {
 }
 
 func makeStrawTree() *gocrush.TestingNode {
-
 	var parent = new(gocrush.TestingNode)
 	parent.Id = "ROOT"
 	parent.Type = ROOT

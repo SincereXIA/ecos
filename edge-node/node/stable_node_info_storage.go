@@ -22,9 +22,29 @@ var ( // rocksdb的设置参数
 
 type StableNodeInfoStorage struct {
 	db                   *gorocksdb.DB
-	nowInfoMap           map[ID]NodeInfo
+	nowInfoMap           map[ID]*NodeInfo
 	nowGroupInfo         *GroupInfo
 	uncommittedGroupInfo *GroupInfo
+
+	onGroupApplyHookFunc func(info *GroupInfo)
+}
+
+func (storage *StableNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
+	//TODO implement me
+	if term == 0 {
+		return storage.nowGroupInfo
+	}
+	panic("implement me")
+}
+
+func (storage *StableNodeInfoStorage) GetTermNow() uint64 {
+	//TODO implement me
+	return storage.nowGroupInfo.GroupTerm.GetTerm()
+}
+
+func (storage *StableNodeInfoStorage) GetTermList() []uint64 {
+	//TODO implement me
+	return nil
 }
 
 func (storage *StableNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
@@ -67,8 +87,8 @@ func (storage *StableNodeInfoStorage) GetNodeInfo(nodeId ID) (*NodeInfo, error) 
 	return nodeInfo, nil
 }
 
-func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]NodeInfo {
-	NodeInfoMap := make(map[ID]NodeInfo)
+func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]*NodeInfo {
+	NodeInfoMap := make(map[ID]*NodeInfo)
 	iterator := storage.db.NewIterator(readOptions) //迭代器，遍历数据库
 	defer iterator.Close()
 	iterator.SeekToFirst()
@@ -85,14 +105,14 @@ func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]NodeInfo {
 		if err != nil {
 			return nil
 		}
-		NodeInfoMap[ID(keyData)] = nodeinfo
+		NodeInfoMap[ID(keyData)] = &nodeinfo
 		key.Free()
 		value.Free()
 	}
 	return NodeInfoMap
 }
 
-func (storage *StableNodeInfoStorage) Commit() {
+func (storage *StableNodeInfoStorage) Commit(nextTerm uint64) {
 	storage.nowInfoMap = storage.ListAllNodeInfo()
 	cpy := deepcopy.Copy(storage.uncommittedGroupInfo)
 	storage.nowGroupInfo = cpy.(*GroupInfo)
@@ -112,9 +132,11 @@ func (storage *StableNodeInfoStorage) Commit() {
 		}
 	}
 }
-
-func (storage *StableNodeInfoStorage) GetGroupInfo() *GroupInfo {
-	return storage.nowGroupInfo
+func (storage *StableNodeInfoStorage) Apply() {
+	// TODO: (qiutb) 在 apply 时 使得 已经 commit 的 info 生效
+	if storage.onGroupApplyHookFunc != nil {
+		storage.onGroupApplyHookFunc(storage.GetGroupInfo(0))
+	}
 }
 
 func (storage *StableNodeInfoStorage) SetLeader(nodeId ID) error {
@@ -137,6 +159,10 @@ func (storage *StableNodeInfoStorage) Close() {
 	storage.db.Close()
 }
 
+func (storage *StableNodeInfoStorage) SetOnGroupApply(hookFunc func(info *GroupInfo)) {
+	storage.onGroupApplyHookFunc = hookFunc
+}
+
 func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
 	err := common.InitPath(dataBaseDir)
 	if err != nil {
@@ -151,7 +177,7 @@ func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
 	}
 	return &StableNodeInfoStorage{
 		db:         db,
-		nowInfoMap: make(map[ID]NodeInfo),
+		nowInfoMap: make(map[ID]*NodeInfo),
 		nowGroupInfo: &GroupInfo{
 			GroupTerm: &Term{
 				Term: 0,

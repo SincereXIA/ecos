@@ -155,8 +155,9 @@ func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenge
 
 	for i := 0; i < num; i++ {
 		raftID := uint64(i + 1)
-		infoStorages = append(infoStorages,
-			node.NewStableNodeInfoStorage(path.Join(basePath, "/nodeInfo", strconv.Itoa(i+1))))
+		//infoStorages = append(infoStorages,
+		//	node.NewStableNodeInfoStorage(path.Join(basePath, "/nodeInfo", strconv.Itoa(i+1))))
+		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
 		stableStorages = append(stableStorages, NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
 		rpcServers = append(rpcServers, messenger.NewRpcServer(32670+raftID))
 		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", 32670+raftID))
