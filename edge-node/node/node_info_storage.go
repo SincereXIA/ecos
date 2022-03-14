@@ -1,10 +1,10 @@
 package node
 
 import (
+	"ecos/messenger/timestamppb"
 	"errors"
 	"github.com/gogo/protobuf/sortkeys"
 	"github.com/mohae/deepcopy"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type ID uint64
@@ -48,7 +48,7 @@ type InfoStorageState struct {
 	Term            uint64
 	LeaderID        ID
 	InfoMap         map[ID]*NodeInfo
-	UpdateTimeStamp *Timestamp
+	UpdateTimeStamp *timestamppb.Timestamp
 }
 
 func (storage *MemoryNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {

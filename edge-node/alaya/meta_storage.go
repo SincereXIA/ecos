@@ -5,7 +5,7 @@ import (
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	gorocksdb "github.com/SUMStudio/grocksdb"
-	"google.golang.org/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 )
 
 // MetaStorage Store ObjectMeta

@@ -1,13 +1,13 @@
 package node
 
 import (
+	"ecos/messenger/timestamppb"
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"errors"
 	gorocksdb "github.com/SUMStudio/grocksdb"
+	"github.com/gogo/protobuf/proto"
 	"github.com/mohae/deepcopy"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"strconv"
 	"time"
 )

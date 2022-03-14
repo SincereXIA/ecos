@@ -7,11 +7,11 @@ import (
 	"ecos/edge-node/pipeline"
 	"ecos/utils/logger"
 	mapset "github.com/deckarep/golang-set"
+	"github.com/gogo/protobuf/proto"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 	"strconv"
 	"time"
 )
