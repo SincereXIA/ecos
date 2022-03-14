@@ -35,7 +35,7 @@ type InfoStorage interface {
 }
 
 type MemoryNodeInfoStorage struct {
-	history map[uint64]*GroupInfo
+	history History
 
 	nowState         *InfoStorageState
 	committedState   *InfoStorageState
@@ -44,28 +44,21 @@ type MemoryNodeInfoStorage struct {
 	onGroupApplyHookFunc func(info *GroupInfo)
 }
 
-type InfoStorageState struct {
-	Term            uint64
-	LeaderID        ID
-	InfoMap         map[ID]*NodeInfo
-	UpdateTimeStamp *timestamppb.Timestamp
-}
-
 func (storage *MemoryNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
 	nodeId := info.RaftId
-	storage.uncommittedState.InfoMap[ID(nodeId)] = info
+	storage.uncommittedState.InfoMap[nodeId] = info
 	storage.updateTimestamp()
 	return nil
 }
 
 func (storage *MemoryNodeInfoStorage) DeleteNodeInfo(nodeId ID) error {
-	delete(storage.uncommittedState.InfoMap, nodeId)
+	delete(storage.uncommittedState.InfoMap, uint64(nodeId))
 	storage.updateTimestamp()
 	return nil
 }
 
 func (storage *MemoryNodeInfoStorage) GetNodeInfo(nodeId ID) (*NodeInfo, error) {
-	if nodeInfo, ok := storage.uncommittedState.InfoMap[nodeId]; ok {
+	if nodeInfo, ok := storage.uncommittedState.InfoMap[uint64(nodeId)]; ok {
 		return nodeInfo, nil
 	}
 	return nil, errors.New("node not found")
@@ -73,7 +66,11 @@ func (storage *MemoryNodeInfoStorage) GetNodeInfo(nodeId ID) (*NodeInfo, error) 
 }
 
 func (storage *MemoryNodeInfoStorage) ListAllNodeInfo() map[ID]*NodeInfo {
-	return storage.uncommittedState.InfoMap
+	tempMap := make(map[ID]*NodeInfo)
+	for k, v := range storage.uncommittedState.InfoMap {
+		tempMap[ID(k)] = v
+	}
+	return tempMap
 }
 
 func (storage *MemoryNodeInfoStorage) Commit(newTerm uint64) {
@@ -87,7 +84,7 @@ func (storage *MemoryNodeInfoStorage) Apply() {
 	// Apply
 	cpy := deepcopy.Copy(storage.committedState)
 
-	storage.history[storage.nowState.Term] = storage.GetGroupInfo(0)
+	storage.history.HistoryMap[storage.nowState.Term] = storage.GetGroupInfo(0)
 	storage.nowState = cpy.(*InfoStorageState)
 	if storage.onGroupApplyHookFunc != nil {
 		storage.onGroupApplyHookFunc(storage.GetGroupInfo(0))
@@ -106,12 +103,12 @@ func (storage *MemoryNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
 			UpdateTimestamp: storage.nowState.UpdateTimeStamp,
 		}
 	}
-	return storage.history[term]
+	return storage.history.HistoryMap[term]
 }
 
 func (storage *MemoryNodeInfoStorage) SetLeader(nodeId ID) error {
-	if _, ok := storage.uncommittedState.InfoMap[nodeId]; ok {
-		storage.uncommittedState.LeaderID = nodeId
+	if _, ok := storage.uncommittedState.InfoMap[uint64(nodeId)]; ok {
+		storage.uncommittedState.LeaderID = uint64(nodeId)
 		storage.updateTimestamp()
 	} else {
 		return errors.New("leader not found")
@@ -128,8 +125,8 @@ func (storage *MemoryNodeInfoStorage) GetTermNow() uint64 {
 }
 
 func (storage *MemoryNodeInfoStorage) GetTermList() []uint64 {
-	keys := make([]uint64, 0, len(storage.history))
-	for key := range storage.history {
+	keys := make([]uint64, 0, len(storage.history.HistoryMap))
+	for key := range storage.history.HistoryMap {
 		keys = append(keys, key)
 	}
 	sortkeys.Uint64s(keys)
@@ -145,26 +142,28 @@ func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {
 		nowState: &InfoStorageState{
 			Term:            0,
 			LeaderID:        0,
-			InfoMap:         make(map[ID]*NodeInfo),
+			InfoMap:         make(map[uint64]*NodeInfo),
 			UpdateTimeStamp: timestamppb.Now(),
 		},
 		committedState: &InfoStorageState{
 			Term:            0,
 			LeaderID:        0,
-			InfoMap:         make(map[ID]*NodeInfo),
+			InfoMap:         make(map[uint64]*NodeInfo),
 			UpdateTimeStamp: timestamppb.Now(),
 		},
 		uncommittedState: &InfoStorageState{
 			Term:            1,
 			LeaderID:        0,
-			InfoMap:         make(map[ID]*NodeInfo),
+			InfoMap:         make(map[uint64]*NodeInfo),
 			UpdateTimeStamp: timestamppb.Now(),
 		},
-		history: map[uint64]*GroupInfo{},
+		history: History{
+			HistoryMap: map[uint64]*GroupInfo{},
+		},
 	}
 }
 
-func map2Slice(input map[ID]*NodeInfo) (output []*NodeInfo) {
+func map2Slice(input map[uint64]*NodeInfo) (output []*NodeInfo) {
 	for _, info := range input {
 		output = append(output, info)
 	}

@@ -2,8 +2,8 @@ package pipeline
 
 import (
 	"ecos/edge-node/node"
+	"ecos/messenger/timestamppb"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"reflect"
 	"strconv"
 	"testing"

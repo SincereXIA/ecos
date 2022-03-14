@@ -1,198 +1,99 @@
 package node
 
 import (
-	"ecos/messenger/timestamppb"
 	"ecos/utils/common"
+	"ecos/utils/database"
 	"ecos/utils/logger"
-	"errors"
 	gorocksdb "github.com/SUMStudio/grocksdb"
 	"github.com/gogo/protobuf/proto"
-	"github.com/mohae/deepcopy"
-	"strconv"
-	"time"
 )
 
-const term = "Term"
+const (
+	history          = "history"
+	nowState         = "nowState"
+	committedState   = "committedState"
+	uncommittedState = "uncommittedState"
+)
 
 var ( // rocksdb的设置参数
-	opts         = gorocksdb.NewDefaultOptions()
-	readOptions  = gorocksdb.NewDefaultReadOptions()
-	writeOptions = gorocksdb.NewDefaultWriteOptions()
+	opts         *gorocksdb.Options
+	readOptions  *gorocksdb.ReadOptions
+	writeOptions *gorocksdb.WriteOptions
 )
 
 type StableNodeInfoStorage struct {
-	db                   *gorocksdb.DB
-	nowInfoMap           map[ID]*NodeInfo
-	nowGroupInfo         *GroupInfo
-	uncommittedGroupInfo *GroupInfo
-
-	onGroupApplyHookFunc func(info *GroupInfo)
+	*MemoryNodeInfoStorage
+	db *gorocksdb.DB
 }
 
-func (storage *StableNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
-	//TODO implement me
-	if term == 0 {
-		return storage.nowGroupInfo
-	}
-	panic("implement me")
+func init() {
+	opts, readOptions, writeOptions = database.InitRocksdb()
 }
 
-func (storage *StableNodeInfoStorage) GetTermNow() uint64 {
-	//TODO implement me
-	return storage.nowGroupInfo.GroupTerm.GetTerm()
-}
-
-func (storage *StableNodeInfoStorage) GetTermList() []uint64 {
-	//TODO implement me
-	return nil
-}
-
-func (storage *StableNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
-	nodeId := strconv.FormatUint(info.RaftId, 10)
-	nodeInfoData, err := proto.Marshal(info)
+// SaveMemoryNodeInfoStorage Save MemoryNodeInfoStorage
+func (s *StableNodeInfoStorage) SaveMemoryNodeInfoStorage() {
+	historyProtoData, err := proto.Marshal(&s.history)
 	if err != nil {
-		return nil
+		logger.Errorf("Marshal history failed, err:%v", err)
 	}
-	err = storage.db.Put(writeOptions, []byte(nodeId), nodeInfoData)
+	err = s.db.Put(writeOptions, []byte(history), historyProtoData)
 	if err != nil {
-		return err
+		logger.Errorf("put history failed, err:%v", err)
 	}
-	storage.updateTimestamp()
-	return nil
-}
 
-func (storage *StableNodeInfoStorage) DeleteNodeInfo(nodeId ID) error {
-	id := strconv.FormatUint(uint64(nodeId), 10)
-	err := storage.db.Delete(writeOptions, []byte(id))
+	nowStateProtoData, err := proto.Marshal(s.nowState)
 	if err != nil {
-		return err
+		logger.Errorf("Marshal nowState failed, err:%v", err)
 	}
-	storage.updateTimestamp()
-	return nil
-}
-
-func (storage *StableNodeInfoStorage) GetNodeInfo(nodeId ID) (*NodeInfo, error) {
-	readOptions := gorocksdb.NewDefaultReadOptions()
-	id := strconv.FormatUint(uint64(nodeId), 10)
-	nodeInfoData, err := storage.db.Get(readOptions, []byte(id))
-	defer nodeInfoData.Free()
-	if !nodeInfoData.Exists() {
-		return nil, errors.New("node not found")
-	}
-	nodeInfo := &NodeInfo{}
-	proto.Unmarshal(nodeInfoData.Data(), nodeInfo)
+	err = s.db.Put(writeOptions, []byte(nowState), nowStateProtoData)
 	if err != nil {
-		return nil, err
+		logger.Errorf("put nowState failed, err:%v", err)
 	}
-	return nodeInfo, nil
-}
 
-func (storage *StableNodeInfoStorage) ListAllNodeInfo() map[ID]*NodeInfo {
-	NodeInfoMap := make(map[ID]*NodeInfo)
-	iterator := storage.db.NewIterator(readOptions) //迭代器，遍历数据库
-	defer iterator.Close()
-	iterator.SeekToFirst()
-	for it := iterator; it.Valid(); it.Next() {
-		key := it.Key()
-		keyData, err := strconv.ParseUint(string(key.Data()), 10, 64)
-		if err != nil {
-			return nil
-		}
-		value := it.Value()
-		valueData := value.Data()
-		nodeinfo := NodeInfo{}
-		err = proto.Unmarshal(valueData, &nodeinfo)
-		if err != nil {
-			return nil
-		}
-		NodeInfoMap[ID(keyData)] = &nodeinfo
-		key.Free()
-		value.Free()
-	}
-	return NodeInfoMap
-}
-
-func (storage *StableNodeInfoStorage) Commit(nextTerm uint64) {
-	storage.nowInfoMap = storage.ListAllNodeInfo()
-	cpy := deepcopy.Copy(storage.uncommittedGroupInfo)
-	storage.nowGroupInfo = cpy.(*GroupInfo)
-	storage.nowGroupInfo.NodesInfo = map2Slice(storage.nowInfoMap)
-	oldTerm := storage.uncommittedGroupInfo.GroupTerm.Term
-	storage.uncommittedGroupInfo.GroupTerm.Term = uint64(time.Now().UnixNano())
-	// prevent commit too quick let term equal
-	if storage.uncommittedGroupInfo.GroupTerm.Term == oldTerm {
-		storage.uncommittedGroupInfo.GroupTerm.Term += 1
-		termData, err := proto.Marshal(storage.uncommittedGroupInfo.GroupTerm)
-		if err != nil {
-			logger.Errorf("Marshal Term failed, err:%v\n", err)
-		}
-		err = storage.db.Put(writeOptions, []byte(term), termData)
-		if err != nil {
-			logger.Errorf("save Term failed, err:%v\n", err)
-		}
-	}
-}
-func (storage *StableNodeInfoStorage) Apply() {
-	// TODO: (qiutb) 在 apply 时 使得 已经 commit 的 info 生效
-	if storage.onGroupApplyHookFunc != nil {
-		storage.onGroupApplyHookFunc(storage.GetGroupInfo(0))
-	}
-}
-
-func (storage *StableNodeInfoStorage) SetLeader(nodeId ID) error {
-
-	info, err := storage.GetNodeInfo(nodeId)
+	committedStateProtoData, err := proto.Marshal(s.committedState)
 	if err != nil {
-		return errors.New("leader not found")
+		logger.Errorf("Marshal committedState failed, err:%v", err)
 	}
-	storage.uncommittedGroupInfo.LeaderInfo = info
-	storage.updateTimestamp()
+	err = s.db.Put(writeOptions, []byte(committedState), committedStateProtoData)
+	if err != nil {
+		logger.Errorf("put committedState failed, err:%v", err)
+	}
 
-	return nil
+	uncommittedStateProtoData, err := proto.Marshal(s.uncommittedState)
+	if err != nil {
+		logger.Errorf("Marshal uncommittedState failed, err:%v", err)
+	}
+	err = s.db.Put(writeOptions, []byte(uncommittedState), uncommittedStateProtoData)
+	if err != nil {
+		logger.Errorf("put uncommittedState failed, err:%v", err)
+	}
 }
 
-func (storage *StableNodeInfoStorage) updateTimestamp() {
-	storage.uncommittedGroupInfo.UpdateTimestamp = timestamppb.Now()
+func (s *StableNodeInfoStorage) RecoverMemoryNodeInfoStorage() {
+	// TODO
 }
 
-func (storage *StableNodeInfoStorage) Close() {
-	storage.db.Close()
+func (s *StableNodeInfoStorage) Close() {
+	s.db.Close()
 }
 
-func (storage *StableNodeInfoStorage) SetOnGroupApply(hookFunc func(info *GroupInfo)) {
-	storage.onGroupApplyHookFunc = hookFunc
-}
-
+// NewStableNodeInfoStorage create a stableNodeInfoStorage instance
 func NewStableNodeInfoStorage(dataBaseDir string) *StableNodeInfoStorage {
 	err := common.InitPath(dataBaseDir)
 	if err != nil {
 		logger.Errorf("mkdir err: %v", err)
 		return nil
 	}
+	opts = gorocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
 	db, err := gorocksdb.OpenDb(opts, dataBaseDir)
 	if err != nil {
 		logger.Errorf("open database failed, err:%v\n", err)
 		return nil
 	}
+
 	return &StableNodeInfoStorage{
-		db:         db,
-		nowInfoMap: make(map[ID]*NodeInfo),
-		nowGroupInfo: &GroupInfo{
-			GroupTerm: &Term{
-				Term: 0,
-			},
-			LeaderInfo:      nil,
-			NodesInfo:       nil,
-			UpdateTimestamp: timestamppb.Now(),
-		},
-		uncommittedGroupInfo: &GroupInfo{
-			GroupTerm: &Term{
-				Term: uint64(time.Now().UnixNano()),
-			},
-			LeaderInfo:      nil,
-			NodesInfo:       nil,
-			UpdateTimestamp: timestamppb.Now(),
-		},
+		NewMemoryNodeInfoStorage(),
+		db,
 	}
 }
