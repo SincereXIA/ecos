@@ -2,6 +2,7 @@ package object
 
 import (
 	"crypto/sha256"
+	clientNode "ecos/client/node"
 	"ecos/client/user"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/node"

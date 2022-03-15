@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"ecos/client/config"
+	clientNode "ecos/client/node"
 	"ecos/edge-node/moon"
 	"ecos/edge-node/node"
 	"ecos/edge-node/object"
