@@ -67,7 +67,7 @@ func TestEcosWriter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			factory := NewEcosWriterFactory(config.DefaultConfig, "127.0.0.1:32801")
+			factory := NewEcosWriterFactory(config.DefaultConfig, "127.0.0.1", 32801)
 			writer := factory.GetEcosWriter(tt.args.key)
 			file, err := os.Open(tt.args.localFilePath)
 			assert.NoError(t, err)

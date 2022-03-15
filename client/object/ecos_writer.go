@@ -1,15 +1,18 @@
 package object
 
 import (
+	"context"
 	"crypto/sha256"
 	"ecos/client/config"
+	"ecos/edge-node/moon"
 	"ecos/edge-node/node"
 	"ecos/edge-node/object"
+	"ecos/messenger"
+	timestamp "ecos/messenger/timestamppb"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/hex"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"hash"
 	"io"
 )
@@ -140,7 +143,7 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 		pending -= writeSize
 	}
 	// Update ObjectMeta of EcosWriter.meta.ObjHash
-	w.meta.Size += uint64(offset)
+	w.meta.ObjSize += uint64(offset)
 	if w.config.Object.ObjectHash {
 		w.objHash.Write(p[:offset])
 	}
@@ -154,8 +157,8 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 // Then these infos will be sent to AlayaServer
 func (w *EcosWriter) commitMeta() error {
 	w.meta.ObjId = GenObjectId(w.key)
-	// w.meta.Size has been set in EcosWriter.Write
-	w.meta.UpdateTime = timestamppb.Now()
+	// w.meta.ObjSize has been set in EcosWriter.Write
+	w.meta.UpdateTime = timestamp.Now()
 	if w.config.Object.ObjectHash {
 		w.meta.ObjHash = hex.EncodeToString(w.objHash.Sum(nil))
 	} else {
@@ -214,18 +217,17 @@ type EcosWriterFactory struct {
 // NewEcosWriterFactory Constructor for EcosWriterFactory
 //
 // nodeAddr shall provide the address to get GroupInfo from
-func NewEcosWriterFactory(config *config.ClientConfig, nodeAddr string) *EcosWriterFactory {
-	// TODO: Get GroupInfo from Node at `nodeAddr`
-	groupInfo := &node.GroupInfo{
-		Term:       0,
-		LeaderInfo: node.NewSelfInfo(0x01, "127.0.0.1", 32801),
-		NodesInfo: []*node.NodeInfo{
-			node.NewSelfInfo(0x01, "127.0.0.1", 32801),
-			node.NewSelfInfo(0x02, "127.0.0.1", 32802),
-			node.NewSelfInfo(0x03, "127.0.0.1", 32803),
-		},
-		UpdateTimestamp: timestamppb.Now(),
+func NewEcosWriterFactory(config *config.ClientConfig, nodeAddr string, port int) *EcosWriterFactory {
+	conn, err := messenger.GetRpcConn(nodeAddr, uint64(port))
+	if err != nil {
+		return nil
 	}
+	moonClient := moon.NewMoonClient(conn)
+	groupInfo, err := moonClient.GetGroupInfo(context.Background(), &node.Term{Term: 0})
+	if err != nil {
+		return nil
+	}
+	// TODO: Retry?
 	ret := &EcosWriterFactory{
 		groupInfo: groupInfo,
 		config:    config,
