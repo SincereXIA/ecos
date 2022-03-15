@@ -4,10 +4,10 @@ import (
 	"context"
 	"ecos/client/config"
 	"ecos/edge-node/gaia"
+	"ecos/edge-node/node"
+	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/logger"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"time"
 )
 
@@ -20,10 +20,9 @@ type UploadClient struct {
 }
 
 // NewGaiaClient creates a client stream with 1s Timeout
-func NewGaiaClient(serverAddr string) (*UploadClient, error) {
+func NewGaiaClient(serverInfo *node.NodeInfo) (*UploadClient, error) {
 	var newClient UploadClient
-	newClient.serverAddr = serverAddr
-	conn, err := grpc.Dial(newClient.serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := messenger.GetRpcConnByInfo(serverInfo)
 	if err != nil {
 		return nil, err
 	}

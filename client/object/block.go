@@ -134,14 +134,8 @@ func (b *Block) updateBlockInfo() error {
 }
 
 func (b *Block) getUploadStream() (*UploadClient, error) {
-	var serverAddr string
-	for _, nodeInfo := range b.groupInfo.NodesInfo {
-		if b.PgId == nodeInfo.RaftId {
-			serverAddr = fmt.Sprintf("%v:%v", nodeInfo.IpAddr, nodeInfo.RpcPort)
-			break
-		}
-	}
-	client, err := NewGaiaClient(serverAddr)
+	serverInfo := clientNode.LocalInfoStorage.GetNodeInfo(0, b.blockPipes[b.BlockInfo.PgId].RaftId[0])
+	client, err := NewGaiaClient(serverInfo)
 	if err != nil {
 		logger.Errorf("Unable to start Gaia Client: %v", err)
 		return nil, err

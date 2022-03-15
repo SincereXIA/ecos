@@ -169,8 +169,8 @@ func (w *EcosWriter) commitMeta() error {
 	for i := 0; i < w.blockCount; i++ {
 		w.meta.Blocks = append(w.meta.Blocks, &w.blocks[i].BlockInfo)
 	}
-	// TODO: Add PG Calc for ObjectMeta
-	metaClient, err := NewMetaClient("")
+	metaServerNode := w.checkObjNodeByPg()
+	metaClient, err := NewMetaClient(metaServerNode)
 	if err != nil {
 		logger.Errorf("Upload Object Failed: %v", err)
 		return err

@@ -4,26 +4,26 @@ import (
 	"context"
 	"ecos/client/config"
 	"ecos/edge-node/alaya"
+	"ecos/edge-node/node"
 	"ecos/edge-node/object"
+	"ecos/messenger"
 	"ecos/messenger/common"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"time"
 )
 
 type MetaClient struct {
-	serverAddr string
+	serverNode *node.NodeInfo
 	client     alaya.AlayaClient
 	context    context.Context
 	cancel     context.CancelFunc
 }
 
 // NewMetaClient create a client with config
-func NewMetaClient(serverAddr string) (*MetaClient, error) {
+func NewMetaClient(serverNode *node.NodeInfo) (*MetaClient, error) {
 	var newClient = MetaClient{
-		serverAddr: serverAddr,
+		serverNode: serverNode,
 	}
-	conn, err := grpc.Dial(newClient.serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := messenger.GetRpcConnByInfo(serverNode)
 	if err != nil {
 		return nil, err
 	}
