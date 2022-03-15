@@ -106,13 +106,13 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 	}
 }
 
-func NewGaia(rpcServer *messenger.RpcServer) *Gaia {
+func NewGaia(rpcServer *messenger.RpcServer, selfInfo *node.NodeInfo, infoStorage node.InfoStorage) *Gaia {
 	ctx, cancel := context.WithCancel(context.Background())
 	g := Gaia{
 		ctx:         ctx,
 		cancel:      cancel,
-		selfInfo:    nil,
-		infoStorage: nil,
+		selfInfo:    selfInfo,
+		infoStorage: infoStorage,
 	}
 	RegisterGaiaServer(rpcServer, &g)
 	return &g
