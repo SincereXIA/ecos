@@ -7,11 +7,12 @@ import (
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/node"
 	"ecos/edge-node/object"
+	"ecos/edge-node/pipeline"
+	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"io"
 )
@@ -38,6 +39,7 @@ type Block struct {
 	groupInfo  *node.GroupInfo
 	blockCount int
 	needHash   bool
+	blockPipes []*pipeline.Pipeline
 
 	// These are for Upload and Release
 	uploadCount int
@@ -50,8 +52,10 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	start := &gaia.UploadBlockRequest{
 		Payload: &gaia.UploadBlockRequest_Message{
 			Message: &gaia.ControlMessage{
-				Code:  gaia.ControlMessage_BEGIN,
-				Block: &b.BlockInfo,
+				Code:     gaia.ControlMessage_BEGIN,
+				Block:    &b.BlockInfo,
+				Pipeline: b.blockPipes[b.PgId],
+				Term:     b.groupInfo.GroupTerm.Term,
 			},
 		},
 	}
@@ -82,8 +86,10 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	end := &gaia.UploadBlockRequest{
 		Payload: &gaia.UploadBlockRequest_Message{
 			Message: &gaia.ControlMessage{
-				Code:  gaia.ControlMessage_EOF,
-				Block: &b.BlockInfo,
+				Code:     gaia.ControlMessage_EOF,
+				Block:    &b.BlockInfo,
+				Pipeline: b.blockPipes[b.PgId],
+				Term:     b.groupInfo.GroupTerm.Term,
 			},
 		},
 	}
@@ -120,7 +126,6 @@ func minSize(i int, i2 int) int {
 }
 
 func (b *Block) updateBlockInfo() error {
-	b.BlockInfo.BlockId = GenBlockId(b.key, b.blockCount)
 	b.BlockInfo.BlockSize = 0
 	for _, chunk := range b.chunks {
 		b.BlockInfo.BlockSize += uint64(len(chunk.data))
@@ -128,6 +133,11 @@ func (b *Block) updateBlockInfo() error {
 	err := b.genBlockHash()
 	if err != nil {
 		return err
+	}
+	if b.needHash {
+		b.BlockInfo.BlockId = b.BlockInfo.BlockHash
+	} else {
+		b.BlockInfo.BlockId = GenBlockId()
 	}
 	// TODO: Calculate Place Group from Block Info and GroupInfo
 	b.BlockInfo.PgId = GenBlockPG(&b.BlockInfo)
@@ -190,22 +200,34 @@ func GenObjectId(key string) string {
 }
 
 // GenBlockId Generates BlockId for the `i` th block of a specific object
-// This method ensures the global unique
-func GenBlockId(objectId string, blockCount int) string {
+//
+// This method ensures the global unique with UUID!
+//
+// ONLY CALL THIS WHEN BLOCK_HASH IS NOT VALID
+func GenBlockId() string {
 	return uuid.New().String()
 }
+
+// These const are for PgNum calc
+const (
+	blockPgNum = 100
+	objPgNum   = 100
+)
+
+var (
+	blockMapper = common.NewMapper(blockPgNum)
+	objMapper   = common.NewMapper(objPgNum)
+)
 
 // GenObjectPG Generates PgId for ObjectMeta
 // PgId of ObjectMeta depends on `key` of Object
 func GenObjectPG(key string) uint64 {
-	// TODO: Calculate ObjectMeta.PgId based on Object key
-	return 1
+	return objMapper.MapIDtoPG(key)
 }
 
 // GenBlockPG Generates PgId for Block
 // PgId of Block depends on `BlockId` of Block
 // While BlockId depends on `Block.BlockHash`
 func GenBlockPG(block *object.BlockInfo) uint64 {
-	// TODO: Calculate BlockInfo.PgId based on Object key
-	return 2
+	return blockMapper.MapIDtoPG(block.BlockId)
 }

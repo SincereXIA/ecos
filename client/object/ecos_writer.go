@@ -8,6 +8,7 @@ import (
 	"ecos/edge-node/moon"
 	"ecos/edge-node/node"
 	"ecos/edge-node/object"
+	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	timestamp "ecos/messenger/timestamppb"
 	"ecos/utils/common"
@@ -45,9 +46,11 @@ type EcosWriter struct {
 	curBlock       *Block
 	blockCount     int
 	finishedBlocks chan *Block
+	blockPipes     []*pipeline.Pipeline
 
-	meta    *object.ObjectMeta
-	objHash hash.Hash
+	meta     *object.ObjectMeta
+	objHash  hash.Hash
+	objPipes []*pipeline.Pipeline
 }
 
 // getCurBlock ensures to return with a Block can put new Chunk in
@@ -65,6 +68,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 			groupInfo:   w.groupInfo,
 			blockCount:  w.blockCount,
 			needHash:    w.config.Object.BlockHash,
+			blockPipes:  w.blockPipes,
 			uploadCount: 0,
 			delFunc: func(self *Block) {
 				// Release Chunks
@@ -204,15 +208,24 @@ func (w *EcosWriter) Close() error {
 			break
 		}
 	}
-	// TODO: w.commitMeta()
+	err := w.commitMeta()
+	if err != nil {
+		return err
+	}
 	w.Status = FINISHED
 	return nil
 }
 
+func (w *EcosWriter) checkObjNodeByPg() *node.NodeInfo {
+	return clientNode.LocalInfoStorage.GetNodeInfo(0, w.objPipes[w.meta.PgId].RaftId[0])
+}
+
 // EcosWriterFactory Generates EcosWriter with ClientConfig
 type EcosWriterFactory struct {
-	config    *config.ClientConfig
-	groupInfo *node.GroupInfo
+	config     *config.ClientConfig
+	groupInfo  *node.GroupInfo
+	objPipes   []*pipeline.Pipeline
+	blockPipes []*pipeline.Pipeline
 }
 
 // NewEcosWriterFactory Constructor for EcosWriterFactory
@@ -229,9 +242,14 @@ func NewEcosWriterFactory(config *config.ClientConfig, nodeAddr string, port int
 		return nil
 	}
 	// TODO: Retry?
+	clientNode.LocalInfoStorage.SaveGroupInfoWithTerm(0, groupInfo)
+	const groupNum = 3
+	// TODO: Get pgNum, groupNum from moon
 	ret := &EcosWriterFactory{
-		groupInfo: groupInfo,
-		config:    config,
+		groupInfo:  groupInfo,
+		config:     config,
+		objPipes:   pipeline.GenPipelines(groupInfo, objPgNum, groupNum),
+		blockPipes: pipeline.GenPipelines(groupInfo, blockPgNum, groupNum),
 	}
 	return ret
 }
@@ -245,13 +263,15 @@ func (f *EcosWriterFactory) GetEcosWriter(key string) EcosWriter {
 	maxChunk := uint(f.config.UploadBuffer / f.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(f.newLocalChunk, maxChunk, int(maxChunk))
 	return EcosWriter{
-		groupInfo: f.groupInfo,
-		key:       key,
-		config:    f.config,
-		Status:    READING,
-		chunks:    chunkPool,
-		blocks:    map[int]*Block{},
-		meta:      &object.ObjectMeta{},
-		objHash:   sha256.New(),
+		groupInfo:  f.groupInfo,
+		key:        key,
+		config:     f.config,
+		Status:     READING,
+		chunks:     chunkPool,
+		blocks:     map[int]*Block{},
+		blockPipes: f.blockPipes,
+		meta:       &object.ObjectMeta{},
+		objHash:    sha256.New(),
+		objPipes:   f.objPipes,
 	}
 }
