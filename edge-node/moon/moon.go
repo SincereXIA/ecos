@@ -128,6 +128,10 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 	return &raftpb.Message{}, nil
 }
 
+func (m *Moon) GetGroupInfo(_ context.Context, term *node.Term) (*node.GroupInfo, error) {
+	return m.InfoStorage.GetGroupInfo(term.Term), nil
+}
+
 func (m *Moon) RequestJoinGroup(leaderInfo *node.NodeInfo) error {
 	tryTime := 3
 	var fail error
