@@ -2,8 +2,7 @@ syntax = "proto3";
 
 package messenger;
 
-import "github.com/gogo/protobuf/gogoproto/gogo.proto";
-import "google/protobuf/timestamp.proto";
+import "timestamp.proto";
 
 option go_package = "ecos/edge-node/object";
 
@@ -13,8 +12,8 @@ message Block {
 
 message ObjectMeta {
   string obj_id = 1;
-  uint64  ObjSize = 2;
-  google.protobuf.Timestamp update_time = 3;
+  uint64  obj_size = 2;
+  Timestamp update_time = 3;
   string obj_hash = 4;
   uint64 pg_id = 5;
   repeated BlockInfo blocks = 6;
