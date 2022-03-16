@@ -2,12 +2,17 @@ package object
 
 import (
 	"ecos/client/config"
+	"ecos/edge-node/alaya"
 	"ecos/edge-node/gaia"
+	"ecos/edge-node/moon"
+	"ecos/edge-node/node"
 	"ecos/messenger"
+	"ecos/utils/common"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net"
 	"os"
+	"path"
 	"runtime"
 	"strconv"
 	"testing"
@@ -19,7 +24,8 @@ func TestEcosWriter(t *testing.T) {
 	t.Logf("Current test filename: %s", filename)
 	type args struct {
 		localFilePath string
-		server        string
+		nodeAddr      string
+		port          int
 		key           string
 	}
 	tests := []struct {
@@ -30,44 +36,36 @@ func TestEcosWriter(t *testing.T) {
 		{"Gaia Test",
 			args{
 				"./ecos_writer_test.go",
-				"127.0.0.1:32801",
+				"127.0.0.1",
+				32801,
 				"/upload.go",
 			},
 			false,
 		},
 	}
-	rpcServer1 := messenger.NewRpcServer(32801)
-	gaia.NewGaia(rpcServer1)
-	go func() {
-		err := rpcServer1.Run()
-		if err != nil {
-			t.Errorf("UploadFile() error = %v", err)
-		}
-	}()
 
-	rpcServer2 := messenger.NewRpcServer(32802)
-	gaia.NewGaia(rpcServer2)
-	go func() {
-		err := rpcServer2.Run()
-		if err != nil {
-			t.Errorf("UploadFile() error = %v", err)
-		}
-	}()
+	moons, alayas, rpcServers, err := createServers(3, "", "./ecos-data/db/moon")
+	if err != nil {
+		t.Errorf("RpcServer error = %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		gaia.NewGaia(rpcServers[i])
+		i := i
+		go func() {
+			err := rpcServers[i].Run()
+			if err != nil {
+				t.Errorf("GaiaServer error = %v", err)
+			}
+		}()
+		go moons[i].Run()
+		go alayas[i].Run()
+	}
 
-	rpcServer3 := messenger.NewRpcServer(32803)
-	gaia.NewGaia(rpcServer3)
-	go func() {
-		err := rpcServer3.Run()
-		if err != nil {
-			t.Errorf("UploadFile() error = %v", err)
-		}
-	}()
-
-	time.Sleep(100 * time.Millisecond) // ensure rpcServer running
+	time.Sleep(10 * time.Second) // ensure rpcServer running
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			factory := NewEcosWriterFactory(config.DefaultConfig, "127.0.0.1", 32801)
+			factory := NewEcosWriterFactory(config.DefaultConfig, tt.args.nodeAddr, tt.args.port)
 			writer := factory.GetEcosWriter(tt.args.key)
 			file, err := os.Open(tt.args.localFilePath)
 			assert.NoError(t, err)
@@ -91,9 +89,6 @@ func TestEcosWriter(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		})
 	}
-	rpcServer1.Stop()
-	rpcServer2.Stop()
-	rpcServer3.Stop()
 }
 
 func TestPortClose(t *testing.T) {
@@ -104,4 +99,37 @@ func TestPortClose(t *testing.T) {
 		}
 	}
 	t.Log("All ports closed!")
+}
+
+func createServers(num int, sunAddr string, basePath string) ([]*moon.Moon, []*alaya.Alaya, []*messenger.RpcServer, error) {
+	err := common.InitAndClearPath(basePath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var infoStorages []node.InfoStorage
+	var stableStorages []moon.Storage
+	var rpcServers []*messenger.RpcServer
+	var moons []*moon.Moon
+	var nodeInfos []*node.NodeInfo
+	var alayas []*alaya.Alaya
+
+	for i := 0; i < num; i++ {
+		raftID := uint64(i + 1)
+		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
+		stableStorages = append(stableStorages, moon.NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
+		rpcServers = append(rpcServers, messenger.NewRpcServer(32800+raftID))
+		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", 32800+raftID))
+		alayas = append(alayas, alaya.NewAlaya(nodeInfos[i], infoStorages[i], alaya.NewMemoryMetaStorage(), rpcServers[i]))
+	}
+
+	for i := 0; i < num; i++ {
+		if sunAddr != "" {
+			moons = append(moons, moon.NewMoon(nodeInfos[i], sunAddr, nil, nil, rpcServers[i], infoStorages[i],
+				stableStorages[i]))
+		} else {
+			moons = append(moons, moon.NewMoon(nodeInfos[i], sunAddr, nil, nodeInfos, rpcServers[i], infoStorages[i],
+				stableStorages[i]))
+		}
+	}
+	return moons, alayas, rpcServers, nil
 }
