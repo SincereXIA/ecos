@@ -30,8 +30,8 @@ type Block struct {
 // data: content of Block
 func NewBlock(objectId string, blockCount int, size int, data []byte) *Block {
 	ret := &Block{BlockInfo: object.BlockInfo{
-		BlockId: GenBlockId(objectId, blockCount),
-		Size:    uint64(size),
+		BlockId:   GenBlockId(objectId, blockCount),
+		BlockSize: uint64(size),
 	},
 		data: data,
 	}
@@ -44,10 +44,10 @@ func (b *Block) toChunks() []*gaia.Chunk {
 	chunkSize := ClientConfig.Object.ChunkSize
 	var chunks []*gaia.Chunk
 	offset := uint64(0)
-	for offset < b.Size {
+	for offset < b.BlockSize {
 		nextOffset := offset + chunkSize
-		if nextOffset > b.Size {
-			nextOffset = b.Size
+		if nextOffset > b.BlockSize {
+			nextOffset = b.BlockSize
 		}
 		chunks = append(chunks, &gaia.Chunk{
 			Content: b.data[offset:nextOffset],
@@ -85,7 +85,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 		}
 		byteCount += uint64(len(chunk.Content))
 	}
-	if byteCount != b.Size {
+	if byteCount != b.BlockSize {
 		logger.Errorf("Incompatible size: Chunks: %v, Block: %v", byteCount, b.Size)
 		return errors.New("incompatible upload size")
 	}

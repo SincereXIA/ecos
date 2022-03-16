@@ -51,7 +51,7 @@ unit-test-job:   # This job runs in the test stage.
     - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct
     - echo "Running unit tests... This will take about 60 seconds."
     - go mod tidy
-    - go test ./... -coverprofile=cover.out
+    - go test ./... -coverprofile=cover.out -parallel 1 -p 1
     - golangci-lint --version
     - golangci-lint run --out-format checkstyle ./... > report.xml || true
     - ls

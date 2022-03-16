@@ -60,8 +60,8 @@ func testStorage(storage InfoStorage, t *testing.T) {
 	t.Run("test info commit", func(t *testing.T) {
 		storage.Commit(uint64(time.Now().UnixNano()))
 		// TODO:  rocksdb 的 infoStorage 完成后，取消下面注释
-		//group := storage.GetGroupInfo()
-		//assert.Empty(t, group.NodesInfo)
+		// group := storage.GetGroupInfo(0)
+		// assert.Empty(t, group.NodesInfo)
 	})
 	t.Run("test info apply", func(t *testing.T) {
 		storage.Apply()
@@ -82,7 +82,7 @@ func testStorage(storage InfoStorage, t *testing.T) {
 		assert.Equal(t, len(group.NodesInfo), 2)
 		storage.Commit(uint64(time.Now().UnixNano()))
 		// TODO:  rocksdb 的 infoStorage 完成后，取消下面注释
-		//assert.Equal(t, len(group.NodesInfo), 2)
+		assert.Equal(t, len(group.NodesInfo), 2)
 		storage.Apply()
 		group = storage.GetGroupInfo(0)
 		t.Logf("Old term: %v, new term: %v", term, group.GroupTerm.Term)

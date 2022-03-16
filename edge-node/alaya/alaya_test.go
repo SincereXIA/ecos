@@ -6,10 +6,10 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
+	"ecos/messenger/timestamppb"
 	"ecos/utils/common"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"strconv"
 	"testing"
@@ -86,7 +86,7 @@ func TestNewAlaya(t *testing.T) {
 
 	_, err := a.RecordObjectMeta(context.TODO(), &object.ObjectMeta{
 		ObjId:      "/volume/bucket/testObj",
-		Size:       100,
+		ObjSize:    100,
 		UpdateTime: timestamppb.Now(),
 		Blocks:     nil,
 		PgId:       pipelines[0].PgId,
@@ -99,7 +99,7 @@ func TestNewAlaya(t *testing.T) {
 	if err != nil {
 		t.Errorf("get Meta fail, err:%v", err)
 	}
-	assert.Equal(t, uint64(100), meta.Size, "obj size")
+	assert.Equal(t, uint64(100), meta.ObjSize, "obj size")
 
 	a2 := alayas[pipelines[0].RaftId[1]-1]
 	meta2, err := a2.MetaStorage.GetMeta("/volume/bucket/testObj")

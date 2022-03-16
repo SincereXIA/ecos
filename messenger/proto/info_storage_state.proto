@@ -6,15 +6,11 @@ import "timestamp.proto";
 
 option go_package = "ecos/edge-node/node";
 
-
-
-message Term{
+message InfoStorageState {
   uint64 Term = 1;
+  uint64 LeaderID = 2;
+  map<uint64, NodeInfo> InfoMap = 3;
+  Timestamp UpdateTimeStamp = 4;
 }
 
-message GroupInfo{
-  Term GroupTerm = 1;
-  NodeInfo leader_info = 2;
-  repeated NodeInfo nodes_info = 3;
-  Timestamp update_timestamp = 4;
-}
+
