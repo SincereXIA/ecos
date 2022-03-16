@@ -68,7 +68,7 @@ func action(c *cli.Context) error {
 
 	//init Gaia
 	logger.Infof("Start init Gaia ...")
-	Gaia = gaia.NewGaia(rpcServer)
+	Gaia = gaia.NewGaia(rpcServer, selfInfo, infoStorage, gaia.DefaultConfig)
 
 	// Run
 	go func() {
