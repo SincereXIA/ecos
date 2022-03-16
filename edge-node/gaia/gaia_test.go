@@ -7,17 +7,21 @@ import (
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"math/rand"
+	"os"
+	"path"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestNewGaia(t *testing.T) {
-	var basePath []string
+	var basePaths []string
 	storage := node.NewMemoryNodeInfoStorage()
 	for i := 0; i < 5; i++ {
-		basePath = append(basePath, "./ecos-data/gaia-"+strconv.Itoa(i))
+		basePaths = append(basePaths, "./ecos-data/gaia-"+strconv.Itoa(i))
 	}
 	var rpcServers []*messenger.RpcServer
 	for i := 0; i < 5; i++ {
@@ -36,7 +40,8 @@ func TestNewGaia(t *testing.T) {
 	var gaias []*Gaia
 	for i := 0; i < 5; i++ {
 		info, _ := storage.GetNodeInfo(node.ID(i + 1))
-		gaias = append(gaias, NewGaia(rpcServers[i], info, storage))
+		config := Config{basePath: basePaths[i]}
+		gaias = append(gaias, NewGaia(rpcServers[i], info, storage, &config))
 		go func(rpcServer *messenger.RpcServer) {
 			rpcServer.Run()
 		}(rpcServers[i])
@@ -45,7 +50,23 @@ func TestNewGaia(t *testing.T) {
 	time.Sleep(time.Second)
 
 	pipelines := pipeline.GenPipelines(storage.GetGroupInfo(0), 10, 3)
-	p := pipelines[0]
+	wait := sync.WaitGroup{}
+	for i := 0; i < 10; i++ {
+		p := pipelines[i]
+		wait.Add(1)
+		go func(p *pipeline.Pipeline) {
+			uploadBlockTest(t, p, storage, basePaths)
+			wait.Done()
+		}(p)
+	}
+	wait.Wait()
+
+	for _, p := range basePaths {
+		_ = os.RemoveAll(p)
+	}
+}
+
+func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, storage node.InfoStorage, basePaths []string) {
 	id := p.RaftId[0]
 	info, _ := storage.GetNodeInfo(node.ID(id))
 	conn, _ := messenger.GetRpcConnByInfo(info)
@@ -56,12 +77,15 @@ func TestNewGaia(t *testing.T) {
 		t.Errorf("Get Upload stream err: %v", err)
 	}
 
-	data := [1024]byte{}
+	testTrunkSize := 1024 * 1024
+	testBlockSize := testTrunkSize * 8
+
+	data := make([]byte, testTrunkSize)
 	rand.Read(data[:])
 
 	blockInfo := &object.BlockInfo{
 		BlockId:   uuid.New().String(),
-		BlockSize: uint64(len(data)),
+		BlockSize: uint64(testBlockSize),
 		BlockHash: "",
 		PgId:      1,
 	}
@@ -76,17 +100,14 @@ func TestNewGaia(t *testing.T) {
 		t.Errorf("Send stream err: %v", err)
 	}
 
-	stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Chunk{Chunk: &Chunk{
-		Content: data[:],
-	}}})
-
-	stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Chunk{Chunk: &Chunk{
-		Content: data[:],
-	}}})
-
-	stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Chunk{Chunk: &Chunk{
-		Content: data[:],
-	}}})
+	for i := 0; i < testBlockSize/testTrunkSize; i++ {
+		err = stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Chunk{Chunk: &Chunk{
+			Content: data[:],
+		}}})
+		if err != nil {
+			t.Errorf("Send stream err: %v", err)
+		}
+	}
 
 	stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Message{Message: &ControlMessage{
 		Code:     ControlMessage_EOF,
@@ -95,5 +116,25 @@ func TestNewGaia(t *testing.T) {
 		Term:     1,
 	}}})
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(1 * time.Second)
+	assertFilesOK(t, blockInfo.BlockId, blockInfo.BlockSize, p, basePaths)
+}
+
+func assertFilesOK(t *testing.T, blockID string, fileSize uint64, p *pipeline.Pipeline, basePaths []string) {
+	var paths []string
+	for _, id := range p.RaftId {
+		paths = append(paths, path.Join(basePaths[id-1], blockID))
+	}
+
+	for _, filePath := range paths {
+		stat, err := os.Stat(filePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				t.Errorf("path not exist: %v", filePath)
+			}
+			t.Errorf("path not ok: %v", filePath)
+			return
+		}
+		assert.Equal(t, fileSize, uint64(stat.Size()), "file size should be equal")
+	}
 }

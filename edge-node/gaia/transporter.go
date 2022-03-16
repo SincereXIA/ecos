@@ -6,6 +6,7 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
+	"ecos/utils/common"
 	"io"
 	"os"
 	"path"
@@ -21,13 +22,11 @@ type PrimaryCopyTransporter struct {
 	ctx           context.Context
 }
 
-var basePath = "./ecos-data/block/"
-
 // NewPrimaryCopyTransporter return a PrimaryCopyTransporter
 //
 // when pipeline contains only self node, it will only write to local
 func NewPrimaryCopyTransporter(ctx context.Context, info *object.BlockInfo, pipeline *pipeline.Pipeline,
-	selfID uint64, groupInfo *node.GroupInfo) (t *PrimaryCopyTransporter, err error) {
+	selfID uint64, groupInfo *node.GroupInfo, basePath string) (t *PrimaryCopyTransporter, err error) {
 	var localWriter io.Writer
 	// 创建远端 writer
 	var remoteWriters []io.Writer
@@ -35,6 +34,7 @@ func NewPrimaryCopyTransporter(ctx context.Context, info *object.BlockInfo, pipe
 		if selfID == nodeID {
 			// 创建本地 writer
 			blockPath := path.Join(basePath, info.BlockId)
+			_ = common.InitParentPath(blockPath)
 			localWriter, err = os.Create(blockPath)
 			if err != nil {
 				return nil, err // TODO: trans to ecos err

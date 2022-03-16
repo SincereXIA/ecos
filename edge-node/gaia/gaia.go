@@ -20,6 +20,8 @@ type Gaia struct {
 	cancel      context.CancelFunc
 	selfInfo    *node.NodeInfo
 	infoStorage node.InfoStorage
+
+	config *Config
 }
 
 func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
@@ -51,7 +53,7 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 			case ControlMessage_BEGIN:
 				// TODO: 建立与同组 Node 的连接，准备转发
 				transporter, err = NewPrimaryCopyTransporter(g.ctx, msg.Block, p, g.selfInfo.RaftId,
-					g.infoStorage.GetGroupInfo(msg.Term))
+					g.infoStorage.GetGroupInfo(msg.Term), g.config.basePath)
 				if err != nil {
 					return err
 				}
@@ -106,13 +108,16 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 	}
 }
 
-func NewGaia(rpcServer *messenger.RpcServer, selfInfo *node.NodeInfo, infoStorage node.InfoStorage) *Gaia {
+func NewGaia(rpcServer *messenger.RpcServer, selfInfo *node.NodeInfo, infoStorage node.InfoStorage,
+	config *Config) *Gaia {
 	ctx, cancel := context.WithCancel(context.Background())
 	g := Gaia{
 		ctx:         ctx,
 		cancel:      cancel,
 		selfInfo:    selfInfo,
 		infoStorage: infoStorage,
+
+		config: config,
 	}
 	RegisterGaiaServer(rpcServer, &g)
 	return &g

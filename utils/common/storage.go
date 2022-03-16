@@ -4,6 +4,7 @@ import (
 	"ecos/utils/logger"
 	"errors"
 	"os"
+	"path"
 )
 
 // InitPath create path as an empty dir
@@ -33,4 +34,10 @@ func InitAndClearPath(path string) error {
 	}
 	err = os.RemoveAll(path)
 	return err
+}
+
+// InitParentPath create file parent path if not exist
+func InitParentPath(filePath string) error {
+	parentPath := path.Dir(filePath)
+	return InitPath(parentPath)
 }
