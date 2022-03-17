@@ -3,6 +3,7 @@ package messenger;
 
 import "common.proto";
 import "object.proto";
+import "pipeline.proto";
 option go_package = "ecos/edge-node/gaia";
 
 service Gaia {
@@ -23,6 +24,8 @@ message ControlMessage {
   }
   Code code = 1;
   BlockInfo block = 2;
+  Pipeline pipeline = 3;
+  uint64 term = 4;
 }
 
 message Chunk {

@@ -1,5 +1,13 @@
 # 开发日志
 
+## 2022/3/17
+
+**SincereXIA:**
+
+- 完成 Gaia Block 落盘和转发逻辑
+- 增加 Gaia uint test
+- 尝试使用 3267x 端口修正端口被占用的问题
+
 ## 2022/2/21
 
 **SincereXIA:**

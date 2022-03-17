@@ -43,7 +43,7 @@ func TestNewAlaya(t *testing.T) {
 			RaftId:   uint64(i) + 1,
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",
-			RpcPort:  uint64(32771 + i),
+			RpcPort:  uint64(32671 + i),
 			Capacity: 1,
 		}
 		_ = infoStorage.UpdateNodeInfo(&info)
@@ -129,10 +129,10 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 			RaftId:   uint64(i + 1),
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",
-			RpcPort:  uint64(32760 + i + 1),
+			RpcPort:  uint64(32670 + i + 1),
 			Capacity: 10,
 		})
-		rpcServers = append(rpcServers, messenger.NewRpcServer(uint64(32760+i+1)))
+		rpcServers = append(rpcServers, messenger.NewRpcServer(uint64(32670+i+1)))
 	}
 
 	// UP 6 Alaya
