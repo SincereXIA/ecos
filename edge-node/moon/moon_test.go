@@ -5,7 +5,6 @@ import (
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/common"
-	"ecos/utils/logger"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/raft/v3"
@@ -55,23 +54,23 @@ func TestRaft(t *testing.T) {
 	// Node4
 	node4Info := node.NewSelfInfo(0x04, "127.0.0.1", 32674)
 	rpcServer4 := messenger.NewRpcServer(32674)
-	node4 := NewMoon(node4Info, "", nil, nodeInfos, rpcServer4, node.NewMemoryNodeInfoStorage(),
+	node4 := NewMoon(node4Info, "", moons[leader].selfInfo, nodeInfos, rpcServer4, node.NewMemoryNodeInfoStorage(),
 		NewStorage(path.Join(basePath, "/raft", "/4")))
 	moons = append(moons, node4)
 	rpcServers = append(rpcServers, rpcServer4)
-	go rpcServer4.Run()
+	go func() {
+		err = rpcServer4.Run()
+		if err != nil {
+			t.Errorf("Run rpcServer err: %v", err)
+		}
+	}()
 
 	// 启动 Node4
 	// 集群提交增加节点请求
 	go node4.Run()
-	err = node4.RequestJoinGroup(moons[leader].selfInfo)
-	if err != nil {
-		logger.Fatalf("moon4 request join to group fail: %v", err)
-		return
-	}
 
 	// 等待共识
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	// 判断集群是否达成共识
 	info := moons[0].InfoStorage.ListAllNodeInfo()
@@ -92,24 +91,37 @@ func TestRaft(t *testing.T) {
 		moons[i].Stop()
 	}
 
-	defer os.RemoveAll(basePath)
+	_ = os.RemoveAll(basePath)
 }
 
 func TestMoon_Register(t *testing.T) {
 	dbBasePath := "./ecos-data/db/moon/"
 	moonNum := 5
 
-	defer os.RemoveAll(dbBasePath)
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(dbBasePath)
+
 	sunRpc := messenger.NewRpcServer(3260)
 	sun.NewSun(sunRpc)
-	go sunRpc.Run()
+	go func() {
+		err := sunRpc.Run()
+		if err != nil {
+			t.Errorf("Run rpcServer err: %v", err)
+		}
+	}()
 	time.Sleep(1 * time.Second)
 
 	moons, rpcServers, err := createMoons(moonNum, "127.0.0.1:3260", dbBasePath)
 	assert.NoError(t, err)
 
 	for i := 0; i < moonNum; i++ {
-		go rpcServers[i].Run()
+		go func(server *messenger.RpcServer) {
+			err = server.Run()
+			if err != nil {
+				t.Errorf("Run rpcServer err: %v", err)
+			}
+		}(rpcServers[i])
 		go moons[i].Run()
 	}
 
