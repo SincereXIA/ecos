@@ -8,6 +8,7 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"ecos/utils/timestamp"
 	"encoding/json"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
@@ -31,21 +32,26 @@ type Moon struct {
 	infoMap       map[uint64]*node.NodeInfo
 	leaderID      uint64 // 注册时的 leader 信息
 
+	// InfoStorageTimer trigger infoStorage to commit
+	InfoStorageTimer *time.Timer
+
 	// Moon Rpc
 	UnimplementedMoonServer
 
 	sunAddr  string
 	raftChan chan raftpb.Message
 
-	mutex sync.Mutex
+	mutex  sync.Mutex
+	config *Config
 }
 
 type ActionType int
 
 type Message struct {
-	Action   ActionType
-	NodeInfo node.NodeInfo
-	Term     uint64
+	Action    ActionType
+	NodeInfo  node.NodeInfo
+	Term      uint64
+	TimeStamp *timestamp.Timestamp
 }
 
 const (
@@ -65,9 +71,10 @@ func (m *Moon) AddNodeToGroup(_ context.Context, info *node.NodeInfo) (*AddNodeR
 		LeaderInfo: nil,
 	}
 	msg := Message{
-		Action:   UpdateNodeInfo,
-		NodeInfo: *info,
-		Term:     m.InfoStorage.GetTermNow(),
+		Action:    UpdateNodeInfo,
+		NodeInfo:  *info,
+		Term:      m.InfoStorage.GetTermNow(),
+		TimeStamp: timestamp.Now(),
 	}
 	js, _ := json.Marshal(&msg)
 	if m.raft == nil {
@@ -221,6 +228,7 @@ func NewMoon(selfInfo *node.NodeInfo, config *Config, rpcServer *messenger.RpcSe
 		sunAddr:       sunAddr,
 		mutex:         sync.Mutex{},
 		infoMap:       make(map[uint64]*node.NodeInfo),
+		config:        config,
 	}
 	leaderInfo := config.GroupInfo.LeaderInfo
 	if leaderInfo != nil {
@@ -273,6 +281,57 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 	}
 }
 
+func (m *Moon) IsLeader() bool {
+	return m.raft.Status().Lead == m.id
+}
+
+// waitAndCommitStorage start a timer to wait a NodeInfoCommitInterval,
+// after that start to propose a StorageCommit log. (if this node is leader)
+func (m *Moon) waitAndCommitStorage() {
+	if !m.IsLeader() {
+		return // only leader can propose storage apply
+	}
+	if m.InfoStorageTimer == nil || !m.InfoStorageTimer.Stop() {
+		m.InfoStorageTimer = time.AfterFunc(m.config.NodeInfoCommitInterval, func() {
+			message := Message{
+				Action:    StorageCommit,
+				NodeInfo:  node.NodeInfo{},
+				Term:      uint64(time.Now().UnixNano()),
+				TimeStamp: timestamp.Now(),
+			}
+			data, _ := json.Marshal(&message)
+			err := m.raft.Propose(m.ctx, data)
+			if err != nil {
+				logger.Errorf("Moon: %v propose storage commit term: %v err: %v", m.id, message.Term, err)
+			}
+			logger.Infof("Moon: %v propose storage commit term: %v", m.id, message.Term)
+		})
+	} else {
+		m.InfoStorageTimer.Reset(m.config.NodeInfoCommitInterval)
+	}
+}
+
+// waitAndCommitStorage wait all follower finish InfoStorage commit,
+// and start to propose a StorageApply log. (if this node is leader)
+func (m *Moon) waitAndApplyStorage(commitMessage *Message) {
+	if !m.IsLeader() {
+		return // only leader can propose storage commit
+	}
+	// TODO: wait all follower ready
+	message := Message{
+		Action:    StorageApply,
+		NodeInfo:  node.NodeInfo{},
+		Term:      commitMessage.Term,
+		TimeStamp: timestamp.Now(),
+	}
+	data, _ := json.Marshal(&message)
+	err := m.raft.Propose(m.ctx, data)
+	if err != nil {
+		logger.Errorf("Moon: %v propose storage apply term: %v err: %v", m.id, message.Term, err)
+	}
+	logger.Infof("Moon: %v propose storage apply term: %v", m.id, message.Term)
+}
+
 func (m *Moon) process(entry raftpb.Entry) {
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
 		var msg Message
@@ -281,18 +340,21 @@ func (m *Moon) process(entry raftpb.Entry) {
 		case UpdateNodeInfo:
 			nodeInfo := msg.NodeInfo
 			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
-			_ = m.InfoStorage.UpdateNodeInfo(&nodeInfo)
+			_ = m.InfoStorage.UpdateNodeInfo(&nodeInfo, msg.TimeStamp)
+			m.waitAndCommitStorage()
 			break
 		case DeleteNodeInfo:
 			nodeInfo := msg.NodeInfo
 			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
-			_ = m.InfoStorage.DeleteNodeInfo(node.ID(nodeInfo.RaftId))
-			break
-		case StorageApply:
-			m.InfoStorage.Apply()
+			_ = m.InfoStorage.DeleteNodeInfo(node.ID(nodeInfo.RaftId), msg.TimeStamp)
+			m.waitAndCommitStorage()
 			break
 		case StorageCommit:
 			m.InfoStorage.Commit(msg.Term)
+			m.waitAndApplyStorage(&msg)
+			break
+		case StorageApply:
+			m.InfoStorage.Apply()
 			break
 		}
 		if err != nil {
@@ -389,7 +451,6 @@ func (m *Moon) Run() {
 				}
 			}
 			_ = m.raftStorage.Append(rd.Entries)
-			//go n.send(rd.Messages)
 			go m.sendByRpc(rd.Messages)
 			for _, entry := range rd.CommittedEntries {
 				m.process(entry)
@@ -419,8 +480,13 @@ func (m *Moon) reportSelfInfo() {
 	}
 
 	logger.Infof("%v join group success, start report self info", m.id)
-	info := m.selfInfo
-	js, _ := json.Marshal(info)
+	message := Message{
+		Action:    UpdateNodeInfo,
+		NodeInfo:  *m.selfInfo,
+		Term:      m.InfoStorage.GetTermNow(),
+		TimeStamp: timestamp.Now(),
+	}
+	js, _ := json.Marshal(message)
 	err := m.raft.Propose(m.ctx, js)
 	if err != nil {
 		logger.Errorf("report self info err: %v", err.Error())

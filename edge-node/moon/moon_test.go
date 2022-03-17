@@ -52,6 +52,9 @@ func TestRaft(t *testing.T) {
 		}
 	}
 
+	time.Sleep(2 * time.Second) // wait for InfoStorage apply
+	assertInfoStorageOK(t, len(moons), moons...)
+
 	// Node4
 	node4Info := node.NewSelfInfo(0x04, "127.0.0.1", 32674)
 	rpcServer4 := messenger.NewRpcServer(32674)
@@ -78,18 +81,17 @@ func TestRaft(t *testing.T) {
 	go node4.Run()
 
 	// 等待共识
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// 判断集群是否达成共识
+	assertInfoStorageOK(t, len(moons), moons...)
 	info := moons[0].InfoStorage.ListAllNodeInfo()
 	t.Log(info)
 	for i := 1; i < 4; i++ {
 		anotherInfo := moons[i].InfoStorage.ListAllNodeInfo()
-
 		if diff := cmp.Diff(info, anotherInfo, protocmp.Transform()); diff != "" {
 			t.Errorf("Node Info Not Equal")
 		}
-
 		t.Log(anotherInfo)
 	}
 	t.Log("Reach agreement success")
@@ -100,6 +102,19 @@ func TestRaft(t *testing.T) {
 	}
 
 	_ = os.RemoveAll(basePath)
+}
+
+func assertInfoStorageOK(t *testing.T, nodeNum int, moons ...*Moon) {
+	firstGroupInfo := moons[0].InfoStorage.GetGroupInfo(0)
+	for _, moon := range moons {
+		storage := moon.InfoStorage
+		groupInfo := storage.GetGroupInfo(0)
+		if diff := cmp.Diff(firstGroupInfo, groupInfo, protocmp.Transform()); diff != "" {
+			t.Errorf("Group info not equal")
+		}
+		assert.Equal(t, nodeNum, len(groupInfo.NodesInfo),
+			"node num in group info should same as real node num")
+	}
 }
 
 func TestMoon_Register(t *testing.T) {
@@ -156,6 +171,8 @@ func TestMoon_Register(t *testing.T) {
 			break
 		}
 	}
+	time.Sleep(2 * time.Second)
+	assertInfoStorageOK(t, moonNum, moons...)
 	for i := 0; i < moonNum; i++ {
 		rpcServers[i].Stop()
 		moons[i].Stop()

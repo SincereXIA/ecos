@@ -4,6 +4,7 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/database"
 	"ecos/utils/logger"
+	"ecos/utils/timestamp"
 	gorocksdb "github.com/SUMStudio/grocksdb"
 	"github.com/gogo/protobuf/proto"
 )
@@ -30,8 +31,8 @@ func init() {
 	opts, readOptions, writeOptions = database.InitRocksdb()
 }
 
-func (s *StableNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
-	err := s.MemoryNodeInfoStorage.UpdateNodeInfo(info)
+func (s *StableNodeInfoStorage) UpdateNodeInfo(info *NodeInfo, time *timestamp.Timestamp) error {
+	err := s.MemoryNodeInfoStorage.UpdateNodeInfo(info, time)
 	if err != nil {
 		return err
 	}
@@ -43,8 +44,8 @@ func (s *StableNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
 	return nil
 }
 
-func (s *StableNodeInfoStorage) DeleteNodeInfo(nodeId ID) error {
-	err := s.MemoryNodeInfoStorage.DeleteNodeInfo(nodeId)
+func (s *StableNodeInfoStorage) DeleteNodeInfo(nodeId ID, time *timestamp.Timestamp) error {
+	err := s.MemoryNodeInfoStorage.DeleteNodeInfo(nodeId, time)
 	if err != nil {
 		return err
 	}

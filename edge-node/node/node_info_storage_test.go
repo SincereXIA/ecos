@@ -2,6 +2,7 @@ package node
 
 import (
 	"ecos/utils/common"
+	"ecos/utils/timestamp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -47,15 +48,15 @@ func testStorage(storage InfoStorage, t *testing.T) {
 			RpcPort:  8888,
 			Capacity: 8888,
 		}
-		assert.NoError(t, storage.UpdateNodeInfo(&info1))
-		assert.NoError(t, storage.UpdateNodeInfo(&info2))
+		assert.NoError(t, storage.UpdateNodeInfo(&info1, timestamp.Now()))
+		assert.NoError(t, storage.UpdateNodeInfo(&info2, timestamp.Now()))
 		infos := storage.ListAllNodeInfo()
 		assert.Equal(t, len(infos), 2)
 		group := storage.GetGroupInfo(0)
 		assert.Empty(t, group.NodesInfo)
 	})
 	t.Run("test update leader info", func(t *testing.T) {
-		assert.NoError(t, storage.SetLeader(1))
+		assert.NoError(t, storage.SetLeader(1, timestamp.Now()))
 	})
 	t.Run("test info commit", func(t *testing.T) {
 		storage.Commit(uint64(time.Now().UnixNano()))
@@ -76,7 +77,7 @@ func testStorage(storage InfoStorage, t *testing.T) {
 			RpcPort:  8888,
 			Capacity: 8888,
 		}
-		assert.NoError(t, storage.UpdateNodeInfo(&info3))
+		assert.NoError(t, storage.UpdateNodeInfo(&info3, timestamp.Now()))
 		group = storage.GetGroupInfo(0)
 		assert.Equal(t, len(group.NodesInfo), 2)
 		storage.Commit(uint64(time.Now().UnixNano()))

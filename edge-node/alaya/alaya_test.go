@@ -46,7 +46,7 @@ func TestNewAlaya(t *testing.T) {
 			RpcPort:  uint64(32671 + i),
 			Capacity: 1,
 		}
-		_ = infoStorage.UpdateNodeInfo(&info)
+		_ = infoStorage.UpdateNodeInfo(&info, timestamp.Now())
 		groupInfo.NodesInfo = append(groupInfo.NodesInfo, &info)
 	}
 	infoStorage.Commit(1)
@@ -140,7 +140,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 	term = 2
 	for i := 0; i < 6; i++ {
 		for j := 0; j < 6; j++ {
-			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j], timestamp.Now())
 		}
 		infoStorages[i].Commit(term)
 		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i]))
@@ -169,7 +169,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 
 	for i := 6; i < 9; i++ {
 		for j := 0; j < 6; j++ {
-			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j], timestamp.Now())
 		}
 		infoStorages[i].Commit(term)
 		infoStorages[i].Apply()
@@ -189,7 +189,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 	term = 3
 	for i := 0; i < 9; i++ {
 		for j := 0; j < 9; j++ {
-			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j])
+			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j], timestamp.Now())
 		}
 		infoStorages[i].Commit(term)
 	}
