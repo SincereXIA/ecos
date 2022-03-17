@@ -204,6 +204,12 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		a := alayas[i]
 		a.printPipelineInfo()
 	}
+
+	pipelines := pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3)
+	for _, p := range pipelines {
+		t.Logf("PG: %v, id: %v, %v, %v", p.PgId, p.RaftId[0], p.RaftId[1], p.RaftId[2])
+	}
+
 	// TODO: 某些 pipeline 节点数目不为三，需要进一步修正
 
 	for i := 0; i < 9; i++ { // for each node

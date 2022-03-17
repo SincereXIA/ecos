@@ -6,6 +6,7 @@ import (
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/common"
+	"ecos/utils/timestamp"
 	"net"
 	"path"
 	"strconv"
@@ -116,12 +117,21 @@ func createServers(num int, sunAddr string, basePath string) ([]*moon.Moon, []*a
 		alayas = append(alayas, alaya.NewAlaya(nodeInfos[i], infoStorages[i], alaya.NewMemoryMetaStorage(), rpcServers[i]))
 	}
 
+	moonConfig := moon.DefaultConfig
+	moonConfig.SunAddr = sunAddr
+	moonConfig.GroupInfo = node.GroupInfo{
+		GroupTerm:       &node.Term{Term: 0},
+		LeaderInfo:      nil,
+		UpdateTimestamp: timestamp.Now(),
+	}
+
 	for i := 0; i < num; i++ {
 		if sunAddr != "" {
-			moons = append(moons, moon.NewMoon(nodeInfos[i], sunAddr, nil, nil, rpcServers[i], infoStorages[i],
+			moons = append(moons, moon.NewMoon(nodeInfos[i], &moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		} else {
-			moons = append(moons, moon.NewMoon(nodeInfos[i], sunAddr, nil, nodeInfos, rpcServers[i], infoStorages[i],
+			moonConfig.GroupInfo.NodesInfo = nodeInfos
+			moons = append(moons, moon.NewMoon(nodeInfos[i], &moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		}
 	}

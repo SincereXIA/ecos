@@ -5,25 +5,25 @@ import (
 )
 
 const (
-	AlayaError int = (1 + iota) * 1000
+	AlayaError int32 = (1 + iota) * 1000
 	GaiaError
 	MoonError
 	SunError
 	ClientError
 	CommonError
 
-	SystemError int = 77 * 1000
+	SystemError int32 = 77 * 1000
 )
 
 const (
 	/* ALAYA error */
 
-	CodePgNotExist int = AlayaError + iota
+	CodePgNotExist int32 = AlayaError + iota
 	CodeMetaNotExist
 )
 
 const (
-	CodeConnectSunFail int = MoonError + iota
+	CodeConnectSunFail int32 = MoonError + iota
 	CodeMoonRaftNotReady
 )
 
@@ -45,6 +45,13 @@ const (
 	CodeZeroSize
 )
 
+/* Gaia error */
+const (
+	CodeNoTransporter int32 = GaiaError + iota
+	CodeTransporterWriteFail
+	CodeGaiaClosed
+)
+
 var (
 	PGNotExist   = newErr(CodePgNotExist, "place group not exist")
 	MetaNotExist = newErr(CodePgNotExist, "meta data not exist")
@@ -56,20 +63,26 @@ var (
 
 	IncompatibleSize = newErr(CodeIncompatibleSize, "incompatible size")
 
-	IllegalStatus = newErr(CodeIllegalStatus, "unit illegal status")
-	RepeatedClose = newErr(CodeRepeatedClose, "unit repeated close")
+	IllegalStatus = newErr(CodeIllegalStatus, "block illegal status")
+	RepeatedClose = newErr(CodeRepeatedClose, "block repeated close")
 
 	PoolClosed = newErr(CodePoolClosed, "pool has closed")
 	ZeroSize   = newErr(CodeZeroSize, "0 for uint size")
+
+	/* Gaia error */
+
+	NoTransporterErr     = newErr(CodeNoTransporter, "no transporter available")
+	TransporterWriteFail = newErr(CodeTransporterWriteFail, "transporter write fail")
+	GaiaClosedErr        = newErr(CodeGaiaClosed, "gaia context done")
 )
 
 type Errno struct {
 	error
-	Code    int
+	Code    int32
 	Message string
 }
 
-func newErr(code int, name string) Errno {
+func newErr(code int32, name string) Errno {
 	return Errno{
 		error:   errors.New(name),
 		Code:    code,
