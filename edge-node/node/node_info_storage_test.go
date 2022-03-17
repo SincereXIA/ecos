@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestMemoryNodeInfoStorage(t *testing.T) {
+func TestNodeInfoStorage(t *testing.T) {
 	storage := NewMemoryNodeInfoStorage()
 	testStorage(storage, t)
 
@@ -59,9 +59,8 @@ func testStorage(storage InfoStorage, t *testing.T) {
 	})
 	t.Run("test info commit", func(t *testing.T) {
 		storage.Commit(uint64(time.Now().UnixNano()))
-		// TODO:  rocksdb 的 infoStorage 完成后，取消下面注释
-		// group := storage.GetGroupInfo(0)
-		// assert.Empty(t, group.NodesInfo)
+		group := storage.GetGroupInfo(0)
+		assert.Empty(t, group.NodesInfo)
 	})
 	t.Run("test info apply", func(t *testing.T) {
 		storage.Apply()
