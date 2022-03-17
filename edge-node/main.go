@@ -40,7 +40,7 @@ func action(c *cli.Context) error {
 	// read config
 	confPath := c.Path("config")
 	conf := edgeNodeConfig.DefaultConfig
-	conf.Moon.SunAddr = c.String("sun")
+	conf.MoonConfig.SunAddr = c.String("sun")
 	config.Register(conf, confPath)
 	config.ReadAll()
 	_ = config.GetConf(conf)
@@ -57,7 +57,7 @@ func action(c *cli.Context) error {
 	selfInfo := conf.SelfInfo
 	rpcServer := messenger.NewRpcServer(conf.RpcPort)
 	stableStorage := moon.NewStorage(path.Join(dbBasePath, "/raft/moon"))
-	Moon = moon.NewMoon(selfInfo, conf.Moon.SunAddr, nil, nil,
+	Moon = moon.NewMoon(selfInfo, &conf.MoonConfig,
 		rpcServer, infoStorage, stableStorage)
 
 	//init Alaya

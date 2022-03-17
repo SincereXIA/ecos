@@ -4,7 +4,7 @@
 package object
 
 import (
-	timestamppb "ecos/messenger/timestamppb"
+	timestamp "ecos/utils/timestamp"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
 	io "io"
@@ -71,15 +71,15 @@ func (m *Block) GetData() [][]byte {
 }
 
 type ObjectMeta struct {
-	ObjId                string                 `protobuf:"bytes,1,opt,name=obj_id,json=objId,proto3" json:"obj_id,omitempty"`
-	ObjSize              uint64                 `protobuf:"varint,2,opt,name=obj_size,json=objSize,proto3" json:"obj_size,omitempty"`
-	UpdateTime           *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
-	ObjHash              string                 `protobuf:"bytes,4,opt,name=obj_hash,json=objHash,proto3" json:"obj_hash,omitempty"`
-	PgId                 uint64                 `protobuf:"varint,5,opt,name=pg_id,json=pgId,proto3" json:"pg_id,omitempty"`
-	Blocks               []*BlockInfo           `protobuf:"bytes,6,rep,name=blocks,proto3" json:"blocks,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
-	XXX_unrecognized     []byte                 `json:"-"`
-	XXX_sizecache        int32                  `json:"-"`
+	ObjId                string               `protobuf:"bytes,1,opt,name=obj_id,json=objId,proto3" json:"obj_id,omitempty"`
+	ObjSize              uint64               `protobuf:"varint,2,opt,name=obj_size,json=objSize,proto3" json:"obj_size,omitempty"`
+	UpdateTime           *timestamp.Timestamp `protobuf:"bytes,3,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
+	ObjHash              string               `protobuf:"bytes,4,opt,name=obj_hash,json=objHash,proto3" json:"obj_hash,omitempty"`
+	PgId                 uint64               `protobuf:"varint,5,opt,name=pg_id,json=pgId,proto3" json:"pg_id,omitempty"`
+	Blocks               []*BlockInfo         `protobuf:"bytes,6,rep,name=blocks,proto3" json:"blocks,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
+	XXX_unrecognized     []byte               `json:"-"`
+	XXX_sizecache        int32                `json:"-"`
 }
 
 func (m *ObjectMeta) Reset()         { *m = ObjectMeta{} }
@@ -129,7 +129,7 @@ func (m *ObjectMeta) GetObjSize() uint64 {
 	return 0
 }
 
-func (m *ObjectMeta) GetUpdateTime() *timestamppb.Timestamp {
+func (m *ObjectMeta) GetUpdateTime() *timestamp.Timestamp {
 	if m != nil {
 		return m.UpdateTime
 	}
@@ -714,7 +714,7 @@ func (m *ObjectMeta) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.UpdateTime == nil {
-				m.UpdateTime = &timestamppb.Timestamp{}
+				m.UpdateTime = &timestamp.Timestamp{}
 			}
 			if err := m.UpdateTime.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err

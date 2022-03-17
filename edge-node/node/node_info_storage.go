@@ -1,7 +1,7 @@
 package node
 
 import (
-	"ecos/messenger/timestamppb"
+	"ecos/utils/timestamp"
 	"errors"
 	"github.com/gogo/protobuf/sortkeys"
 	"github.com/mohae/deepcopy"
@@ -143,19 +143,19 @@ func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {
 			Term:            0,
 			LeaderID:        0,
 			InfoMap:         make(map[uint64]*NodeInfo),
-			UpdateTimeStamp: timestamppb.Now(),
+			UpdateTimeStamp: timestamp.Now(),
 		},
 		committedState: &InfoStorageState{
 			Term:            0,
 			LeaderID:        0,
 			InfoMap:         make(map[uint64]*NodeInfo),
-			UpdateTimeStamp: timestamppb.Now(),
+			UpdateTimeStamp: timestamp.Now(),
 		},
 		uncommittedState: &InfoStorageState{
 			Term:            1,
 			LeaderID:        0,
 			InfoMap:         make(map[uint64]*NodeInfo),
-			UpdateTimeStamp: timestamppb.Now(),
+			UpdateTimeStamp: timestamp.Now(),
 		},
 		history: History{
 			HistoryMap: map[uint64]*GroupInfo{},
@@ -171,5 +171,5 @@ func map2Slice(input map[uint64]*NodeInfo) (output []*NodeInfo) {
 }
 
 func (storage *MemoryNodeInfoStorage) updateTimestamp() {
-	storage.uncommittedState.UpdateTimeStamp = timestamppb.Now()
+	storage.uncommittedState.UpdateTimeStamp = timestamp.Now()
 }

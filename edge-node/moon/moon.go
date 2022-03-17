@@ -40,6 +40,21 @@ type Moon struct {
 	mutex sync.Mutex
 }
 
+type ActionType int
+
+type Message struct {
+	Action   ActionType
+	NodeInfo node.NodeInfo
+	Term     uint64
+}
+
+const (
+	UpdateNodeInfo ActionType = iota
+	DeleteNodeInfo
+	StorageCommit
+	StorageApply
+)
+
 func (m *Moon) AddNodeToGroup(_ context.Context, info *node.NodeInfo) (*AddNodeReply, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -49,7 +64,12 @@ func (m *Moon) AddNodeToGroup(_ context.Context, info *node.NodeInfo) (*AddNodeR
 		},
 		LeaderInfo: nil,
 	}
-	js, _ := json.Marshal(info)
+	msg := Message{
+		Action:   UpdateNodeInfo,
+		NodeInfo: *info,
+		Term:     m.InfoStorage.GetTermNow(),
+	}
+	js, _ := json.Marshal(&msg)
 	if m.raft == nil {
 		reply.Result.Status = common.Result_FAIL
 		reply.Result.Message = errno.MoonRaftNotReady.Error()
@@ -181,12 +201,12 @@ func (m *Moon) Register(sunAddr string) (leaderInfo *node.NodeInfo, err error) {
 	return result.GroupInfo.LeaderInfo, nil
 }
 
-func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
-	leaderInfo *node.NodeInfo, groupInfo []*node.NodeInfo, rpcServer *messenger.RpcServer,
+func NewMoon(selfInfo *node.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
 	infoStorage node.InfoStorage, stableStorage Storage) *Moon {
 	ctx, cancel := context.WithCancel(context.Background())
 	storage := raft.NewMemoryStorage()
 	raftChan := make(chan raftpb.Message)
+	sunAddr := config.SunAddr
 	m := &Moon{
 		id:            0, // set raft id after register
 		selfInfo:      selfInfo,
@@ -202,6 +222,7 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 		mutex:         sync.Mutex{},
 		infoMap:       make(map[uint64]*node.NodeInfo),
 	}
+	leaderInfo := config.GroupInfo.LeaderInfo
 	if leaderInfo != nil {
 		m.leaderID = leaderInfo.RaftId
 	}
@@ -211,10 +232,9 @@ func NewMoon(selfInfo *node.NodeInfo, sunAddr string,
 	if leaderInfo != nil {
 		m.infoMap[leaderInfo.RaftId] = leaderInfo
 	}
-	for _, info := range groupInfo {
+	for _, info := range config.GroupInfo.NodesInfo {
 		m.infoMap[info.RaftId] = info
 	}
-
 	return m
 }
 
@@ -255,13 +275,29 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 
 func (m *Moon) process(entry raftpb.Entry) {
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var nodeInfo node.NodeInfo
-		err := json.Unmarshal(entry.Data, &nodeInfo)
-		if err != nil {
-			logger.Errorf("Moon process nodeInfo err: %v", err.Error())
+		var msg Message
+		err := json.Unmarshal(entry.Data, &msg)
+		switch msg.Action {
+		case UpdateNodeInfo:
+			nodeInfo := msg.NodeInfo
+			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
+			_ = m.InfoStorage.UpdateNodeInfo(&nodeInfo)
+			break
+		case DeleteNodeInfo:
+			nodeInfo := msg.NodeInfo
+			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
+			_ = m.InfoStorage.DeleteNodeInfo(node.ID(nodeInfo.RaftId))
+			break
+		case StorageApply:
+			m.InfoStorage.Apply()
+			break
+		case StorageCommit:
+			m.InfoStorage.Commit(msg.Term)
+			break
 		}
-		logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
-		_ = m.InfoStorage.UpdateNodeInfo(&nodeInfo)
+		if err != nil {
+			logger.Errorf("Moon process moon message err: %v", err.Error())
+		}
 	}
 }
 

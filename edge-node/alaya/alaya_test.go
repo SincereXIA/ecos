@@ -6,8 +6,8 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
-	"ecos/messenger/timestamppb"
 	"ecos/utils/common"
+	"ecos/utils/timestamp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -36,7 +36,7 @@ func TestNewAlaya(t *testing.T) {
 		},
 		LeaderInfo:      nil,
 		NodesInfo:       []*node.NodeInfo{},
-		UpdateTimestamp: timestamppb.Now(),
+		UpdateTimestamp: timestamp.Now(),
 	}
 	for i := 0; i < 9; i++ {
 		info := node.NodeInfo{
@@ -87,7 +87,7 @@ func TestNewAlaya(t *testing.T) {
 	_, err := a.RecordObjectMeta(context.TODO(), &object.ObjectMeta{
 		ObjId:      "/volume/bucket/testObj",
 		ObjSize:    100,
-		UpdateTime: timestamppb.Now(),
+		UpdateTime: timestamp.Now(),
 		Blocks:     nil,
 		PgId:       pipelines[0].PgId,
 	})

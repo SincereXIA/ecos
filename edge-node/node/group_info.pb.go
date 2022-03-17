@@ -4,7 +4,7 @@
 package node
 
 import (
-	timestamp "ecos/messenger/timestamppb"
+	timestamp "ecos/utils/timestamp"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
 	io "io"

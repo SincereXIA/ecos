@@ -5,6 +5,7 @@ import (
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/common"
+	"ecos/utils/timestamp"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/raft/v3"
@@ -54,7 +55,14 @@ func TestRaft(t *testing.T) {
 	// Node4
 	node4Info := node.NewSelfInfo(0x04, "127.0.0.1", 32674)
 	rpcServer4 := messenger.NewRpcServer(32674)
-	node4 := NewMoon(node4Info, "", moons[leader].selfInfo, nodeInfos, rpcServer4, node.NewMemoryNodeInfoStorage(),
+	moonConfig := DefaultConfig
+	moonConfig.GroupInfo = node.GroupInfo{
+		GroupTerm:       &node.Term{Term: 0},
+		LeaderInfo:      moons[leader].selfInfo,
+		NodesInfo:       nodeInfos,
+		UpdateTimestamp: nil,
+	}
+	node4 := NewMoon(node4Info, &moonConfig, rpcServer4, node.NewMemoryNodeInfoStorage(),
 		NewStorage(path.Join(basePath, "/raft", "/4")))
 	moons = append(moons, node4)
 	rpcServers = append(rpcServers, rpcServer4)
@@ -175,12 +183,21 @@ func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenge
 		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", 32670+raftID))
 	}
 
+	moonConfig := DefaultConfig
+	moonConfig.SunAddr = sunAddr
+	moonConfig.GroupInfo = node.GroupInfo{
+		GroupTerm:       &node.Term{Term: 0},
+		LeaderInfo:      nil,
+		UpdateTimestamp: timestamp.Now(),
+	}
+
 	for i := 0; i < num; i++ {
 		if sunAddr != "" {
-			moons = append(moons, NewMoon(nodeInfos[i], sunAddr, nil, nil, rpcServers[i], infoStorages[i],
+			moons = append(moons, NewMoon(nodeInfos[i], &moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		} else {
-			moons = append(moons, NewMoon(nodeInfos[i], sunAddr, nil, nodeInfos, rpcServers[i], infoStorages[i],
+			moonConfig.GroupInfo.NodesInfo = nodeInfos
+			moons = append(moons, NewMoon(nodeInfos[i], &moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		}
 	}

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package messenger;
 
-option go_package = "ecos/messenger/timestamppb";
+option go_package = "ecos/utils/timestamp";
 
 message Timestamp {
   // Represents seconds of UTC time since Unix epoch
