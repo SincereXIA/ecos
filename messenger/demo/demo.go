@@ -19,7 +19,7 @@ func (s *Server) SayHello(_ context.Context, in *HelloRequest) (*HelloReply, err
 
 func ServerRun() {
 	// 监听本地的8972端口
-	lis, err := net.Listen("tcp", ":40972")
+	lis, err := net.Listen("tcp", ":32671")
 	if err != nil {
 		fmt.Printf("failed to listen %v", err.Error())
 		return

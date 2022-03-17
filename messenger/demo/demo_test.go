@@ -10,8 +10,8 @@ import (
 
 func TestServer_SayHello(t *testing.T) {
 	go ServerRun()
-	time.Sleep(1 * time.Second)
-	conn, err := grpc.Dial(":40972", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	time.Sleep(100 * time.Millisecond)
+	conn, err := grpc.Dial(":32671", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Errorf("faild to connect: %v", err)
 	}

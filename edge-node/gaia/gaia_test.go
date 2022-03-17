@@ -37,13 +37,16 @@ func TestNewGaia(t *testing.T) {
 	}
 	storage.Commit(1)
 	storage.Apply()
-	var gaias []*Gaia
 	for i := 0; i < 5; i++ {
 		info, _ := storage.GetNodeInfo(node.ID(i + 1))
 		config := Config{basePath: basePaths[i]}
-		gaias = append(gaias, NewGaia(rpcServers[i], info, storage, &config))
+		NewGaia(rpcServers[i], info, storage, &config)
 		go func(rpcServer *messenger.RpcServer) {
-			rpcServer.Run()
+			err := rpcServer.Run()
+			if err != nil {
+				t.Errorf("rpcServer run error: %v", err)
+				return
+			}
 		}(rpcServers[i])
 	}
 
@@ -109,12 +112,15 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, storage node.InfoStorag
 		}
 	}
 
-	stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Message{Message: &ControlMessage{
+	err = stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Message{Message: &ControlMessage{
 		Code:     ControlMessage_EOF,
 		Block:    blockInfo,
 		Pipeline: p,
 		Term:     1,
 	}}})
+	if err != nil {
+		t.Errorf("Send stream err: %v", err)
+	}
 
 	time.Sleep(1 * time.Second)
 	assertFilesOK(t, blockInfo.BlockId, blockInfo.BlockSize, p, basePaths)

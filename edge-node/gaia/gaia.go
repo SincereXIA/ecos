@@ -25,7 +25,7 @@ type Gaia struct {
 }
 
 func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
-	var transporter *PrimaryCopyTransporter
+	transporter := &PrimaryCopyTransporter{}
 	for {
 		select {
 		case <-g.ctx.Done():
@@ -46,53 +46,9 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 		}
 		switch payload := r.Payload.(type) {
 		case *UploadBlockRequest_Message:
-			msg := payload.Message
-			code := msg.Code
-			p := msg.Pipeline
-			switch code {
-			case ControlMessage_BEGIN:
-				// TODO: 建立与同组 Node 的连接，准备转发
-				transporter, err = NewPrimaryCopyTransporter(g.ctx, msg.Block, p, g.selfInfo.RaftId,
-					g.infoStorage.GetGroupInfo(msg.Term), g.config.basePath)
-				if err != nil {
-					return err
-				}
-			case ControlMessage_EOF:
-				// TODO: 确认转发成功，关闭连接
-				err := transporter.Close()
-				if err != nil {
-					return stream.SendAndClose(&common.Result{
-						Status:  common.Result_FAIL,
-						Message: err.Error(),
-					})
-				}
-				return stream.SendAndClose(&common.Result{
-					Status: common.Result_OK,
-				})
-			default:
-				logger.Errorf("ControlMessage has unexpected code %v", code)
-				return stream.SendAndClose(&common.Result{
-					Status: common.Result_FAIL,
-				})
-			}
+			err = g.processControlMessage(payload, transporter, stream)
 		case *UploadBlockRequest_Chunk:
-			// TODO: 处理接收到的 Block，转发给同组 Node
-			chunk := payload.Chunk.Content
-			if transporter == nil {
-				return stream.SendAndClose(&common.Result{
-					Status:  common.Result_FAIL,
-					Code:    errno.NoTransporterErr.Code,
-					Message: errno.NoTransporterErr.Error(),
-				})
-			}
-			_, err = transporter.Write(chunk)
-			if err != nil {
-				return stream.SendAndClose(&common.Result{
-					Status:  common.Result_FAIL,
-					Code:    errno.CodeTransporterWriteFail,
-					Message: errno.TransporterWriteFail.Error() + err.Error(),
-				})
-			}
+			err = g.processChunk(payload, transporter, stream)
 		case nil:
 			// The field is not set.
 			logger.Warningf("Received blank Payload")
@@ -105,7 +61,67 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 				Status: common.Result_FAIL,
 			})
 		}
+		if err != nil {
+			return err
+		}
 	}
+}
+
+// processControlMessage will modify transporter when receive ControlMessage_BEGIN
+func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transporter *PrimaryCopyTransporter,
+	stream Gaia_UploadBlockDataServer) (err error) {
+	msg := message.Message
+	code := msg.Code
+	p := msg.Pipeline
+	switch code {
+	case ControlMessage_BEGIN:
+		// 建立与同组 Node 的连接，准备转发
+		t, err := NewPrimaryCopyTransporter(g.ctx, msg.Block, p, g.selfInfo.RaftId,
+			g.infoStorage.GetGroupInfo(msg.Term), g.config.basePath)
+		if err != nil {
+			return err
+		}
+		*transporter = *t
+	case ControlMessage_EOF:
+		// 确认转发成功，关闭连接
+		err := transporter.Close()
+		if err != nil {
+			return stream.SendAndClose(&common.Result{
+				Status:  common.Result_FAIL,
+				Message: err.Error(),
+			})
+		}
+		return stream.SendAndClose(&common.Result{
+			Status: common.Result_OK,
+		})
+	default:
+		logger.Errorf("ControlMessage has unexpected code %v", code)
+		return stream.SendAndClose(&common.Result{
+			Status: common.Result_FAIL,
+		})
+	}
+	return nil
+}
+
+func (g *Gaia) processChunk(chunk *UploadBlockRequest_Chunk, transporter *PrimaryCopyTransporter,
+	stream Gaia_UploadBlockDataServer) (err error) {
+	data := chunk.Chunk.Content
+	if transporter == nil {
+		return stream.SendAndClose(&common.Result{
+			Status:  common.Result_FAIL,
+			Code:    errno.NoTransporterErr.Code,
+			Message: errno.NoTransporterErr.Error(),
+		})
+	}
+	_, err = transporter.Write(data)
+	if err != nil {
+		return stream.SendAndClose(&common.Result{
+			Status:  common.Result_FAIL,
+			Code:    errno.CodeTransporterWriteFail,
+			Message: errno.TransporterWriteFail.Error() + err.Error(),
+		})
+	}
+	return nil
 }
 
 func NewGaia(rpcServer *messenger.RpcServer, selfInfo *node.NodeInfo, infoStorage node.InfoStorage,
