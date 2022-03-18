@@ -9,10 +9,11 @@ import (
 // ** just for test **
 func NewSelfInfo(raftID uint64, ipaddr string, rpcPort uint64) *NodeInfo {
 	selfInfo := &NodeInfo{
-		RaftId:  raftID,
-		Uuid:    uuid.New().String(),
-		IpAddr:  ipaddr,
-		RpcPort: rpcPort,
+		RaftId:   raftID,
+		Uuid:     uuid.New().String(),
+		IpAddr:   ipaddr,
+		RpcPort:  rpcPort,
+		Capacity: 10,
 	}
 	return selfInfo
 }

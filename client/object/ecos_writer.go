@@ -171,8 +171,8 @@ func (w *EcosWriter) commitMeta() error {
 	}
 	w.meta.PgId = GenObjectPG(w.key)
 	// w.meta.Blocks is set here. The map and Block.Close ensures the Block Status
-	for i := 0; i < w.blockCount; i++ {
-		w.meta.Blocks = append(w.meta.Blocks, &w.blocks[i].BlockInfo)
+	for _, block := range w.blocks {
+		w.meta.Blocks = append(w.meta.Blocks, &block.BlockInfo)
 	}
 	metaServerNode := w.checkObjNodeByPg()
 	metaClient, err := NewMetaClient(metaServerNode)
@@ -203,10 +203,8 @@ func (w *EcosWriter) Close() error {
 	w.commitCurBlock()
 	w.Status = UPLOADING
 	for i := 0; i < w.blockCount; i++ {
-		select {
-		case <-w.finishedBlocks:
-			break
-		}
+		block := <-w.finishedBlocks
+		logger.Tracef("block closed: %v", block.BlockId)
 	}
 	err := w.commitMeta()
 	if err != nil {
@@ -270,8 +268,16 @@ func (f *EcosWriterFactory) GetEcosWriter(key string) EcosWriter {
 		chunks:     chunkPool,
 		blocks:     map[int]*Block{},
 		blockPipes: f.blockPipes,
-		meta:       &object.ObjectMeta{},
-		objHash:    sha256.New(),
-		objPipes:   f.objPipes,
+		meta: &object.ObjectMeta{
+			ObjId:      "",
+			ObjSize:    0,
+			UpdateTime: nil,
+			ObjHash:    "",
+			PgId:       0,
+			Blocks:     []*object.BlockInfo{},
+		},
+		objHash:        sha256.New(),
+		objPipes:       f.objPipes,
+		finishedBlocks: make(chan *Block),
 	}
 }

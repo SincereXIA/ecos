@@ -4,11 +4,12 @@ import (
 	"ecos/utils/config"
 	"ecos/utils/logger"
 	"os"
+	"time"
 )
 
 const blockSize = 1 << 22
 const chunkSize = 1 << 20
-const uploadTimeoutMs = 1000
+const uploadTimeout = time.Second * 10
 const uploadBuffer = 1 << 25
 const blockHash = true
 const objectHash = false
@@ -22,9 +23,9 @@ type ObjectConfig struct {
 
 type ClientConfig struct {
 	config.Config
-	Object          ObjectConfig
-	UploadTimeoutMs int
-	UploadBuffer    uint64
+	Object        ObjectConfig
+	UploadTimeout time.Duration
+	UploadBuffer  uint64
 }
 
 var DefaultConfig *ClientConfig
@@ -40,8 +41,8 @@ func init() {
 				BlockHash:  blockHash,
 				ObjectHash: objectHash,
 			},
-			UploadTimeoutMs: uploadTimeoutMs,
-			UploadBuffer:    uploadBuffer,
+			UploadTimeout: uploadTimeout,
+			UploadBuffer:  uploadBuffer,
 		}
 	}
 	if Config == nil {

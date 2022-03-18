@@ -8,7 +8,6 @@ import (
 	"ecos/edge-node/object"
 	"ecos/messenger"
 	"ecos/messenger/common"
-	"time"
 )
 
 type MetaClient struct {
@@ -28,9 +27,8 @@ func NewMetaClient(serverNode *node.NodeInfo) (*MetaClient, error) {
 		return nil, err
 	}
 	newClient.client = alaya.NewAlayaClient(conn)
-	if configTimeout := config.Config.UploadTimeoutMs; configTimeout > 0 {
-		newClient.context, newClient.cancel = context.WithTimeout(context.Background(),
-			time.Duration(config.Config.UploadTimeoutMs)*time.Millisecond)
+	if configTimeout := config.Config.UploadTimeout; configTimeout > 0 {
+		newClient.context, newClient.cancel = context.WithTimeout(context.Background(), configTimeout)
 	} else {
 		newClient.context = context.Background()
 		newClient.cancel = nil

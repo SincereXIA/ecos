@@ -174,6 +174,8 @@ func (b *Block) Close() error {
 	}
 	go func() {
 		// TODO: Should We make this go routine repeating when a upload is failed?
+		// TODO (xiong): if upload is failed, writer never can be close
+		defer b.delFunc(b)
 		if client.cancel != nil {
 			defer client.cancel()
 		}
@@ -182,13 +184,12 @@ func (b *Block) Close() error {
 			b.status = FAILED
 			return
 		} else {
-			_, err := client.GetUploadResult()
+			_, err = client.GetUploadResult()
 			if err != nil {
 				b.status = FAILED
 				return
 			}
 			b.status = FINISHED
-			defer b.delFunc(b)
 		}
 	}()
 	return nil

@@ -40,7 +40,7 @@ func TestNewGaia(t *testing.T) {
 	storage.Apply()
 	for i := 0; i < 5; i++ {
 		info, _ := storage.GetNodeInfo(node.ID(i + 1))
-		config := Config{basePath: basePaths[i]}
+		config := Config{BasePath: basePaths[i]}
 		NewGaia(rpcServers[i], info, storage, &config)
 		go func(rpcServer *messenger.RpcServer) {
 			err := rpcServer.Run()
