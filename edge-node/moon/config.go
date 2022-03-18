@@ -11,10 +11,10 @@ type Config struct {
 	NodeInfoCommitInterval time.Duration
 }
 
-var DefaultConfig Config
+var DefaultConfig *Config
 
 func init() {
-	DefaultConfig = Config{
+	DefaultConfig = &Config{
 		SunAddr:                "",
 		GroupInfo:              node.GroupInfo{},
 		NodeInfoCommitInterval: time.Second,

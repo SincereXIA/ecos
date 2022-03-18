@@ -57,7 +57,7 @@ func action(c *cli.Context) error {
 	selfInfo := conf.SelfInfo
 	rpcServer := messenger.NewRpcServer(conf.RpcPort)
 	stableStorage := moon.NewStorage(path.Join(dbBasePath, "/raft/moon"))
-	Moon = moon.NewMoon(selfInfo, &conf.MoonConfig,
+	Moon = moon.NewMoon(selfInfo, conf.MoonConfig,
 		rpcServer, infoStorage, stableStorage)
 
 	//init Alaya

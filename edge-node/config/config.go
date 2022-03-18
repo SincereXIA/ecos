@@ -1,6 +1,7 @@
 package config
 
 import (
+	"ecos/edge-node/gaia"
 	"ecos/edge-node/moon"
 	"ecos/edge-node/node"
 	"ecos/utils/common"
@@ -20,8 +21,10 @@ type Config struct {
 	SelfInfo    *node.NodeInfo
 	RpcPort     uint64
 	HttpPort    uint64
-	MoonConfig  moon.Config
 	StoragePath string
+
+	MoonConfig *moon.Config
+	GaiaConfig *gaia.Config
 }
 
 var DefaultConfig *Config
@@ -35,12 +38,13 @@ func init() {
 			Uuid:     uuid.New().String(),
 			IpAddr:   ipAddr,
 			RpcPort:  rpcPort,
-			Capacity: 0,
+			Capacity: 10,
 		},
 		RpcPort:     rpcPort,
 		HttpPort:    httpPort,
-		MoonConfig:  moon.Config{SunAddr: ""},
+		MoonConfig:  moon.DefaultConfig,
 		StoragePath: "./ecos-data",
+		GaiaConfig:  gaia.DefaultConfig,
 	}
 	//DefaultConfig.Capacity = common.GetAvailStorage(DefaultConfig.StoragePath)
 }
@@ -49,6 +53,12 @@ func init() {
 func InitConfig(conf *Config) error {
 	var defaultConfig Config
 	_ = config.GetDefaultConf(&defaultConfig)
+
+	// check ip address
+	if !isAvailableIpAdder(conf.SelfInfo.IpAddr) {
+		conf.SelfInfo.IpAddr = defaultConfig.SelfInfo.IpAddr
+	}
+
 	// check storagePath
 	if conf.StoragePath == "" {
 		conf.StoragePath = defaultConfig.StoragePath
@@ -90,4 +100,23 @@ func getSelfIpAddr() (error, string) {
 		}
 	}
 	return nil, selfIp
+}
+
+func isAvailableIpAdder(addr string) bool {
+	if addr == "" {
+		return false
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, address := range addrs {
+		// 检查ip地址判断是否回环地址
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.String() == addr {
+				return true
+			}
+		}
+	}
+	return false
 }
