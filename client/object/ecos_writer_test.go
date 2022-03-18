@@ -103,6 +103,12 @@ func TestEcosWriter(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		})
 	}
+
+	for i := 0; i < 9; i++ {
+		moons[i].Stop()
+		alayas[i].Stop()
+		rpcServers[i].Stop()
+	}
 }
 
 func TestPortClose(t *testing.T) {
