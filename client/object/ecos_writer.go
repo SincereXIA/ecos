@@ -219,7 +219,7 @@ func (w *EcosWriter) Close() error {
 }
 
 func (w *EcosWriter) checkObjNodeByPg() *node.NodeInfo {
-	return clientNode.LocalInfoStorage.GetNodeInfo(0, w.objPipes[w.meta.PgId-1].RaftId[0])
+	return clientNode.InfoStorage.GetNodeInfo(0, w.objPipes[w.meta.PgId-1].RaftId[0])
 }
 
 // EcosWriterFactory Generates EcosWriter with ClientConfig
@@ -244,7 +244,7 @@ func NewEcosWriterFactory(config *config.ClientConfig, nodeAddr string, port int
 		return nil
 	}
 	// TODO: Retry?
-	clientNode.LocalInfoStorage.SaveGroupInfoWithTerm(0, groupInfo)
+	clientNode.InfoStorage.SaveGroupInfoWithTerm(0, groupInfo)
 	const groupNum = 3
 	// TODO: Get pgNum, groupNum from moon
 	ret := &EcosWriterFactory{

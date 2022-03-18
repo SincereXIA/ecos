@@ -146,7 +146,7 @@ func (b *Block) updateBlockInfo() error {
 }
 
 func (b *Block) getUploadStream() (*UploadClient, error) {
-	serverInfo := clientNode.LocalInfoStorage.GetNodeInfo(0, b.blockPipes[b.BlockInfo.PgId].RaftId[0])
+	serverInfo := clientNode.InfoStorage.GetNodeInfo(0, b.blockPipes[b.BlockInfo.PgId].RaftId[0])
 	client, err := NewGaiaClient(serverInfo)
 	if err != nil {
 		logger.Errorf("Unable to start Gaia Client: %v", err)
