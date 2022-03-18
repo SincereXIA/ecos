@@ -23,12 +23,6 @@
 - 新增`EcosNode`，封装了`NodeInfo`并实现了`gocrush.Node`接口
 - 使用`gocrush`包实现了基于CRUSH算法的`GenPipelines`
 
-## 2022/2/19
-@xionghc
-- 修改了`pipeline`的拼写（之前错为`pipline`）
-- 新增`EcosNode`，封装了`NodeInfo`并实现了`gocrush.Node`接口
-- 使用`gocrush`包实现了基于CRUSH算法的`GenPipelines`
-
 ## 2022/2/13
 
 - `NodeInfoStorage` 接口支持设置 term，同 term `GroupInfo` 保证一致

@@ -22,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 type MoonClient interface {
 	SendRaftMessage(ctx context.Context, in *raftpb.Message, opts ...grpc.CallOption) (*raftpb.Message, error)
 	AddNodeToGroup(ctx context.Context, in *node.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error)
+	GetGroupInfo(ctx context.Context, in *node.Term, opts ...grpc.CallOption) (*node.GroupInfo, error)
 }
 
 type moonClient struct {
@@ -50,12 +51,22 @@ func (c *moonClient) AddNodeToGroup(ctx context.Context, in *node.NodeInfo, opts
 	return out, nil
 }
 
+func (c *moonClient) GetGroupInfo(ctx context.Context, in *node.Term, opts ...grpc.CallOption) (*node.GroupInfo, error) {
+	out := new(node.GroupInfo)
+	err := c.cc.Invoke(ctx, "/messenger.Moon/GetGroupInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MoonServer is the server API for Moon service.
 // All implementations must embed UnimplementedMoonServer
 // for forward compatibility
 type MoonServer interface {
 	SendRaftMessage(context.Context, *raftpb.Message) (*raftpb.Message, error)
 	AddNodeToGroup(context.Context, *node.NodeInfo) (*AddNodeReply, error)
+	GetGroupInfo(context.Context, *node.Term) (*node.GroupInfo, error)
 	mustEmbedUnimplementedMoonServer()
 }
 
@@ -68,6 +79,9 @@ func (UnimplementedMoonServer) SendRaftMessage(context.Context, *raftpb.Message)
 }
 func (UnimplementedMoonServer) AddNodeToGroup(context.Context, *node.NodeInfo) (*AddNodeReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddNodeToGroup not implemented")
+}
+func (UnimplementedMoonServer) GetGroupInfo(context.Context, *node.Term) (*node.GroupInfo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGroupInfo not implemented")
 }
 func (UnimplementedMoonServer) mustEmbedUnimplementedMoonServer() {}
 
@@ -118,6 +132,24 @@ func _Moon_AddNodeToGroup_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Moon_GetGroupInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(node.Term)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MoonServer).GetGroupInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/messenger.Moon/GetGroupInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MoonServer).GetGroupInfo(ctx, req.(*node.Term))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Moon_ServiceDesc is the grpc.ServiceDesc for Moon service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -132,6 +164,10 @@ var Moon_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddNodeToGroup",
 			Handler:    _Moon_AddNodeToGroup_Handler,
+		},
+		{
+			MethodName: "GetGroupInfo",
+			Handler:    _Moon_GetGroupInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -2,39 +2,61 @@ package config
 
 import (
 	"ecos/utils/config"
+	"ecos/utils/logger"
 	"os"
+	"time"
 )
 
 const blockSize = 1 << 22
 const chunkSize = 1 << 20
-const uploadTimeoutMs = 1000
+const uploadTimeout = time.Second * 10
+const uploadBuffer = 1 << 25
+const blockHash = true
+const objectHash = false
 
 type ObjectConfig struct {
-	BlockSize uint64
-	ChunkSize uint64
+	BlockSize  uint64
+	ChunkSize  uint64
+	BlockHash  bool
+	ObjectHash bool
 }
 
-type Config struct {
+type ClientConfig struct {
 	config.Config
-	Object          ObjectConfig
-	UploadTimeoutMs int
+	Object        ObjectConfig
+	UploadTimeout time.Duration
+	UploadBuffer  uint64
 }
 
-var DefaultConfig *Config
+var DefaultConfig *ClientConfig
+var Config *ClientConfig
 
 func init() {
-	DefaultConfig = &Config{
-		Config: config.Config{},
-		Object: ObjectConfig{
-			BlockSize: blockSize,
-			ChunkSize: chunkSize,
-		},
-		UploadTimeoutMs: uploadTimeoutMs,
+	if DefaultConfig == nil {
+		DefaultConfig = &ClientConfig{
+			Config: config.Config{},
+			Object: ObjectConfig{
+				BlockSize:  blockSize,
+				ChunkSize:  chunkSize,
+				BlockHash:  blockHash,
+				ObjectHash: objectHash,
+			},
+			UploadTimeout: uploadTimeout,
+			UploadBuffer:  uploadBuffer,
+		}
+	}
+	if Config == nil {
+		err := InitConfig(Config)
+		if err != nil {
+			logger.Warningf("parse client config failed %v", err)
+			logger.Warningf("using default client config")
+			Config = DefaultConfig
+		}
 	}
 }
 
 // InitConfig check config and init data dir and set some empty config value
-func InitConfig(conf *Config) error {
+func InitConfig(conf *ClientConfig) error {
 	// read persist config file in storage path
 	// TODO: read confPath from cmd args
 	confPath := "./config/client.json"

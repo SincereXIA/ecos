@@ -9,6 +9,8 @@ const (
 	GaiaError
 	MoonError
 	SunError
+	ClientError
+	CommonError
 
 	SystemError int32 = 77 * 1000
 )
@@ -25,6 +27,24 @@ const (
 	CodeMoonRaftNotReady
 )
 
+const (
+	// Client errors
+
+	CodeIncompatibleSize = ClientError + iota
+
+	CodeFullBuffer
+
+	CodeIllegalStatus
+	CodeRepeatedClose
+)
+
+const (
+	// Utils Common Error
+
+	CodePoolClosed = CommonError + iota
+	CodeZeroSize
+)
+
 /* Gaia error */
 const (
 	CodeNoTransporter int32 = GaiaError + iota
@@ -39,6 +59,15 @@ var (
 	ConnectSunFail = newErr(CodeConnectSunFail, "connect sun fail")
 
 	MoonRaftNotReady = newErr(CodeMoonRaftNotReady, "moon raft not ready")
+	// Client Upload Errors
+
+	IncompatibleSize = newErr(CodeIncompatibleSize, "incompatible size")
+
+	IllegalStatus = newErr(CodeIllegalStatus, "block illegal status")
+	RepeatedClose = newErr(CodeRepeatedClose, "block repeated close")
+
+	PoolClosed = newErr(CodePoolClosed, "pool has closed")
+	ZeroSize   = newErr(CodeZeroSize, "0 for uint size")
 
 	/* Gaia error */
 

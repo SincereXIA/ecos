@@ -1,11 +1,11 @@
 package gaia
 
 type Config struct {
-	basePath string
+	BasePath string
 }
 
 var DefaultConfig *Config
 
 func init() {
-	DefaultConfig = &Config{basePath: "./ecos-data/gaia/"}
+	DefaultConfig = &Config{BasePath: "./ecos-data/gaia/"}
 }
