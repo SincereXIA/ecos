@@ -1,10 +1,11 @@
 package node
 
 import (
-	"ecos/messenger/timestamppb"
+	"ecos/utils/timestamp"
 	"errors"
 	"github.com/gogo/protobuf/sortkeys"
 	"github.com/mohae/deepcopy"
+	"sort"
 )
 
 type ID uint64
@@ -12,10 +13,10 @@ type ID uint64
 // InfoStorage 实现有任期的边缘节点信息存储
 //
 type InfoStorage interface {
-	UpdateNodeInfo(info *NodeInfo) error
-	DeleteNodeInfo(nodeId ID) error
+	UpdateNodeInfo(info *NodeInfo, time *timestamp.Timestamp) error
+	DeleteNodeInfo(nodeId ID, time *timestamp.Timestamp) error
 	GetNodeInfo(nodeId ID) (*NodeInfo, error)
-	SetLeader(nodeId ID) error
+	SetLeader(nodeId ID, time *timestamp.Timestamp) error
 	// Commit 提交缓存区的节点信息，至此该 term 无法再变化，但提交尚未生效
 	Commit(newTerm uint64)
 	// Apply 使得已经 Commit 的节点信息马上生效
@@ -44,16 +45,16 @@ type MemoryNodeInfoStorage struct {
 	onGroupApplyHookFunc func(info *GroupInfo)
 }
 
-func (storage *MemoryNodeInfoStorage) UpdateNodeInfo(info *NodeInfo) error {
+func (storage *MemoryNodeInfoStorage) UpdateNodeInfo(info *NodeInfo, time *timestamp.Timestamp) error {
 	nodeId := info.RaftId
 	storage.uncommittedState.InfoMap[nodeId] = info
-	storage.updateTimestamp()
+	storage.updateTimestamp(time)
 	return nil
 }
 
-func (storage *MemoryNodeInfoStorage) DeleteNodeInfo(nodeId ID) error {
+func (storage *MemoryNodeInfoStorage) DeleteNodeInfo(nodeId ID, time *timestamp.Timestamp) error {
 	delete(storage.uncommittedState.InfoMap, uint64(nodeId))
-	storage.updateTimestamp()
+	storage.updateTimestamp(time)
 	return nil
 }
 
@@ -106,10 +107,10 @@ func (storage *MemoryNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
 	return storage.history.HistoryMap[term]
 }
 
-func (storage *MemoryNodeInfoStorage) SetLeader(nodeId ID) error {
+func (storage *MemoryNodeInfoStorage) SetLeader(nodeId ID, time *timestamp.Timestamp) error {
 	if _, ok := storage.uncommittedState.InfoMap[uint64(nodeId)]; ok {
 		storage.uncommittedState.LeaderID = uint64(nodeId)
-		storage.updateTimestamp()
+		storage.updateTimestamp(time)
 	} else {
 		return errors.New("leader not found")
 	}
@@ -143,19 +144,19 @@ func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {
 			Term:            0,
 			LeaderID:        0,
 			InfoMap:         make(map[uint64]*NodeInfo),
-			UpdateTimeStamp: timestamppb.Now(),
+			UpdateTimeStamp: timestamp.Now(),
 		},
 		committedState: &InfoStorageState{
 			Term:            0,
 			LeaderID:        0,
 			InfoMap:         make(map[uint64]*NodeInfo),
-			UpdateTimeStamp: timestamppb.Now(),
+			UpdateTimeStamp: timestamp.Now(),
 		},
 		uncommittedState: &InfoStorageState{
 			Term:            1,
 			LeaderID:        0,
 			InfoMap:         make(map[uint64]*NodeInfo),
-			UpdateTimeStamp: timestamppb.Now(),
+			UpdateTimeStamp: timestamp.Now(),
 		},
 		history: History{
 			HistoryMap: map[uint64]*GroupInfo{},
@@ -167,9 +168,12 @@ func map2Slice(input map[uint64]*NodeInfo) (output []*NodeInfo) {
 	for _, info := range input {
 		output = append(output, info)
 	}
+	sort.Slice(output, func(i, j int) bool {
+		return output[i].RaftId > output[j].RaftId
+	})
 	return
 }
 
-func (storage *MemoryNodeInfoStorage) updateTimestamp() {
-	storage.uncommittedState.UpdateTimeStamp = timestamppb.Now()
+func (storage *MemoryNodeInfoStorage) updateTimestamp(timestamp *timestamp.Timestamp) {
+	storage.uncommittedState.UpdateTimeStamp = timestamp
 }

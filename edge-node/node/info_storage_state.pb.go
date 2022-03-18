@@ -4,7 +4,7 @@
 package node
 
 import (
-	timestamppb "ecos/messenger/timestamppb"
+	timestamp "ecos/utils/timestamp"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
 	io "io"
@@ -24,13 +24,13 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type InfoStorageState struct {
-	Term                 uint64                 `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
-	LeaderID             uint64                 `protobuf:"varint,2,opt,name=LeaderID,proto3" json:"LeaderID,omitempty"`
-	InfoMap              map[uint64]*NodeInfo   `protobuf:"bytes,3,rep,name=InfoMap,proto3" json:"InfoMap,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	UpdateTimeStamp      *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=UpdateTimeStamp,proto3" json:"UpdateTimeStamp,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
-	XXX_unrecognized     []byte                 `json:"-"`
-	XXX_sizecache        int32                  `json:"-"`
+	Term                 uint64               `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
+	LeaderID             uint64               `protobuf:"varint,2,opt,name=LeaderID,proto3" json:"LeaderID,omitempty"`
+	InfoMap              map[uint64]*NodeInfo `protobuf:"bytes,3,rep,name=InfoMap,proto3" json:"InfoMap,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	UpdateTimeStamp      *timestamp.Timestamp `protobuf:"bytes,4,opt,name=UpdateTimeStamp,proto3" json:"UpdateTimeStamp,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
+	XXX_unrecognized     []byte               `json:"-"`
+	XXX_sizecache        int32                `json:"-"`
 }
 
 func (m *InfoStorageState) Reset()         { *m = InfoStorageState{} }
@@ -87,7 +87,7 @@ func (m *InfoStorageState) GetInfoMap() map[uint64]*NodeInfo {
 	return nil
 }
 
-func (m *InfoStorageState) GetUpdateTimeStamp() *timestamppb.Timestamp {
+func (m *InfoStorageState) GetUpdateTimeStamp() *timestamp.Timestamp {
 	if m != nil {
 		return m.UpdateTimeStamp
 	}
@@ -461,7 +461,7 @@ func (m *InfoStorageState) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.UpdateTimeStamp == nil {
-				m.UpdateTimeStamp = &timestamppb.Timestamp{}
+				m.UpdateTimeStamp = &timestamp.Timestamp{}
 			}
 			if err := m.UpdateTimeStamp.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err

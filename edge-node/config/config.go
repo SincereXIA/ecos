@@ -1,6 +1,7 @@
 package config
 
 import (
+	"ecos/edge-node/moon"
 	"ecos/edge-node/node"
 	"ecos/utils/common"
 	"ecos/utils/config"
@@ -14,17 +15,12 @@ import (
 const rpcPort = 3267
 const httpPort = 3268
 
-type MoonConf struct {
-	SunAddr   string
-	GroupInfo node.GroupInfo
-}
-
 type Config struct {
 	config.Config
 	SelfInfo    *node.NodeInfo
 	RpcPort     uint64
 	HttpPort    uint64
-	Moon        MoonConf
+	MoonConfig  moon.Config
 	StoragePath string
 }
 
@@ -43,7 +39,7 @@ func init() {
 		},
 		RpcPort:     rpcPort,
 		HttpPort:    httpPort,
-		Moon:        MoonConf{SunAddr: ""},
+		MoonConfig:  moon.Config{SunAddr: ""},
 		StoragePath: "./ecos-data",
 	}
 	//DefaultConfig.Capacity = common.GetAvailStorage(DefaultConfig.StoragePath)

@@ -6,6 +6,7 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
+	"ecos/utils/timestamp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
@@ -33,7 +34,7 @@ func TestNewGaia(t *testing.T) {
 			RpcPort:  uint64(32670 + i),
 			Capacity: 10,
 		}
-		_ = storage.UpdateNodeInfo(&info)
+		_ = storage.UpdateNodeInfo(&info, timestamp.Now())
 	}
 	storage.Commit(1)
 	storage.Apply()

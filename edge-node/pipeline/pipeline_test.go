@@ -2,7 +2,7 @@ package pipeline
 
 import (
 	"ecos/edge-node/node"
-	"ecos/messenger/timestamppb"
+	"ecos/utils/timestamp"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"strconv"
@@ -29,7 +29,7 @@ func genGroupInfo() *node.GroupInfo {
 		},
 		LeaderInfo:      nil,
 		NodesInfo:       []*node.NodeInfo{},
-		UpdateTimestamp: timestamppb.Now(),
+		UpdateTimestamp: timestamp.Now(),
 	}
 	for i := 1; i <= 20; i++ {
 		group.NodesInfo = append(group.NodesInfo, &node.NodeInfo{
