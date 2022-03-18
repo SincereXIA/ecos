@@ -79,9 +79,9 @@ func (w *EcosWriter) getCurBlock() *Block {
 				w.finishedBlocks <- self
 			},
 		}
+		w.blockCount++
 		w.curBlock = newBlock
 	}
-	w.blockCount++
 	return w.curBlock
 }
 
@@ -117,6 +117,10 @@ func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 //
 // curChunk shall be nil after calling this.
 func (w *EcosWriter) commitCurChunk() {
+	// TODO (xiong): 如果恰好写完了一个 block，writer 关闭的时候还会调用此方法，此时 curChunk 为 null，导致提交了一个空的 block
+	if w.curChunk == nil {
+		return // Temp fix by zhang
+	}
 	block := w.getCurBlock()
 	block.chunks = append(block.chunks, w.curChunk)
 	w.curChunk = nil
@@ -139,7 +143,7 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 			return offset, err
 		}
 		writeSize := minSize(int(chunk.freeSize), pending)
-		chunk.data = append(chunk.data, p[offset:writeSize]...)
+		chunk.data = append(chunk.data, p[offset:offset+writeSize]...)
 		chunk.freeSize -= uint64(writeSize)
 		if chunk.freeSize == 0 {
 			w.commitCurChunk()
@@ -204,7 +208,7 @@ func (w *EcosWriter) Close() error {
 	w.Status = UPLOADING
 	for i := 0; i < w.blockCount; i++ {
 		block := <-w.finishedBlocks
-		logger.Tracef("block closed: %v", block.BlockId)
+		logger.Debugf("block closed: %v", block.BlockId)
 	}
 	err := w.commitMeta()
 	if err != nil {
@@ -215,7 +219,7 @@ func (w *EcosWriter) Close() error {
 }
 
 func (w *EcosWriter) checkObjNodeByPg() *node.NodeInfo {
-	return clientNode.LocalInfoStorage.GetNodeInfo(0, w.objPipes[w.meta.PgId].RaftId[0])
+	return clientNode.LocalInfoStorage.GetNodeInfo(0, w.objPipes[w.meta.PgId-1].RaftId[0])
 }
 
 // EcosWriterFactory Generates EcosWriter with ClientConfig

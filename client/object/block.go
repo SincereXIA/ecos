@@ -1,7 +1,6 @@
 package object
 
 import (
-	"crypto/sha256"
 	clientNode "ecos/client/node"
 	"ecos/client/user"
 	"ecos/edge-node/gaia"
@@ -14,6 +13,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"github.com/google/uuid"
+	"github.com/minio/sha256-simd"
 	"io"
 )
 
@@ -139,6 +139,7 @@ func (b *Block) updateBlockInfo() error {
 	} else {
 		b.BlockInfo.BlockId = GenBlockId()
 	}
+	logger.Debugf("Gen block info success: %v", &b.BlockInfo)
 	// TODO: Calculate Place Group from Block Info and GroupInfo
 	b.BlockInfo.PgId = GenBlockPG(&b.BlockInfo)
 	return nil
@@ -160,6 +161,9 @@ func (b *Block) getUploadStream() (*UploadClient, error) {
 }
 
 func (b *Block) Close() error {
+	if len(b.chunks) == 0 {
+		return nil // Temp fix by zhang
+	}
 	if b.status != READING {
 		return errno.RepeatedClose
 	}
@@ -174,7 +178,7 @@ func (b *Block) Close() error {
 	}
 	go func() {
 		// TODO: Should We make this go routine repeating when a upload is failed?
-		// TODO (xiong): if upload is failed, writer never can be close
+		// TODO (xiong): if upload is failed, now writer never can be close or writer won't know, we should fix it.
 		defer b.delFunc(b)
 		if client.cancel != nil {
 			defer client.cancel()
@@ -212,7 +216,7 @@ func GenBlockId() string {
 // These const are for PgNum calc
 const (
 	blockPgNum = 100
-	objPgNum   = 100
+	objPgNum   = 10
 )
 
 var (

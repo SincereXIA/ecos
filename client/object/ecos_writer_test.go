@@ -10,9 +10,8 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/timestamp"
 	"github.com/stretchr/testify/assert"
-	"io"
+	"math/rand"
 	"net"
-	"os"
 	"path"
 	"runtime"
 	"strconv"
@@ -24,27 +23,46 @@ func TestEcosWriter(t *testing.T) {
 	_, filename, _, _ := runtime.Caller(0)
 	t.Logf("Current test filename: %s", filename)
 	type args struct {
-		localFilePath string
-		nodeAddr      string
-		port          int
-		key           string
+		objectSize int
+		nodeAddr   string
+		port       int
+		key        string
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantErr bool
 	}{
-		{"Gaia Test",
+		{"writer 8M object",
 			args{
-				"./ecos_writer_test.go",
+				1024 * 1024 * 8, // 8M
 				"127.0.0.1",
 				32801,
-				"/upload.go",
+				"/path/8M_obj",
+			},
+			false,
+		},
+		{"writer 8.1M object",
+			args{
+				1024*1024*8 + 1024*100, // 8.1M
+				"127.0.0.1",
+				32801,
+				"/path/8.1M_obj",
+			},
+			false,
+		},
+		{"writer 128M object",
+			args{
+				1024 * 1024 * 128, // 128M
+				"127.0.0.1",
+				32801,
+				"/path/128M_obj",
 			},
 			false,
 		},
 	}
 	basePath := "./ecos-data/"
+	_ = common.InitAndClearPath(basePath)
 	infos, moons, alayas, rpcServers, err := createServers(9, "", path.Join(basePath, "db", "moon"))
 	if err != nil {
 		t.Errorf("RpcServer error = %v", err)
@@ -70,19 +88,12 @@ func TestEcosWriter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			factory := NewEcosWriterFactory(config.DefaultConfig, tt.args.nodeAddr, tt.args.port)
 			writer := factory.GetEcosWriter(tt.args.key)
-			file, err := os.Open(tt.args.localFilePath)
+			var data = make([]byte, tt.args.objectSize)
+			rand.Read(data)
 			assert.NoError(t, err)
-			for {
-				var data = make([]byte, 1<<22)
-				readSize, err := file.Read(data)
-				if err == io.EOF {
-					break
-				}
-				assert.NoError(t, err)
-				writeSize, err := writer.Write(data[:readSize])
-				assert.NoError(t, err)
-				assert.Equal(t, readSize, writeSize)
-			}
+			writeSize, err := writer.Write(data)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.args.objectSize, writeSize)
 			assert.NoError(t, writer.Close())
 			t.Logf("Upload Finish!")
 			if (err != nil) != tt.wantErr {
