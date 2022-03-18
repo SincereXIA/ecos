@@ -342,20 +342,16 @@ func (m *Moon) process(entry raftpb.Entry) {
 			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
 			_ = m.InfoStorage.UpdateNodeInfo(&nodeInfo, msg.TimeStamp)
 			m.waitAndCommitStorage()
-			break
 		case DeleteNodeInfo:
 			nodeInfo := msg.NodeInfo
 			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
 			_ = m.InfoStorage.DeleteNodeInfo(node.ID(nodeInfo.RaftId), msg.TimeStamp)
 			m.waitAndCommitStorage()
-			break
 		case StorageCommit:
 			m.InfoStorage.Commit(msg.Term)
 			m.waitAndApplyStorage(&msg)
-			break
 		case StorageApply:
 			m.InfoStorage.Apply()
-			break
 		}
 		if err != nil {
 			logger.Errorf("Moon process moon message err: %v", err.Error())
