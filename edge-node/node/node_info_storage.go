@@ -104,10 +104,10 @@ func (storage *MemoryNodeInfoStorage) Apply() {
 	storage.rwMutex.Lock()
 	storage.history.HistoryMap[storage.nowState.Term] = nowGroupInfo
 	storage.nowState = cpy.(*InfoStorageState)
+	storage.rwMutex.Unlock()
 	if storage.onGroupApplyHookFunc != nil {
 		storage.onGroupApplyHookFunc(storage.GetGroupInfo(0))
 	}
-	storage.rwMutex.Unlock()
 }
 
 func (storage *MemoryNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {

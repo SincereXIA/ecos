@@ -139,7 +139,7 @@ func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 		return nil
 	}
 	for _, id := range NodeIDs {
-		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raftCfg.ID, id, NodeIDs)
+		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raftCfg.ID, r.pgID, id)
 		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeAddNode,
 			NodeID:  id,

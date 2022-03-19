@@ -159,7 +159,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		go infoStorages[i].Apply()
 	}
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 10)
 
 	for i := 0; i < 6; i++ { // for each node
 		a := alayas[i]
@@ -198,7 +198,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		t.Logf("Apply new groupInfo for: %v", i+1)
 		go infoStorages[i].Apply()
 	}
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 15)
 	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]
@@ -226,13 +226,15 @@ func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipelin
 		leaderID := p.RaftId[0]
 		pgID := p.PgId
 		a := alayas[leaderID-1]
-		assert.Equal(t, leaderID, a.PGRaftNode[pgID].raft.Status().Lead)
+		assert.Equal(t, leaderID, a.getRaftNode(pgID).raft.Status().Lead)
 	}
 	// 判断 每个 alaya 的每个 raft node 是否都成功加入 PG
 	for _, a := range alayas {
-		for _, r := range a.PGRaftNode {
-			assert.NotZero(t, r.raft.Status().Lead)
-		}
+		a.PGRaftNode.Range(func(key, value interface{}) bool {
+			raftNode := value.(*Raft)
+			assert.NotZero(t, raftNode.raft.Status().Lead)
+			return true
+		})
 	}
 }
 

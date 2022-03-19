@@ -25,9 +25,13 @@ type Alaya struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	SelfInfo         *node.NodeInfo
-	PGMessageChans   sync.Map
-	PGRaftNode       map[uint64]*Raft
+	SelfInfo       *node.NodeInfo
+	PGMessageChans sync.Map
+	// PGRaftNode save all raft node on this edge.
+	// pgID -> Raft node
+	PGRaftNode sync.Map
+	// mutex ensure Alaya.Run after pipeline ready
+	mutex            sync.Mutex
 	raftNodeStopChan chan uint64 // 内部 raft node 主动退出时，使用该 chan 通知 alaya
 
 	InfoStorage node.InfoStorage
@@ -48,13 +52,21 @@ const (
 	STOPPED
 )
 
+func (a *Alaya) getRaftNode(pgID uint64) *Raft {
+	raft, ok := a.PGRaftNode.Load(pgID)
+	if !ok {
+		return nil
+	}
+	return raft.(*Raft)
+}
+
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 		pgID := meta.PgId
-		a.PGRaftNode[pgID].ProposeObjectMeta(meta)
+		a.getRaftNode(pgID).ProposeObjectMeta(meta)
 		// TODO: 检查元数据是否同步成功
 	}
 
@@ -72,19 +84,23 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 			Message: &raftpb.Message{},
 		}, nil
 	}
+	logger.Warningf("receive raft message from: %v, but pg: %v not exist", pgMessage.Message.From, pgID)
 	return nil, errno.PGNotExist
 }
 
 func (a *Alaya) Stop() {
-	for _, raft := range a.PGRaftNode {
-		go raft.Stop()
-	}
+	a.PGRaftNode.Range(func(key, value interface{}) bool {
+		go value.(*Raft).Stop()
+		return true
+	})
 	a.MetaStorage.Close()
 	a.cancel()
 }
 
 func (a *Alaya) ApplyNewGroupInfo(groupInfo *node.GroupInfo) {
 	// TODO: (zhang) make pgNum configurable
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 	a.state = UPDATING
 	oldPipelines := a.pipelines
 	terms := a.InfoStorage.GetTermList()
@@ -107,14 +123,18 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 	a.pipelines = pipelines
 
 	// Add raft node new in pipelines
-	for pgID, raftNode := range a.PGRaftNode {
+	a.PGRaftNode.Range(func(key, value interface{}) bool {
+		raftNode := value.(*Raft)
+		pgID := key.(uint64)
+
 		if raftNode.raft.Status().Lead != a.SelfInfo.RaftId {
-			continue
+			return true
 		}
 		// if this node is leader, add new pipelines node first
 		p := pipelines[pgID-1]
 		raftNode.ProposeNewPipeline(p, oldPipelines[pgID-1])
-	}
+		return true
+	})
 
 	// start run raft node new in pipelines
 	for _, p := range pipelines {
@@ -153,7 +173,7 @@ func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage
 		ctx:              ctx,
 		cancel:           cancel,
 		PGMessageChans:   sync.Map{},
-		PGRaftNode:       make(map[uint64]*Raft),
+		PGRaftNode:       sync.Map{},
 		SelfInfo:         selfInfo,
 		InfoStorage:      infoStorage,
 		MetaStorage:      metaStorage,
@@ -168,23 +188,30 @@ func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage
 }
 
 func (a *Alaya) Run() {
-	for _, raftNode := range a.PGRaftNode {
-		go raftNode.Run()
-	}
+	a.mutex.Lock()
+	a.PGRaftNode.Range(func(key, value interface{}) bool {
+		go value.(*Raft).Run()
+		return true
+	})
 	a.state = RUNNING
+	a.mutex.Unlock()
+
 	select {
 	case pgID := <-a.raftNodeStopChan:
 		a.PGMessageChans.Delete(pgID)
-		delete(a.PGRaftNode, pgID)
+		a.PGRaftNode.Delete(pgID)
 	case <-a.ctx.Done():
 		return
 	}
 }
 
 func (a *Alaya) printPipelineInfo() {
-	for pgID, raftNode := range a.PGRaftNode {
+	a.PGRaftNode.Range(func(key, value interface{}) bool {
+		raftNode := value.(*Raft)
+		pgID := key.(uint64)
 		logger.Infof("Alaya: %v, PG: %v, leader: %v", a.SelfInfo.RaftId, pgID, raftNode.raft.Status().Lead)
-	}
+		return true
+	})
 }
 
 // MakeAlayaRaftInPipeline Make a new raft node for a single pipeline (PG), it will:
@@ -201,8 +228,9 @@ func (a *Alaya) MakeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pip
 		c = make(chan raftpb.Message)
 		a.PGMessageChans.Store(pgID, c)
 	}
-	a.PGRaftNode[pgID] = NewAlayaRaft(a.SelfInfo.RaftId, p, oldP, a.InfoStorage, a.MetaStorage,
-		c.(chan raftpb.Message), a.raftNodeStopChan)
+	a.PGRaftNode.Store(pgID,
+		NewAlayaRaft(a.SelfInfo.RaftId, p, oldP, a.InfoStorage, a.MetaStorage,
+			c.(chan raftpb.Message), a.raftNodeStopChan))
 	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.SelfInfo.RaftId, pgID)
-	return a.PGRaftNode[pgID]
+	return a.getRaftNode(pgID)
 }
