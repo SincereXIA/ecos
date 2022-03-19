@@ -8,7 +8,7 @@
   "HttpPort": 3268,
   "StoragePath": "/data/ecos",
   "MoonConfig": {
-    "SunAddr": "ecos-cloud-dev.ecos.svc.cluster.local:3267",
+    "SunAddr": "ecos-cloud-dev:3267",
     "GroupInfo": {},
     "NodeInfoCommitInterval": 10000000000
   },
