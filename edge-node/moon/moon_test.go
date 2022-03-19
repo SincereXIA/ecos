@@ -26,7 +26,7 @@ func TestRaft(t *testing.T) {
 	var nodeInfos []*node.NodeInfo
 	for i := 0; i < 3; i++ {
 		index := i
-		nodeInfos = append(nodeInfos, moons[i].selfInfo)
+		nodeInfos = append(nodeInfos, moons[i].SelfInfo)
 		go func() {
 			err := rpcServers[index].Run()
 			if err != nil {
@@ -61,11 +61,11 @@ func TestRaft(t *testing.T) {
 	moonConfig := DefaultConfig
 	moonConfig.GroupInfo = node.GroupInfo{
 		GroupTerm:       &node.Term{Term: 0},
-		LeaderInfo:      moons[leader].selfInfo,
+		LeaderInfo:      moons[leader].SelfInfo,
 		NodesInfo:       nodeInfos,
 		UpdateTimestamp: nil,
 	}
-	node4 := NewMoon(node4Info, &moonConfig, rpcServer4, node.NewMemoryNodeInfoStorage(),
+	node4 := NewMoon(node4Info, moonConfig, rpcServer4, node.NewMemoryNodeInfoStorage(),
 		NewStorage(path.Join(basePath, "/raft", "/4")))
 	moons = append(moons, node4)
 	rpcServers = append(rpcServers, rpcServer4)
@@ -210,11 +210,11 @@ func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenge
 
 	for i := 0; i < num; i++ {
 		if sunAddr != "" {
-			moons = append(moons, NewMoon(nodeInfos[i], &moonConfig, rpcServers[i], infoStorages[i],
+			moons = append(moons, NewMoon(nodeInfos[i], moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		} else {
 			moonConfig.GroupInfo.NodesInfo = nodeInfos
-			moons = append(moons, NewMoon(nodeInfos[i], &moonConfig, rpcServers[i], infoStorages[i],
+			moons = append(moons, NewMoon(nodeInfos[i], moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		}
 	}

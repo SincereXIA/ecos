@@ -2,6 +2,7 @@ package alaya
 
 import (
 	"context"
+	"ecos/edge-node/moon"
 	"ecos/edge-node/node"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -24,7 +25,7 @@ type Alaya struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	NodeID           uint64
+	SelfInfo         *node.NodeInfo
 	PGMessageChans   sync.Map
 	PGRaftNode       map[uint64]*Raft
 	raftNodeStopChan chan uint64 // 内部 raft node 主动退出时，使用该 chan 通知 alaya
@@ -107,7 +108,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 
 	// Add raft node new in pipelines
 	for pgID, raftNode := range a.PGRaftNode {
-		if raftNode.raft.Status().Lead != a.NodeID {
+		if raftNode.raft.Status().Lead != a.SelfInfo.RaftId {
 			continue
 		}
 		// if this node is leader, add new pipelines node first
@@ -117,7 +118,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 
 	// start run raft node new in pipelines
 	for _, p := range pipelines {
-		if -1 == arrays.Contains(p.RaftId, a.NodeID) { // pass when node not in pipeline
+		if -1 == arrays.Contains(p.RaftId, a.SelfInfo.RaftId) { // pass when node not in pipeline
 			continue
 		}
 		pgID := p.PgId
@@ -140,6 +141,11 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 	}
 }
 
+// NewAlayaByMoon will wait moon ready then create a new alaya
+func NewAlayaByMoon(moon *moon.Moon, storage MetaStorage, server *messenger.RpcServer) *Alaya {
+	return NewAlaya(moon.SelfInfo, moon.InfoStorage, storage, server)
+}
+
 func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage MetaStorage,
 	rpcServer *messenger.RpcServer) *Alaya {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -148,7 +154,7 @@ func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage
 		cancel:           cancel,
 		PGMessageChans:   sync.Map{},
 		PGRaftNode:       make(map[uint64]*Raft),
-		NodeID:           selfInfo.RaftId,
+		SelfInfo:         selfInfo,
 		InfoStorage:      infoStorage,
 		MetaStorage:      metaStorage,
 		state:            INIT,
@@ -177,7 +183,7 @@ func (a *Alaya) Run() {
 
 func (a *Alaya) printPipelineInfo() {
 	for pgID, raftNode := range a.PGRaftNode {
-		logger.Infof("Alaya: %v, PG: %v, leader: %v", a.NodeID, pgID, raftNode.raft.Status().Lead)
+		logger.Infof("Alaya: %v, PG: %v, leader: %v", a.SelfInfo.RaftId, pgID, raftNode.raft.Status().Lead)
 	}
 }
 
@@ -195,8 +201,8 @@ func (a *Alaya) MakeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pip
 		c = make(chan raftpb.Message)
 		a.PGMessageChans.Store(pgID, c)
 	}
-	a.PGRaftNode[pgID] = NewAlayaRaft(a.NodeID, p, oldP, a.InfoStorage, a.MetaStorage,
+	a.PGRaftNode[pgID] = NewAlayaRaft(a.SelfInfo.RaftId, p, oldP, a.InfoStorage, a.MetaStorage,
 		c.(chan raftpb.Message), a.raftNodeStopChan)
-	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.NodeID, pgID)
+	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.SelfInfo.RaftId, pgID)
 	return a.PGRaftNode[pgID]
 }

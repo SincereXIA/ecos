@@ -152,11 +152,11 @@ func createServers(num int, sunAddr string, basePath string) ([]*node.NodeInfo, 
 
 	for i := 0; i < num; i++ {
 		if sunAddr != "" {
-			moons = append(moons, moon.NewMoon(nodeInfos[i], &moonConfig, rpcServers[i], infoStorages[i],
+			moons = append(moons, moon.NewMoon(nodeInfos[i], moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		} else {
 			moonConfig.GroupInfo.NodesInfo = nodeInfos
-			moons = append(moons, moon.NewMoon(nodeInfos[i], &moonConfig, rpcServers[i], infoStorages[i],
+			moons = append(moons, moon.NewMoon(nodeInfos[i], moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		}
 	}

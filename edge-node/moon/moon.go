@@ -20,7 +20,7 @@ import (
 
 type Moon struct {
 	id            uint64 //raft节点的id
-	selfInfo      *node.NodeInfo
+	SelfInfo      *node.NodeInfo
 	ctx           context.Context //context
 	cancel        context.CancelFunc
 	InfoStorage   node.InfoStorage
@@ -151,7 +151,7 @@ func (m *Moon) RequestJoinGroup(leaderInfo *node.NodeInfo) error {
 		}
 		var err error
 		client := NewMoonClient(conn)
-		result, err := client.AddNodeToGroup(context.Background(), m.selfInfo)
+		result, err := client.AddNodeToGroup(context.Background(), m.SelfInfo)
 		if err != nil {
 			logger.Warningf("Request Join group err: %v", err.Error())
 			fail = err
@@ -191,11 +191,11 @@ func (m *Moon) Register(sunAddr string) (leaderInfo *node.NodeInfo, err error) {
 	}(conn)
 
 	c := sun.NewSunClient(conn)
-	result, err := c.MoonRegister(context.Background(), m.selfInfo)
+	result, err := c.MoonRegister(context.Background(), m.SelfInfo)
 	if err != nil {
 		return nil, err
 	}
-	m.selfInfo.RaftId = result.RaftId
+	m.SelfInfo.RaftId = result.RaftId
 
 	if result.HasLeader {
 		m.infoMap[result.GroupInfo.LeaderInfo.RaftId] = result.GroupInfo.LeaderInfo
@@ -220,7 +220,7 @@ func NewMoon(selfInfo *node.NodeInfo, config *Config, rpcServer *messenger.RpcSe
 	sunAddr := config.SunAddr
 	m := &Moon{
 		id:            0, // set raft id after register
-		selfInfo:      selfInfo,
+		SelfInfo:      selfInfo,
 		ctx:           ctx,
 		cancel:        cancel,
 		InfoStorage:   infoStorage,
@@ -380,9 +380,9 @@ func (m *Moon) Init() error {
 		}
 	}
 
-	m.id = m.selfInfo.RaftId
+	m.id = m.SelfInfo.RaftId
 	cfg := raft.Config{
-		ID:              m.selfInfo.RaftId,
+		ID:              m.SelfInfo.RaftId,
 		ElectionTick:    10,
 		HeartbeatTick:   1,
 		Storage:         m.raftStorage,
@@ -393,7 +393,7 @@ func (m *Moon) Init() error {
 
 	var peers []raft.Peer
 
-	m.infoMap[m.selfInfo.RaftId] = m.selfInfo
+	m.infoMap[m.SelfInfo.RaftId] = m.SelfInfo
 
 	for _, nodeInfo := range m.infoMap {
 		if nodeInfo.RaftId != m.id {
@@ -482,7 +482,7 @@ func (m *Moon) reportSelfInfo() {
 	logger.Infof("%v join group success, start report self info", m.id)
 	message := Message{
 		Action:    UpdateNodeInfo,
-		NodeInfo:  *m.selfInfo,
+		NodeInfo:  *m.SelfInfo,
 		Term:      m.InfoStorage.GetTermNow(),
 		TimeStamp: timestamp.Now(),
 	}

@@ -57,14 +57,14 @@ func action(c *cli.Context) error {
 	selfInfo := conf.SelfInfo
 	rpcServer := messenger.NewRpcServer(conf.RpcPort)
 	stableStorage := moon.NewStorage(path.Join(dbBasePath, "/raft/moon"))
-	Moon = moon.NewMoon(selfInfo, &conf.MoonConfig,
+	Moon = moon.NewMoon(selfInfo, conf.MoonConfig,
 		rpcServer, infoStorage, stableStorage)
 
 	//init Alaya
 	logger.Infof("Start init Alaya ...")
 	metaDBPath := path.Join(dbBasePath, "/meta")
 	metaStorage := alaya.NewStableMetaStorage(metaDBPath)
-	Alaya = alaya.NewAlaya(selfInfo, infoStorage, metaStorage, rpcServer)
+	Alaya = alaya.NewAlayaByMoon(Moon, metaStorage, rpcServer)
 
 	//init Gaia
 	logger.Infof("Start init Gaia ...")

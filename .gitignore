@@ -31,3 +31,5 @@ ecos-data/
 
 # config file in self machine
 conf/*.json
+
+/*.json

@@ -1,13 +1,18 @@
 {
   "SelfInfo": {
     "raft_id": 1,
-    "rpc_port": 3267
+    "rpc_port": 3267,
+    "capacity": 10
   },
   "RpcPort": 3267,
   "HttpPort": 3268,
-  "Moon": {
-    "SunAddr": "ecos-cloud-dev.ecos.svc.cluster.local:3267",
-    "GroupInfo": {}
+  "StoragePath": "/data/ecos",
+  "MoonConfig": {
+    "SunAddr": "ecos-cloud-dev:3267",
+    "GroupInfo": {},
+    "NodeInfoCommitInterval": 20000000000
   },
-  "StoragePath": "/data/ecos"
+  "GaiaConfig": {
+    "BasePath": "/data/ecos/gaia/"
+  }
 }

@@ -5,6 +5,7 @@ import (
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/utils/logger"
 	"sync"
 	"sync/atomic"
 )
@@ -62,6 +63,7 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*Registe
 	}
 
 	s.cachedInfo[nodeInfo.Uuid] = nodeInfo
+	logger.Infof("Register moon success, raftID: %v, leader: %v", raftID, result.GroupInfo.LeaderInfo.RaftId)
 	return &result, nil
 }
 
