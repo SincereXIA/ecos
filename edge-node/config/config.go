@@ -76,9 +76,10 @@ func InitConfig(conf *Config) error {
 	storagePath := conf.StoragePath
 	confPath := path.Join(storagePath + "/config/edge_node.json")
 	s, err := os.Stat(confPath)
+	var persistConf Config
 	if err == nil && !s.IsDir() && s.Size() > 0 {
-		config.Register(conf, confPath)
-		config.ReadAll()
+		config.Read(confPath, &persistConf)
+		conf.SelfInfo.Uuid = persistConf.SelfInfo.Uuid
 	}
 	// save persist config file in storage path
 	err = config.WriteToPath(conf, confPath)
