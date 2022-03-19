@@ -41,8 +41,9 @@ type Moon struct {
 	sunAddr  string
 	raftChan chan raftpb.Message
 
-	mutex  sync.Mutex
+	mutex  sync.RWMutex
 	config *Config
+	status Status
 }
 
 type ActionType int
@@ -61,8 +62,16 @@ const (
 	StorageApply
 )
 
+type Status int
+
+const (
+	StatusInit Status = iota
+	StatusRegistering
+	StatusOK
+)
+
 func (m *Moon) AddNodeToGroup(_ context.Context, info *node.NodeInfo) (*AddNodeReply, error) {
-	m.mutex.Lock()
+	m.mutex.Lock() // only one node can add to group at same time
 	defer m.mutex.Unlock()
 	reply := AddNodeReply{
 		Result: &common.Result{
@@ -230,9 +239,10 @@ func NewMoon(selfInfo *node.NodeInfo, config *Config, rpcServer *messenger.RpcSe
 		ticker:        time.NewTicker(time.Millisecond * 100).C,
 		raftChan:      raftChan,
 		sunAddr:       sunAddr,
-		mutex:         sync.Mutex{},
+		mutex:         sync.RWMutex{},
 		infoMap:       make(map[uint64]*node.NodeInfo),
 		config:        config,
+		status:        StatusInit,
 	}
 	leaderInfo := config.GroupInfo.LeaderInfo
 	if leaderInfo != nil {
@@ -364,6 +374,9 @@ func (m *Moon) process(entry raftpb.Entry) {
 }
 
 func (m *Moon) Init() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.status = StatusRegistering
 	var err error
 	var leaderInfo *node.NodeInfo
 	if m.leaderID != 0 {
@@ -462,7 +475,6 @@ func (m *Moon) Run() {
 			}
 			m.raft.Advance()
 		case message := <-m.raftChan:
-			//logger.Infof("%d got message from %v to %v, type %v", m.id, message.From, message.To, message.Type)
 			_ = m.raft.Step(m.ctx, message)
 		}
 	}
@@ -491,4 +503,14 @@ func (m *Moon) reportSelfInfo() {
 	if err != nil {
 		logger.Errorf("report self info err: %v", err.Error())
 	}
+	m.status = StatusOK
+}
+
+func (m *Moon) GetLeaderID() uint64 {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	if m.raft == nil {
+		return 0
+	}
+	return m.raft.Status().ID
 }
