@@ -64,7 +64,7 @@ func action(c *cli.Context) error {
 	logger.Infof("Start init Alaya ...")
 	metaDBPath := path.Join(dbBasePath, "/meta")
 	metaStorage := alaya.NewStableMetaStorage(metaDBPath)
-	Alaya = alaya.NewAlaya(selfInfo, infoStorage, metaStorage, rpcServer)
+	Alaya = alaya.NewAlayaByMoon(Moon, metaStorage, rpcServer)
 
 	//init Gaia
 	logger.Infof("Start init Gaia ...")

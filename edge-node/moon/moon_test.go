@@ -26,7 +26,7 @@ func TestRaft(t *testing.T) {
 	var nodeInfos []*node.NodeInfo
 	for i := 0; i < 3; i++ {
 		index := i
-		nodeInfos = append(nodeInfos, moons[i].selfInfo)
+		nodeInfos = append(nodeInfos, moons[i].SelfInfo)
 		go func() {
 			err := rpcServers[index].Run()
 			if err != nil {
@@ -61,7 +61,7 @@ func TestRaft(t *testing.T) {
 	moonConfig := DefaultConfig
 	moonConfig.GroupInfo = node.GroupInfo{
 		GroupTerm:       &node.Term{Term: 0},
-		LeaderInfo:      moons[leader].selfInfo,
+		LeaderInfo:      moons[leader].SelfInfo,
 		NodesInfo:       nodeInfos,
 		UpdateTimestamp: nil,
 	}
