@@ -24,7 +24,7 @@ before_script:
 build-job:       # This job runs in the build stage, which runs first.
   stage: build
   before_script:
-    - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct
+    - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct GOCACHE=$(pwd)/.go_cache/
   script:
     - echo "Compiling the code..."
     - export CGO_CFLAGS="-I/usr/local/lib"
@@ -43,12 +43,13 @@ build-job:       # This job runs in the build stage, which runs first.
     key: ecos_go_env
     paths:
       - .mod_cache/
+      - .go_cache/
 
 unit-test-job:   # This job runs in the test stage.
   stage: test
   needs: []
   script:
-    - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct
+    - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct GOCACHE=$(pwd)/.go_cache/
     - echo "Running unit tests... This will take about 60 seconds."
     - go mod tidy
     - go test ./... -coverprofile=cover.out -parallel 1 -p 1
@@ -65,6 +66,7 @@ unit-test-job:   # This job runs in the test stage.
     key: ecos_go_env
     paths:
       - .mod_cache/
+      - .go_cache/
 
 sonarqube-check:
   stage: test
