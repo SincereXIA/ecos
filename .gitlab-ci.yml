@@ -88,8 +88,7 @@ sonarqube-check:
 
 ecos-docker-build:
   stage: docker-build
-  when: manual
-  needs: []
+  needs: [build-job, unit-test-job]
   image: docker:19.03.0
   services:
     - docker:19.03.0-dind
