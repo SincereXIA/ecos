@@ -196,12 +196,14 @@ func (a *Alaya) Run() {
 	a.state = RUNNING
 	a.mutex.Unlock()
 
-	select {
-	case pgID := <-a.raftNodeStopChan:
-		a.PGMessageChans.Delete(pgID)
-		a.PGRaftNode.Delete(pgID)
-	case <-a.ctx.Done():
-		return
+	for {
+		select {
+		case pgID := <-a.raftNodeStopChan:
+			a.PGMessageChans.Delete(pgID)
+			a.PGRaftNode.Delete(pgID)
+		case <-a.ctx.Done():
+			return
+		}
 	}
 }
 
@@ -209,7 +211,7 @@ func (a *Alaya) printPipelineInfo() {
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
-		logger.Infof("Alaya: %v, PG: %v, leader: %v", a.SelfInfo.RaftId, pgID, raftNode.raft.Status().Lead)
+		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v", a.SelfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
 		return true
 	})
 }

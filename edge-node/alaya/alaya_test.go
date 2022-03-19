@@ -75,7 +75,7 @@ func TestNewAlaya(t *testing.T) {
 		a := alayas[i]
 		go a.Run()
 	}
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 8)
 	assertAlayasOK(t, alayas, pipelines)
 
 	for i := 0; i < 9; i++ { // for each node
@@ -159,7 +159,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		go infoStorages[i].Apply()
 	}
 
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 15)
 
 	for i := 0; i < 6; i++ { // for each node
 		a := alayas[i]

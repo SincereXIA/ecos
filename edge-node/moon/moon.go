@@ -236,7 +236,7 @@ func NewMoon(selfInfo *node.NodeInfo, config *Config, rpcServer *messenger.RpcSe
 		raftStorage:   storage,
 		stableStorage: stableStorage,
 		cfg:           nil, // set raft cfg after register
-		ticker:        time.NewTicker(time.Millisecond * 100).C,
+		ticker:        time.NewTicker(time.Millisecond * 300).C,
 		raftChan:      raftChan,
 		sunAddr:       sunAddr,
 		mutex:         sync.RWMutex{},
