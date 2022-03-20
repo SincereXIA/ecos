@@ -82,6 +82,7 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 			return err
 		}
 		*transporter = *t
+		logger.Infof("Gaia start receive block: %v", msg.Block.BlockId)
 	case ControlMessage_EOF:
 		// 确认转发成功，关闭连接
 		err := transporter.Close()
@@ -91,6 +92,7 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 				Message: err.Error(),
 			})
 		}
+		logger.Infof("Gaia save block: %v success", msg.Block.BlockId)
 		return stream.SendAndClose(&common.Result{
 			Status: common.Result_OK,
 		})
