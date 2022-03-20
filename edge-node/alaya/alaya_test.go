@@ -70,6 +70,19 @@ func TestNewAlaya(t *testing.T) {
 		server := rpcServers[i]
 		go server.Run()
 	}
+
+	t.Cleanup(func() {
+		for i := 0; i < 9; i++ { // for each node
+			alaya := alayas[i]
+			alaya.Stop()
+			server := rpcServers[i]
+			server.Stop()
+		}
+
+		_ = os.RemoveAll("./testMetaStorage")
+		_ = os.RemoveAll("./NodeInfoStorage")
+	})
+
 	t.Log("Alayas init done, start run")
 	for i := 0; i < 9; i++ {
 		a := alayas[i]
@@ -107,15 +120,6 @@ func TestNewAlaya(t *testing.T) {
 
 	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
 
-	for i := 0; i < 9; i++ { // for each node
-		alaya := alayas[i]
-		alaya.Stop()
-		server := rpcServers[i]
-		server.Stop()
-	}
-
-	_ = os.RemoveAll("./testMetaStorage")
-	_ = os.RemoveAll("./NodeInfoStorage")
 }
 
 func TestAlaya_UpdatePipeline(t *testing.T) {
@@ -153,6 +157,16 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		}(rpcServers[i])
 		go alayas[i].Run()
 	}
+
+	t.Cleanup(func() {
+		for i := 0; i < 9; i++ { // for each node
+			server := rpcServers[i]
+			server.Stop()
+			alaya := alayas[i]
+			alaya.Stop()
+		}
+	})
+
 	time.Sleep(time.Second * 1)
 	for i := 0; i < 6; i++ {
 		t.Logf("Apply new groupInfo for: %v", i+1)
@@ -208,15 +222,6 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 	pipelines := pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3)
 	for _, p := range pipelines {
 		t.Logf("PG: %v, id: %v, %v, %v", p.PgId, p.RaftId[0], p.RaftId[1], p.RaftId[2])
-	}
-
-	// TODO: 某些 pipeline 节点数目不为三，需要进一步修正
-
-	for i := 0; i < 9; i++ { // for each node
-		server := rpcServers[i]
-		server.Stop()
-		alaya := alayas[i]
-		alaya.Stop()
 	}
 }
 

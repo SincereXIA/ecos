@@ -34,6 +34,13 @@ func TestRaft(t *testing.T) {
 		}()
 		go moons[i].Run()
 	}
+	t.Cleanup(func() {
+		for i := 0; i < 4; i++ {
+			rpcServers[i].Stop()
+			moons[i].Stop()
+		}
+		_ = os.RemoveAll(basePath)
+	})
 
 	// 等待选主
 	leader := -1
@@ -98,12 +105,6 @@ func TestRaft(t *testing.T) {
 	}
 	t.Log("Reach agreement success")
 
-	for i := 0; i < 4; i++ {
-		rpcServers[i].Stop()
-		moons[i].Stop()
-	}
-
-	_ = os.RemoveAll(basePath)
 }
 
 func assertInfoStorageOK(t *testing.T, nodeNum int, moons ...*Moon) {
@@ -150,7 +151,13 @@ func TestMoon_Register(t *testing.T) {
 		go moons[i].Run()
 	}
 
-	//time.Sleep(5 * time.Second)
+	t.Cleanup(func() {
+		sunRpc.Stop()
+		for i := 0; i < moonNum; i++ {
+			rpcServers[i].Stop()
+			moons[i].Stop()
+		}
+	})
 
 	leader := -1
 	for {
@@ -171,10 +178,6 @@ func TestMoon_Register(t *testing.T) {
 	}
 	time.Sleep(2 * time.Second)
 	assertInfoStorageOK(t, moonNum, moons...)
-	for i := 0; i < moonNum; i++ {
-		rpcServers[i].Stop()
-		moons[i].Stop()
-	}
 }
 
 func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenger.RpcServer, error) {

@@ -54,7 +54,7 @@ unit-test-job:   # This job runs in the test stage.
     - golangci-lint --version
     - golangci-lint run --out-format checkstyle ./... > report.xml & # run in background
     - go mod tidy
-    - go test ./... -coverprofile=cover.out -race  # enable race test default
+    - go test ./...  -parallel 1 -p 1  -coverprofile=cover.out -race  # enable race test default
     - ls
   artifacts:
     paths:

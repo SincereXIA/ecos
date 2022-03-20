@@ -82,6 +82,14 @@ func TestEcosWriter(t *testing.T) {
 		go alayas[i].Run()
 	}
 
+	t.Cleanup(func() {
+		for i := 0; i < 9; i++ {
+			moons[i].Stop()
+			alayas[i].Stop()
+			rpcServers[i].Stop()
+		}
+	})
+
 	time.Sleep(15 * time.Second) // ensure rpcServer running
 
 	for _, tt := range tests {
@@ -99,12 +107,6 @@ func TestEcosWriter(t *testing.T) {
 				return
 			}
 		})
-	}
-
-	for i := 0; i < 9; i++ {
-		moons[i].Stop()
-		alayas[i].Stop()
-		rpcServers[i].Stop()
 	}
 }
 
