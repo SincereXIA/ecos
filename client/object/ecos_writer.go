@@ -242,6 +242,7 @@ func NewEcosWriterFactory(config *config.ClientConfig) *EcosWriterFactory {
 	moonClient := moon.NewMoonClient(conn)
 	groupInfo, err := moonClient.GetGroupInfo(context.Background(), &node.Term{Term: 0})
 	if err != nil {
+		logger.Errorf("get group info fail: %v", err)
 		return nil
 	}
 	// TODO: Retry?
