@@ -82,15 +82,21 @@ func TestEcosWriter(t *testing.T) {
 		go alayas[i].Run()
 	}
 
-	time.Sleep(10 * time.Second) // ensure rpcServer running
+	t.Cleanup(func() {
+		for i := 0; i < 9; i++ {
+			moons[i].Stop()
+			alayas[i].Stop()
+			rpcServers[i].Stop()
+		}
+	})
+
+	time.Sleep(15 * time.Second) // ensure rpcServer running
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			factory := NewEcosWriterFactory(config.DefaultConfig, tt.args.nodeAddr, tt.args.port)
 			writer := factory.GetEcosWriter(tt.args.key)
-			var data = make([]byte, tt.args.objectSize)
-			rand.Read(data)
-			assert.NoError(t, err)
+			data := genTestData(tt.args.objectSize)
 			writeSize, err := writer.Write(data)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.args.objectSize, writeSize)
@@ -100,15 +106,25 @@ func TestEcosWriter(t *testing.T) {
 				t.Errorf("PutObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			time.Sleep(1 * time.Second)
 		})
 	}
+}
 
-	for i := 0; i < 9; i++ {
-		moons[i].Stop()
-		alayas[i].Stop()
-		rpcServers[i].Stop()
+func genTestData(size int) []byte {
+	directSize := 1024 * 1024 * 10
+	if size < directSize {
+		data := make([]byte, size)
+		rand.Read(data)
+		return data
 	}
+	d := make([]byte, directSize)
+	data := make([]byte, 0, size)
+	for size-directSize > 0 {
+		data = append(data, d...)
+		size = size - directSize
+	}
+	data = append(data, d[0:size]...)
+	return data
 }
 
 func TestPortClose(t *testing.T) {

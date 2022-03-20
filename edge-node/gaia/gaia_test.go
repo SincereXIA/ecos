@@ -51,6 +51,16 @@ func TestNewGaia(t *testing.T) {
 		}(rpcServers[i])
 	}
 
+	t.Cleanup(func() {
+		for _, server := range rpcServers {
+			server.Stop()
+		}
+
+		for _, p := range basePaths {
+			_ = os.RemoveAll(p)
+		}
+	})
+
 	time.Sleep(time.Second)
 
 	pipelines := pipeline.GenPipelines(storage.GetGroupInfo(0), 10, 3)
@@ -64,10 +74,6 @@ func TestNewGaia(t *testing.T) {
 		}(p)
 	}
 	wait.Wait()
-
-	for _, p := range basePaths {
-		_ = os.RemoveAll(p)
-	}
 }
 
 func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, storage node.InfoStorage, basePaths []string) {

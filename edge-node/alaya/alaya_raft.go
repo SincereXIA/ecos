@@ -8,11 +8,13 @@ import (
 	"ecos/utils/logger"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/gogo/protobuf/proto"
+	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -32,6 +34,10 @@ type Raft struct {
 	metaStorage MetaStorage
 
 	pipeline *pipeline.Pipeline
+	// rwMutex protect pipeline
+	rwMutex sync.RWMutex
+
+	confChangeChan chan raftpb.ConfChange
 }
 
 func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
@@ -40,7 +46,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 
 	ctx, cancel := context.WithCancel(context.Background())
 	raftStorage := raft.NewMemoryStorage()
-	ticker := time.NewTicker(time.Millisecond * 100)
+	ticker := time.NewTicker(time.Millisecond * 300)
 
 	r := &Raft{
 		pgID:        nowPipe.PgId,
@@ -53,15 +59,16 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 			ElectionTick:    10,
 			HeartbeatTick:   1,
 			Storage:         raftStorage,
-			MaxSizePerMsg:   4096,
+			MaxSizePerMsg:   1024 * 1024,
 			MaxInflightMsgs: 256,
 		},
 		ticker:      ticker.C,
 		raftChan:    raftChan,
 		metaStorage: metaStorage,
 
-		pipeline: nowPipe,
-		stopChan: stopChan,
+		pipeline:       nowPipe,
+		stopChan:       stopChan,
+		confChangeChan: make(chan raftpb.ConfChange, 100), // TODO: not ok
 	}
 
 	var peers []raft.Peer
@@ -111,21 +118,45 @@ func (r *Raft) Run() {
 }
 
 func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
+	if len(change.Context) > 0 {
+		if r.raft.Status().Lead == r.raft.Status().ID {
+			// this message sent by propose new pipeline
+			r.confChangeChan <- *change
+		} else {
+			var p pipeline.Pipeline
+			err := p.Unmarshal(change.Context)
+			if err != nil {
+				logger.Errorf("get pipeline from conf change fail")
+			}
+			r.setPipeline(&p)
+		}
+	}
 	if change.NodeID != r.raftCfg.ID {
 		return
 	}
 	if change.Type == raftpb.ConfChangeRemoveNode {
-		r.Stop()
+		go func() {
+			time.Sleep(1 * time.Second)
+			r.Stop()
+		}()
 	}
 }
 
 func (r *Raft) ProposeNewPipeline(newP *pipeline.Pipeline, oldP *pipeline.Pipeline) {
-	r.pipeline = newP
+	r.setPipeline(newP)
+	// clear confChangeChan, to wait conf change propose
+	select {
+	case <-r.confChangeChan:
+	default:
+	}
 	go func() {
 		needAdd, needRemove := calDiff(newP.RaftId, oldP.RaftId)
 		err := r.ProposeNewNodes(needAdd)
 		if err != nil {
 			logger.Errorf("Alaya propose new nodes in PG: %v fail, err: %v", r.pgID, err)
+		}
+		if r.raft.Status().ID != r.getPipeline().RaftId[0] {
+			return
 		}
 		err = r.ProposeRemoveNodes(needRemove)
 		if err != nil {
@@ -139,13 +170,14 @@ func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 		return nil
 	}
 	for _, id := range NodeIDs {
-		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raftCfg.ID, id, NodeIDs)
+		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raftCfg.ID, r.pgID, id)
+		data, _ := r.getPipeline().Marshal()
 		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeAddNode,
 			NodeID:  id,
-			Context: nil,
+			Context: data,
 		})
-		time.Sleep(time.Millisecond * 200)
+		<-r.confChangeChan
 	}
 	return nil
 }
@@ -159,9 +191,9 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 	if len(NodeIDs) == 0 {
 		return nil
 	}
-	time.Sleep(time.Second * 3)
 	// TODO: do it by new leader
 	removeSelf := false
+	data, _ := r.getPipeline().Marshal()
 	for _, id := range NodeIDs {
 		if id == r.raft.Status().ID {
 			removeSelf = true
@@ -171,17 +203,18 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeRemoveNode,
 			NodeID:  id,
-			Context: nil,
+			Context: data,
 		})
-		time.Sleep(time.Millisecond * 200)
+		<-r.confChangeChan
 	}
 	if removeSelf {
 		logger.Infof("raft: %v PG: %v propose conf change remove self", r.raftCfg.ID, r.pgID)
 		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeRemoveNode,
 			NodeID:  r.raft.Status().ID,
-			Context: nil,
+			Context: data,
 		})
+		<-r.confChangeChan
 	}
 	return nil
 }
@@ -190,6 +223,7 @@ func (r *Raft) Stop() {
 	logger.Infof("=========STOP: node: %v, PG: %v ===========", r.raft.Status().ID, r.pgID)
 	r.cancel()
 	r.stopChan <- r.pgID
+	logger.Infof("=========STOP: node: %v, PG: %v done ===========", r.raft.Status().ID, r.pgID)
 }
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
@@ -214,7 +248,7 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 			}
 		}(conn)
 		c := NewAlayaClient(conn)
-		_, err = c.SendRaftMessage(context.TODO(), &PGRaftMessage{ // 这里不用当前 ctx 发送，否则当节点停止之后，最后的确认信息无法发送
+		_, err = c.SendRaftMessage(r.ctx, &PGRaftMessage{
 			PgId:    r.pgID,
 			Message: &message,
 		})
@@ -257,7 +291,7 @@ func (r *Raft) RunAskForLeader() {
 		}
 		time.Sleep(1 * time.Second)
 		if r.raft == nil || r.raft.Status().Lead == uint64(0) || r.raft.Status().Lead == r.raftCfg.ID ||
-			r.raftCfg.ID != r.pipeline.RaftId[0] {
+			r.raftCfg.ID != r.getPipeline().RaftId[0] || !r.pipelineReady() {
 			continue
 		} else {
 			logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
@@ -269,9 +303,52 @@ func (r *Raft) RunAskForLeader() {
 				},
 			}
 			r.sendMsgByRpc(msg)
+			time.Sleep(time.Second) //TODO (zhang): wait real
+			needRemove, _ := calDiff(r.GetVotersID(), r.pipeline.RaftId)
+			if len(needRemove) > 0 {
+				logger.Infof("raft: %v, PG: %v Start remove nodes: %v", r.raft.Status().ID, r.pgID, needRemove)
+				err := r.ProposeRemoveNodes(needRemove)
+				if err != nil {
+					logger.Errorf("Alaya propose remove nodes in PG: %v fail, err: %v", r.pgID, err)
+				}
+			}
 		}
 	}
 }
+
+func (r *Raft) GetVotersID() (rs []uint64) {
+	for id := range r.raft.Status().Config.Voters.IDs() {
+		rs = append(rs, id)
+	}
+	return rs
+}
+
+func (r *Raft) pipelineReady() bool {
+	r.rwMutex.RLock()
+	defer r.rwMutex.RUnlock()
+	voters := r.GetVotersID()
+	for _, id := range r.pipeline.RaftId {
+		if -1 == arrays.Contains(voters, id) {
+			logger.Infof("not ready, not have: %v", id)
+			return false
+		}
+	}
+	return true
+}
+
+func (r *Raft) getPipeline() *pipeline.Pipeline {
+	r.rwMutex.RLock()
+	defer r.rwMutex.RUnlock()
+	p := &r.pipeline
+	return *p
+}
+
+func (r *Raft) setPipeline(p *pipeline.Pipeline) {
+	r.rwMutex.Lock()
+	defer r.rwMutex.Unlock()
+	r.pipeline = p
+}
+
 func calDiff(a []uint64, b []uint64) (da []uint64, db []uint64) {
 	setA := mapset.NewSet()
 	for _, n := range a {

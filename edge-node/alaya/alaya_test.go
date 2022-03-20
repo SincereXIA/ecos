@@ -70,12 +70,25 @@ func TestNewAlaya(t *testing.T) {
 		server := rpcServers[i]
 		go server.Run()
 	}
+
+	t.Cleanup(func() {
+		for i := 0; i < 9; i++ { // for each node
+			alaya := alayas[i]
+			alaya.Stop()
+			server := rpcServers[i]
+			server.Stop()
+		}
+
+		_ = os.RemoveAll("./testMetaStorage")
+		_ = os.RemoveAll("./NodeInfoStorage")
+	})
+
 	t.Log("Alayas init done, start run")
 	for i := 0; i < 9; i++ {
 		a := alayas[i]
 		go a.Run()
 	}
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 8)
 	assertAlayasOK(t, alayas, pipelines)
 
 	for i := 0; i < 9; i++ { // for each node
@@ -107,15 +120,6 @@ func TestNewAlaya(t *testing.T) {
 
 	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
 
-	for i := 0; i < 9; i++ { // for each node
-		alaya := alayas[i]
-		alaya.Stop()
-		server := rpcServers[i]
-		server.Stop()
-	}
-
-	_ = os.RemoveAll("./testMetaStorage")
-	_ = os.RemoveAll("./NodeInfoStorage")
 }
 
 func TestAlaya_UpdatePipeline(t *testing.T) {
@@ -153,13 +157,23 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		}(rpcServers[i])
 		go alayas[i].Run()
 	}
+
+	t.Cleanup(func() {
+		for i := 0; i < 9; i++ { // for each node
+			server := rpcServers[i]
+			server.Stop()
+			alaya := alayas[i]
+			alaya.Stop()
+		}
+	})
+
 	time.Sleep(time.Second * 1)
 	for i := 0; i < 6; i++ {
 		t.Logf("Apply new groupInfo for: %v", i+1)
 		go infoStorages[i].Apply()
 	}
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 15)
 
 	for i := 0; i < 6; i++ { // for each node
 		a := alayas[i]
@@ -198,7 +212,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		t.Logf("Apply new groupInfo for: %v", i+1)
 		go infoStorages[i].Apply()
 	}
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 15)
 	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]
@@ -209,15 +223,6 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 	for _, p := range pipelines {
 		t.Logf("PG: %v, id: %v, %v, %v", p.PgId, p.RaftId[0], p.RaftId[1], p.RaftId[2])
 	}
-
-	// TODO: 某些 pipeline 节点数目不为三，需要进一步修正
-
-	for i := 0; i < 9; i++ { // for each node
-		server := rpcServers[i]
-		server.Stop()
-		alaya := alayas[i]
-		alaya.Stop()
-	}
 }
 
 func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipeline) {
@@ -226,13 +231,15 @@ func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipelin
 		leaderID := p.RaftId[0]
 		pgID := p.PgId
 		a := alayas[leaderID-1]
-		assert.Equal(t, leaderID, a.PGRaftNode[pgID].raft.Status().Lead)
+		assert.Equal(t, leaderID, a.getRaftNode(pgID).raft.Status().Lead)
 	}
 	// 判断 每个 alaya 的每个 raft node 是否都成功加入 PG
 	for _, a := range alayas {
-		for _, r := range a.PGRaftNode {
-			assert.NotZero(t, r.raft.Status().Lead)
-		}
+		a.PGRaftNode.Range(func(key, value interface{}) bool {
+			raftNode := value.(*Raft)
+			assert.NotZero(t, raftNode.raft.Status().Lead)
+			return true
+		})
 	}
 }
 

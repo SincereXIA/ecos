@@ -8,7 +8,6 @@ import (
 	"ecos/utils/timestamp"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
-	"go.etcd.io/etcd/raft/v3"
 	"google.golang.org/protobuf/testing/protocmp"
 	"os"
 	"path"
@@ -35,19 +34,29 @@ func TestRaft(t *testing.T) {
 		}()
 		go moons[i].Run()
 	}
+	t.Cleanup(func() {
+		for i := 0; i < 4; i++ {
+			rpcServers[i].Stop()
+			moons[i].Stop()
+		}
+		_ = os.RemoveAll(basePath)
+	})
 
 	// 等待选主
 	leader := -1
 	for {
+		ok := true
 		for i := 0; i < 3; i++ {
-			if moons[i].raft != nil && raft.StateLeader == moons[i].raft.Status().RaftState {
-				leader = i
-				break
+			if moons[i].GetLeaderID() == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != 3 {
+				ok = false
 			}
-			time.Sleep(100 * time.Millisecond)
+			leader = int(moons[i].GetLeaderID())
 		}
-		if leader >= 0 {
-			t.Logf("leader: %v", leader+1)
+		if !ok {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		} else {
+			t.Logf("leader: %v", leader)
 			break
 		}
 	}
@@ -61,7 +70,7 @@ func TestRaft(t *testing.T) {
 	moonConfig := DefaultConfig
 	moonConfig.GroupInfo = node.GroupInfo{
 		GroupTerm:       &node.Term{Term: 0},
-		LeaderInfo:      moons[leader].SelfInfo,
+		LeaderInfo:      moons[leader-1].SelfInfo,
 		NodesInfo:       nodeInfos,
 		UpdateTimestamp: nil,
 	}
@@ -96,12 +105,6 @@ func TestRaft(t *testing.T) {
 	}
 	t.Log("Reach agreement success")
 
-	for i := 0; i < 4; i++ {
-		rpcServers[i].Stop()
-		moons[i].Stop()
-	}
-
-	_ = os.RemoveAll(basePath)
 }
 
 func assertInfoStorageOK(t *testing.T, nodeNum int, moons ...*Moon) {
@@ -110,7 +113,7 @@ func assertInfoStorageOK(t *testing.T, nodeNum int, moons ...*Moon) {
 		storage := moon.InfoStorage
 		groupInfo := storage.GetGroupInfo(0)
 		if diff := cmp.Diff(firstGroupInfo, groupInfo, protocmp.Transform()); diff != "" {
-			t.Errorf("Group info not equal")
+			t.Errorf("Group info not equal, diff: %v", diff)
 		}
 		assert.Equal(t, nodeNum, len(groupInfo.NodesInfo),
 			"node num in group info should same as real node num")
@@ -140,7 +143,7 @@ func TestMoon_Register(t *testing.T) {
 
 	for i := 0; i < moonNum; i++ {
 		go func(server *messenger.RpcServer) {
-			err = server.Run()
+			err := server.Run()
 			if err != nil {
 				t.Errorf("Run rpcServer err: %v", err)
 			}
@@ -148,20 +151,22 @@ func TestMoon_Register(t *testing.T) {
 		go moons[i].Run()
 	}
 
-	//time.Sleep(5 * time.Second)
+	t.Cleanup(func() {
+		sunRpc.Stop()
+		for i := 0; i < moonNum; i++ {
+			rpcServers[i].Stop()
+			moons[i].Stop()
+		}
+	})
 
 	leader := -1
 	for {
 		ok := true
 		for i := 0; i < moonNum; i++ {
-			if moons[i].raft == nil {
-				ok = false
-				break
-			}
-			if moons[i].raft.Status().Lead == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != moonNum {
+			if moons[i].GetLeaderID() == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != moonNum {
 				ok = false
 			}
-			leader = int(moons[i].raft.Status().Lead)
+			leader = int(moons[i].GetLeaderID())
 		}
 		if !ok {
 			time.Sleep(100 * time.Millisecond)
@@ -173,10 +178,6 @@ func TestMoon_Register(t *testing.T) {
 	}
 	time.Sleep(2 * time.Second)
 	assertInfoStorageOK(t, moonNum, moons...)
-	for i := 0; i < moonNum; i++ {
-		rpcServers[i].Stop()
-		moons[i].Stop()
-	}
 }
 
 func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenger.RpcServer, error) {
