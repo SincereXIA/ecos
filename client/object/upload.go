@@ -57,7 +57,7 @@ func (c *UploadClient) GetUploadResult() (*common.Result, error) {
 		logger.Errorf("Unable to get result form server: %v", err)
 		return nil, err
 	} else {
-		logger.Infof("Result: %v", result)
+		logger.Infof("Block upload success")
 	}
 	return result, err
 }

@@ -189,7 +189,7 @@ func (w *EcosWriter) commitMeta() error {
 		logger.Errorf("Upload Object Failed: %v with Error %v", result, err)
 		return err
 	}
-	logger.Infof("Upload ObjectMeta for %v: %v", w.key, result)
+	logger.Infof("Upload ObjectMeta for %v: success", w.key)
 	return nil
 }
 
@@ -219,6 +219,7 @@ func (w *EcosWriter) Close() error {
 }
 
 func (w *EcosWriter) checkObjNodeByPg() *node.NodeInfo {
+	logger.Infof("META PG: %v, NODE: %v", w.meta.PgId, w.objPipes[w.meta.PgId-1].RaftId)
 	return clientNode.InfoStorage.GetNodeInfo(0, w.objPipes[w.meta.PgId-1].RaftId[0])
 }
 
@@ -233,8 +234,8 @@ type EcosWriterFactory struct {
 // NewEcosWriterFactory Constructor for EcosWriterFactory
 //
 // nodeAddr shall provide the address to get GroupInfo from
-func NewEcosWriterFactory(config *config.ClientConfig, nodeAddr string, port int) *EcosWriterFactory {
-	conn, err := messenger.GetRpcConn(nodeAddr, uint64(port))
+func NewEcosWriterFactory(config *config.ClientConfig) *EcosWriterFactory {
+	conn, err := messenger.GetRpcConn(config.NodeAddr, config.NodePort)
 	if err != nil {
 		return nil
 	}

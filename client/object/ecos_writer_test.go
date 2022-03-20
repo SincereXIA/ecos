@@ -94,7 +94,10 @@ func TestEcosWriter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			factory := NewEcosWriterFactory(config.DefaultConfig, tt.args.nodeAddr, tt.args.port)
+			conf := config.DefaultConfig
+			conf.NodeAddr = tt.args.nodeAddr
+			conf.NodePort = uint64(tt.args.port)
+			factory := NewEcosWriterFactory(conf)
 			writer := factory.GetEcosWriter(tt.args.key)
 			data := genTestData(tt.args.objectSize)
 			writeSize, err := writer.Write(data)
