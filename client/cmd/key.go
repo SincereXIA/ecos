@@ -12,18 +12,13 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var keyCmd = &cobra.Command{
-	Use:   "key",
-	Short: "put a local file as an object in ecos, remote key: ecos_key, local file path: local_path",
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("key cmd")
-	},
+	Use:   "key {put}",
+	Short: "operate object in ecos by key",
 }
 
 var keyPutCmd = &cobra.Command{
-	Use: "put ecos_key local_path",
+	Use:   "put ecos_key local_path",
+	Short: "put a local file as an object in ecos, remote key: ecos_key, local file path: local_path",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("key put cmd")
 		KeyPut(args[0], args[1])
