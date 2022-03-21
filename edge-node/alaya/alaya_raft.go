@@ -265,7 +265,7 @@ func (r *Raft) process(entry raftpb.Entry) {
 		if err != nil {
 			logger.Warningf("alaya raft process object meta in entry err: %v", err)
 		}
-		logger.Tracef("node %v, PG: %v, New object meta: %v", r.raftCfg.ID, r.pgID, meta.ObjId)
+		logger.Infof("node %v, PG: %v, New object meta: %v", r.raftCfg.ID, r.pgID, meta.ObjId)
 		err = r.metaStorage.RecordMeta(&meta)
 		if err != nil {
 			logger.Warningf("alaya record object meta err: %v", err)

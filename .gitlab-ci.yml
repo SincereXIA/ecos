@@ -30,7 +30,8 @@ build-job:       # This job runs in the build stage, which runs first.
     - export CGO_CFLAGS="-I/usr/local/lib"
     - export CGO_LDFLAGS="-L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd"
     - go mod tidy
-    - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos
+    - go build -o build/bin/ecos
+    - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-client ecos/client
     - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-cloud ecos/cloud
     - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-edge-node ecos/edge-node
     - echo "Compile complete."
@@ -105,6 +106,12 @@ ecos-docker-build:
     - mv ./conf ./Dockerfile
     - cd Dockerfile
     - ls ./build/bin
+    - echo "build ecos-client docker image"
+    - export APP_NAME=ecos-client
+    - docker build -f ecos-client-ci -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
+    - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
+    - docker tag $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
+    - docker push $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
     - echo "build ecos-cloud docker image"
     - export APP_NAME=ecos-cloud
     - docker build -f ecos-cloud-ci -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
@@ -133,6 +140,8 @@ deploy-job:      # This job runs in the deploy stage.
     - cd deploy/dev-ol
     - kubectl delete -f ecos-cloud.yaml || true
     - kubectl apply -f ecos-cloud.yaml
+    - kubectl delete -f ecos-client.yaml || true
+    - kubectl apply -f ecos-client.yaml
     - sleep 10
     - kubectl delete -f ecos-edge.yaml || true
     - kubectl apply -f ecos-edge.yaml

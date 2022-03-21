@@ -26,6 +26,8 @@ type ClientConfig struct {
 	Object        ObjectConfig
 	UploadTimeout time.Duration
 	UploadBuffer  uint64
+	NodeAddr      string
+	NodePort      uint64
 }
 
 var DefaultConfig *ClientConfig
@@ -43,6 +45,8 @@ func init() {
 			},
 			UploadTimeout: uploadTimeout,
 			UploadBuffer:  uploadBuffer,
+			NodeAddr:      "ecos-edge-dev",
+			NodePort:      3267,
 		}
 	}
 	if Config == nil {

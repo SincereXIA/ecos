@@ -70,7 +70,11 @@ func (transporter *PrimaryCopyTransporter) Write(chunk []byte) (n int, err error
 
 func (transporter *PrimaryCopyTransporter) Close() error {
 	file := transporter.localWriter.(*os.File)
-	err := file.Close()
+	err := file.Sync()
+	if err != nil {
+		return err
+	}
+	err = file.Close()
 	if err != nil {
 		return err
 	}
