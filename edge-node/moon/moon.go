@@ -137,8 +137,8 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 	return &raftpb.Message{}, nil
 }
 
-func (m *Moon) GetGroupInfo(_ context.Context, term *node.Term) (*node.GroupInfo, error) {
-	return m.InfoStorage.GetGroupInfo(term.Term), nil
+func (m *Moon) GetGroupInfo(_ context.Context, getGroupReq *GetGroupInfoRequest) (*node.GroupInfo, error) {
+	return m.InfoStorage.GetGroupInfo(getGroupReq.Term), nil
 }
 
 func (m *Moon) RequestJoinGroup(leaderInfo *node.NodeInfo) error {
@@ -279,7 +279,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 
 		conn, err := messenger.GetRpcConnByInfo(nodeInfo)
 		if err != nil {
-			logger.Errorf("faild to connect: %v", err)
+			logger.Errorf("failed to connect: %v", err)
 			return
 		}
 		c := NewMoonClient(conn)

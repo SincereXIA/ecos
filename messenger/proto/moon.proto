@@ -11,10 +11,14 @@ option go_package = "ecos/edge-node/moon";
 service Moon {
   rpc SendRaftMessage (raftpb.Message) returns (raftpb.Message) {}
   rpc AddNodeToGroup (NodeInfo) returns (AddNodeReply) {}
-  rpc GetGroupInfo(Term) returns (GroupInfo) {};
+  rpc GetGroupInfo(GetGroupInfoRequest) returns (GroupInfo) {};
 }
 
 message AddNodeReply {
   Result result = 1;
   NodeInfo leaderInfo = 2;
+}
+
+message GetGroupInfoRequest {
+  uint64 term = 1;
 }

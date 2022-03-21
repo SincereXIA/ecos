@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 type MoonClient interface {
 	SendRaftMessage(ctx context.Context, in *raftpb.Message, opts ...grpc.CallOption) (*raftpb.Message, error)
 	AddNodeToGroup(ctx context.Context, in *node.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error)
-	GetGroupInfo(ctx context.Context, in *node.Term, opts ...grpc.CallOption) (*node.GroupInfo, error)
+	GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, opts ...grpc.CallOption) (*node.GroupInfo, error)
 }
 
 type moonClient struct {
@@ -51,7 +51,7 @@ func (c *moonClient) AddNodeToGroup(ctx context.Context, in *node.NodeInfo, opts
 	return out, nil
 }
 
-func (c *moonClient) GetGroupInfo(ctx context.Context, in *node.Term, opts ...grpc.CallOption) (*node.GroupInfo, error) {
+func (c *moonClient) GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, opts ...grpc.CallOption) (*node.GroupInfo, error) {
 	out := new(node.GroupInfo)
 	err := c.cc.Invoke(ctx, "/messenger.Moon/GetGroupInfo", in, out, opts...)
 	if err != nil {
@@ -66,7 +66,7 @@ func (c *moonClient) GetGroupInfo(ctx context.Context, in *node.Term, opts ...gr
 type MoonServer interface {
 	SendRaftMessage(context.Context, *raftpb.Message) (*raftpb.Message, error)
 	AddNodeToGroup(context.Context, *node.NodeInfo) (*AddNodeReply, error)
-	GetGroupInfo(context.Context, *node.Term) (*node.GroupInfo, error)
+	GetGroupInfo(context.Context, *GetGroupInfoRequest) (*node.GroupInfo, error)
 	mustEmbedUnimplementedMoonServer()
 }
 
@@ -80,7 +80,7 @@ func (UnimplementedMoonServer) SendRaftMessage(context.Context, *raftpb.Message)
 func (UnimplementedMoonServer) AddNodeToGroup(context.Context, *node.NodeInfo) (*AddNodeReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddNodeToGroup not implemented")
 }
-func (UnimplementedMoonServer) GetGroupInfo(context.Context, *node.Term) (*node.GroupInfo, error) {
+func (UnimplementedMoonServer) GetGroupInfo(context.Context, *GetGroupInfoRequest) (*node.GroupInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGroupInfo not implemented")
 }
 func (UnimplementedMoonServer) mustEmbedUnimplementedMoonServer() {}
@@ -133,7 +133,7 @@ func _Moon_AddNodeToGroup_Handler(srv interface{}, ctx context.Context, dec func
 }
 
 func _Moon_GetGroupInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(node.Term)
+	in := new(GetGroupInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func _Moon_GetGroupInfo_Handler(srv interface{}, ctx context.Context, dec func(i
 		FullMethod: "/messenger.Moon/GetGroupInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MoonServer).GetGroupInfo(ctx, req.(*node.Term))
+		return srv.(MoonServer).GetGroupInfo(ctx, req.(*GetGroupInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

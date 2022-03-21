@@ -164,7 +164,7 @@ func createServers(num int, sunAddr string, basePath string) ([]*node.NodeInfo, 
 	moonConfig := moon.DefaultConfig
 	moonConfig.SunAddr = sunAddr
 	moonConfig.GroupInfo = node.GroupInfo{
-		GroupTerm:       &node.Term{Term: 0},
+		Term:            0,
 		LeaderInfo:      nil,
 		UpdateTimestamp: timestamp.Now(),
 	}

@@ -4,7 +4,6 @@ go 1.16
 
 require (
 	github.com/SUMStudio/grocksdb v1.6.47
-	github.com/cpuguy83/go-md2man v1.0.10 // indirect
 	github.com/deckarep/golang-set v1.8.0
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-playground/validator/v10 v10.10.0 // indirect
@@ -14,16 +13,14 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
-	github.com/minio/sha256-simd v1.0.0 // indirect
+	github.com/minio/sha256-simd v1.0.0
 	github.com/mitchellh/copystructure v1.2.0
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b
 	github.com/sincerexia/gocrush v0.0.0-20220213012034-a24f00a6eb8e
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/cobra v1.4.0 // indirect
-	github.com/spf13/viper v1.3.2 // indirect
+	github.com/spf13/cobra v1.4.0
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/wxnacy/wgo v1.0.4
@@ -34,5 +31,4 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
