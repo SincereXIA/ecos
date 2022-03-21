@@ -69,7 +69,7 @@ func TestRaft(t *testing.T) {
 	rpcServer4 := messenger.NewRpcServer(32674)
 	moonConfig := DefaultConfig
 	moonConfig.GroupInfo = node.GroupInfo{
-		GroupTerm:       &node.Term{Term: 0},
+		Term:            0,
 		LeaderInfo:      moons[leader-1].SelfInfo,
 		NodesInfo:       nodeInfos,
 		UpdateTimestamp: nil,
@@ -204,7 +204,7 @@ func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenge
 	moonConfig := DefaultConfig
 	moonConfig.SunAddr = sunAddr
 	moonConfig.GroupInfo = node.GroupInfo{
-		GroupTerm:       &node.Term{Term: 0},
+		Term:            0,
 		LeaderInfo:      nil,
 		UpdateTimestamp: timestamp.Now(),
 	}

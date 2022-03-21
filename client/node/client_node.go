@@ -29,7 +29,7 @@ func init() {
 
 // SaveGroupInfo save GroupInfo into history
 func (s *ClientNodeInfoStorage) SaveGroupInfo(groupInfo *node.GroupInfo) {
-	s.history[groupInfo.GroupTerm.Term] = groupInfo
+	s.history[groupInfo.Term] = groupInfo
 }
 
 // SaveGroupInfoWithTerm same as SaveGroupInfo, shall check para term and groupInfo.Term
@@ -41,7 +41,7 @@ func (s *ClientNodeInfoStorage) SaveGroupInfoWithTerm(term uint64, groupInfo *no
 			s.curNodesInfo[info.RaftId] = info
 		}
 	}
-	if term == groupInfo.GroupTerm.Term {
+	if term == groupInfo.Term {
 		s.history[term] = groupInfo
 	}
 }

@@ -168,7 +168,7 @@ func (w *EcosWriter) commitMeta() error {
 	w.meta.ObjId = GenObjectId(w.key)
 	// w.meta.ObjSize has been set in EcosWriter.Write
 	w.meta.UpdateTime = timestamp.Now()
-	w.meta.Term = w.groupInfo.GroupTerm.Term
+	w.meta.Term = w.groupInfo.Term
 	if w.config.Object.ObjectHash {
 		w.meta.ObjHash = hex.EncodeToString(w.objHash.Sum(nil))
 	} else {
@@ -241,7 +241,7 @@ func NewEcosWriterFactory(config *config.ClientConfig) *EcosWriterFactory {
 		return nil
 	}
 	moonClient := moon.NewMoonClient(conn)
-	groupInfo, err := moonClient.GetGroupInfo(context.Background(), &node.Term{Term: 0})
+	groupInfo, err := moonClient.GetGroupInfo(context.Background(), &moon.GetGroupInfoRequest{Term: 0})
 	if err != nil {
 		logger.Errorf("get group info fail: %v", err)
 		return nil

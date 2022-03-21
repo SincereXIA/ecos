@@ -26,7 +26,7 @@ func testStorage(storage InfoStorage, t *testing.T) {
 	hookInfoNum := 0
 	t.Run("test init", func(t *testing.T) {
 		groupInfo := storage.GetGroupInfo(0)
-		assert.Equal(t, groupInfo.GroupTerm.Term, uint64(0))
+		assert.Equal(t, groupInfo.Term, uint64(0))
 		_, err := storage.GetNodeInfo(0)
 		assert.NotNil(t, err)
 		storage.SetOnGroupApply(func(info *GroupInfo) {
@@ -67,9 +67,9 @@ func testStorage(storage InfoStorage, t *testing.T) {
 		storage.Apply()
 		group := storage.GetGroupInfo(0)
 		assert.NotEmpty(t, group.NodesInfo)
-		t.Logf("Old term: %v, new term: %v", 0, group.GroupTerm.Term)
-		assert.NotEqual(t, group.GroupTerm.Term, uint64(0))
-		term := group.GroupTerm.Term
+		t.Logf("Old term: %v, new term: %v", 0, group.Term)
+		assert.NotEqual(t, group.Term, uint64(0))
+		term := group.Term
 		info3 := NodeInfo{
 			RaftId:   3,
 			Uuid:     uuid.New().String(),
@@ -85,8 +85,8 @@ func testStorage(storage InfoStorage, t *testing.T) {
 		assert.Equal(t, len(group.NodesInfo), 2)
 		storage.Apply()
 		group = storage.GetGroupInfo(0)
-		t.Logf("Old term: %v, new term: %v", term, group.GroupTerm.Term)
-		assert.NotEqual(t, group.GroupTerm.Term, term)
+		t.Logf("Old term: %v, new term: %v", term, group.Term)
+		assert.NotEqual(t, group.Term, term)
 		assert.Equal(t, len(group.NodesInfo), 3)
 	})
 	t.Run("test hook", func(t *testing.T) {

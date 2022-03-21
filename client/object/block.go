@@ -55,7 +55,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 				Code:     gaia.ControlMessage_BEGIN,
 				Block:    &b.BlockInfo,
 				Pipeline: b.blockPipes[b.PgId],
-				Term:     b.groupInfo.GroupTerm.Term,
+				Term:     b.groupInfo.Term,
 			},
 		},
 	}
@@ -89,7 +89,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 				Code:     gaia.ControlMessage_EOF,
 				Block:    &b.BlockInfo,
 				Pipeline: b.blockPipes[b.PgId],
-				Term:     b.groupInfo.GroupTerm.Term,
+				Term:     b.groupInfo.Term,
 			},
 		},
 	}
