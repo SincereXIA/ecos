@@ -168,6 +168,7 @@ func (w *EcosWriter) commitMeta() error {
 	w.meta.ObjId = GenObjectId(w.key)
 	// w.meta.ObjSize has been set in EcosWriter.Write
 	w.meta.UpdateTime = timestamp.Now()
+	w.meta.Term = w.groupInfo.GroupTerm.Term
 	if w.config.Object.ObjectHash {
 		w.meta.ObjHash = hex.EncodeToString(w.objHash.Sum(nil))
 	} else {
