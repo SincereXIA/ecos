@@ -9,6 +9,7 @@ option go_package = "ecos/edge-node/alaya";
 
 service Alaya {
   rpc RecordObjectMeta(ObjectMeta) returns (Result) {}
+  rpc GetObjectMeta(MetaRequest) returns (ObjectMeta) {}
   rpc SendRaftMessage (PGRaftMessage) returns (PGRaftMessage) {}
 }
 
@@ -25,4 +26,8 @@ message MetaOperate {
 message PGRaftMessage {
   uint64 pg_id = 1;
   raftpb.Message message = 2;
+}
+
+message MetaRequest {
+  string obj_id = 1;
 }
