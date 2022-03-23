@@ -218,6 +218,7 @@ func GenBlockId() string {
 const (
 	blockPgNum = 100
 	objPgNum   = 10
+	groupNum   = 3
 )
 
 var (

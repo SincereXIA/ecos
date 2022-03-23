@@ -25,6 +25,8 @@ func TestEcosWriter(t *testing.T) {
 	t.Logf("Current test filename: %s", filename)
 	type args struct {
 		objectSize int
+		nodeAddr   string
+		port       int
 		key        string
 	}
 	tests := []struct {
