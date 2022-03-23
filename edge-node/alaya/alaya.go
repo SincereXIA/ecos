@@ -77,6 +77,11 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 }
 
 func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (*PGRaftMessage, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	pgID := pgMessage.PgId
 	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
 		msgChan.(chan raftpb.Message) <- *pgMessage.Message
@@ -215,6 +220,26 @@ func (a *Alaya) printPipelineInfo() {
 		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v", a.SelfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
 		return true
 	})
+}
+
+// IsAllPipelinesOK check if pipelines in THIS alaya node is ok.
+// each raftNode should have leader, and each group should have exactly 3 nodes.
+func (a *Alaya) IsAllPipelinesOK() bool {
+	ok := true
+	length := 0
+	a.PGRaftNode.Range(func(key, value interface{}) bool {
+		raftNode := value.(*Raft)
+		if raftNode.raft.Status().Lead != raftNode.getPipeline().RaftId[0] || len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
+			ok = false
+			return false
+		}
+		length += 1
+		return true
+	})
+	if length == 0 {
+		return false
+	}
+	return ok
 }
 
 // MakeAlayaRaftInPipeline Make a new raft node for a single pipeline (PG), it will:

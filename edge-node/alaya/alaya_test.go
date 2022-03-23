@@ -7,6 +7,7 @@ import (
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	"ecos/utils/common"
+	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -78,7 +79,7 @@ func TestNewAlaya(t *testing.T) {
 		a := alayas[i]
 		go a.Run()
 	}
-	time.Sleep(time.Second * 8)
+	waiteAllAlayaOK(alayas)
 	assertAlayasOK(t, alayas, pipelines)
 
 	for i := 0; i < nodeNum; i++ { // for each node
@@ -148,22 +149,13 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		go alayas[i].Run()
 	}
 
-	t.Cleanup(func() {
-		for i := 0; i < 9; i++ { // for each node
-			server := rpcServers[i]
-			server.Stop()
-			alaya := alayas[i]
-			alaya.Stop()
-		}
-	})
-
 	time.Sleep(time.Second * 1)
 	for i := 0; i < 6; i++ {
 		t.Logf("Apply new groupInfo for: %v", i+1)
 		go infoStorages[i].Apply()
 	}
 
-	time.Sleep(time.Second * 15)
+	waiteAllAlayaOK(alayas)
 
 	for i := 0; i < 6; i++ { // for each node
 		a := alayas[i]
@@ -202,7 +194,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		t.Logf("Apply new groupInfo for: %v", i+1)
 		go infoStorages[i].Apply()
 	}
-	time.Sleep(time.Second * 15)
+	waiteAllAlayaOK(alayas)
 	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]
@@ -212,6 +204,13 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 	pipelines := pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3)
 	for _, p := range pipelines {
 		t.Logf("PG: %v, id: %v, %v, %v", p.PgId, p.RaftId[0], p.RaftId[1], p.RaftId[2])
+	}
+
+	for i := 0; i < 9; i++ { // for each node
+		server := rpcServers[i]
+		server.Stop()
+		alaya := alayas[i]
+		alaya.Stop()
 	}
 }
 
@@ -230,5 +229,27 @@ func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipelin
 			assert.NotZero(t, raftNode.raft.Status().Lead)
 			return true
 		})
+	}
+}
+
+func waiteAllAlayaOK(alayas []*Alaya) {
+	timmer := time.After(60 * time.Second)
+	for {
+		select {
+		case <-timmer:
+			logger.Warningf("Alayas not OK after time out")
+		default:
+		}
+		ok := true
+		for _, alaya := range alayas {
+			if !alaya.IsAllPipelinesOK() {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return
+		}
+		time.Sleep(time.Millisecond * 200)
 	}
 }
