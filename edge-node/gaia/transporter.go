@@ -6,7 +6,9 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
+	commonMessenger "ecos/messenger/common"
 	"ecos/utils/common"
+	"ecos/utils/errno"
 	"io"
 	"os"
 	"path"
@@ -69,17 +71,19 @@ func (transporter *PrimaryCopyTransporter) Write(chunk []byte) (n int, err error
 }
 
 func (transporter *PrimaryCopyTransporter) Close() error {
-	file := transporter.localWriter.(*os.File)
-	err := file.Sync()
-	if err != nil {
-		return err
-	}
-	err = file.Close()
-	if err != nil {
-		return err
+	switch localWriter := transporter.localWriter.(type) {
+	case *os.File:
+		err := localWriter.Sync()
+		if err != nil {
+			return err
+		}
+		err = localWriter.Close()
+		if err != nil {
+			return err
+		}
 	}
 	for _, remoteWriter := range transporter.remoteWriters {
-		err = remoteWriter.(*RemoteWriter).Close()
+		err := remoteWriter.(*RemoteWriter).Close()
 		if err != nil {
 			return err
 		}
@@ -140,6 +144,10 @@ func (w *RemoteWriter) Close() error {
 			},
 		},
 	})
+	result, err := w.stream.CloseAndRecv()
+	if err != nil || result.Status != commonMessenger.Result_OK {
+		return errno.RemoteGaiaFail
+	}
 	return err
 }
 
