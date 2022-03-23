@@ -4,6 +4,7 @@
 package alaya
 
 import (
+	object "ecos/edge-node/object"
 	_ "ecos/messenger/common"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
@@ -24,25 +25,51 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-type MetaData struct {
-	Attrs                map[string]string `protobuf:"bytes,1,rep,name=attrs,proto3" json:"attrs,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+type MetaOperate_Operate int32
+
+const (
+	MetaOperate_PUT    MetaOperate_Operate = 0
+	MetaOperate_DELETE MetaOperate_Operate = 1
+)
+
+var MetaOperate_Operate_name = map[int32]string{
+	0: "PUT",
+	1: "DELETE",
 }
 
-func (m *MetaData) Reset()         { *m = MetaData{} }
-func (m *MetaData) String() string { return proto.CompactTextString(m) }
-func (*MetaData) ProtoMessage()    {}
-func (*MetaData) Descriptor() ([]byte, []int) {
+var MetaOperate_Operate_value = map[string]int32{
+	"PUT":    0,
+	"DELETE": 1,
+}
+
+func (x MetaOperate_Operate) String() string {
+	return proto.EnumName(MetaOperate_Operate_name, int32(x))
+}
+
+func (MetaOperate_Operate) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_26392046f96b310c, []int{0, 0}
+}
+
+type MetaOperate struct {
+	Operate              MetaOperate_Operate `protobuf:"varint,1,opt,name=operate,proto3,enum=messenger.MetaOperate_Operate" json:"operate,omitempty"`
+	Meta                 *object.ObjectMeta  `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
+	XXX_unrecognized     []byte              `json:"-"`
+	XXX_sizecache        int32               `json:"-"`
+}
+
+func (m *MetaOperate) Reset()         { *m = MetaOperate{} }
+func (m *MetaOperate) String() string { return proto.CompactTextString(m) }
+func (*MetaOperate) ProtoMessage()    {}
+func (*MetaOperate) Descriptor() ([]byte, []int) {
 	return fileDescriptor_26392046f96b310c, []int{0}
 }
-func (m *MetaData) XXX_Unmarshal(b []byte) error {
+func (m *MetaOperate) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *MetaData) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *MetaOperate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_MetaData.Marshal(b, m, deterministic)
+		return xxx_messageInfo_MetaOperate.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -52,21 +79,28 @@ func (m *MetaData) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *MetaData) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_MetaData.Merge(m, src)
+func (m *MetaOperate) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MetaOperate.Merge(m, src)
 }
-func (m *MetaData) XXX_Size() int {
+func (m *MetaOperate) XXX_Size() int {
 	return m.Size()
 }
-func (m *MetaData) XXX_DiscardUnknown() {
-	xxx_messageInfo_MetaData.DiscardUnknown(m)
+func (m *MetaOperate) XXX_DiscardUnknown() {
+	xxx_messageInfo_MetaOperate.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_MetaData proto.InternalMessageInfo
+var xxx_messageInfo_MetaOperate proto.InternalMessageInfo
 
-func (m *MetaData) GetAttrs() map[string]string {
+func (m *MetaOperate) GetOperate() MetaOperate_Operate {
 	if m != nil {
-		return m.Attrs
+		return m.Operate
+	}
+	return MetaOperate_PUT
+}
+
+func (m *MetaOperate) GetMeta() *object.ObjectMeta {
+	if m != nil {
+		return m.Meta
 	}
 	return nil
 }
@@ -127,8 +161,8 @@ func (m *PGRaftMessage) GetMessage() *raftpb.Message {
 }
 
 func init() {
-	proto.RegisterType((*MetaData)(nil), "messenger.MetaData")
-	proto.RegisterMapType((map[string]string)(nil), "messenger.MetaData.AttrsEntry")
+	proto.RegisterEnum("messenger.MetaOperate_Operate", MetaOperate_Operate_name, MetaOperate_Operate_value)
+	proto.RegisterType((*MetaOperate)(nil), "messenger.MetaOperate")
 	proto.RegisterType((*PGRaftMessage)(nil), "messenger.PGRaftMessage")
 }
 
@@ -136,30 +170,30 @@ func init() { proto.RegisterFile("alaya.proto", fileDescriptor_26392046f96b310c)
 
 var fileDescriptor_26392046f96b310c = []byte{
 	// 326 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x51, 0x41, 0x4f, 0xf2, 0x40,
-	0x10, 0x65, 0x81, 0x7e, 0x9f, 0x0c, 0x1a, 0x60, 0xc5, 0xa4, 0xe9, 0xa1, 0x21, 0x3d, 0x18, 0x3c,
-	0x58, 0x12, 0xf4, 0x40, 0x3c, 0x98, 0x60, 0x34, 0xc4, 0x03, 0xc1, 0xac, 0x37, 0x2f, 0x66, 0x69,
-	0x87, 0x46, 0xa5, 0xdd, 0x66, 0x77, 0x31, 0xc1, 0x5f, 0xe1, 0xd1, 0x9f, 0xe4, 0xd1, 0x9f, 0x60,
-	0xf0, 0x8f, 0x98, 0x6e, 0x41, 0xea, 0xc1, 0xd3, 0xee, 0xbc, 0xf7, 0x66, 0xf2, 0xde, 0x0c, 0xd4,
-	0xf9, 0x9c, 0x2f, 0xb9, 0x9f, 0x4a, 0xa1, 0x05, 0xad, 0xc5, 0xa8, 0x14, 0x26, 0x11, 0x4a, 0xa7,
-	0x25, 0xf9, 0x4c, 0xa7, 0xd3, 0x5e, 0xf6, 0xe4, 0xac, 0xb3, 0x1b, 0x88, 0x38, 0x16, 0xc9, 0xa6,
-	0x12, 0xd3, 0x47, 0x0c, 0xd6, 0x9c, 0xf7, 0x02, 0x3b, 0x63, 0xd4, 0xfc, 0x92, 0x6b, 0x4e, 0x4f,
-	0xc1, 0xe2, 0x5a, 0x4b, 0x65, 0x93, 0x4e, 0xa5, 0x5b, 0xef, 0xbb, 0xfe, 0xcf, 0x54, 0x7f, 0xa3,
-	0xf1, 0x87, 0x99, 0xe0, 0x2a, 0xd1, 0x72, 0xc9, 0x72, 0xb1, 0x33, 0x00, 0xd8, 0x82, 0xb4, 0x09,
-	0x95, 0x27, 0x5c, 0xda, 0xa4, 0x43, 0xba, 0x35, 0x96, 0x7d, 0x69, 0x1b, 0xac, 0x67, 0x3e, 0x5f,
-	0xa0, 0x5d, 0x36, 0x58, 0x5e, 0x9c, 0x95, 0x07, 0xc4, 0x9b, 0xc0, 0xde, 0xcd, 0x88, 0xf1, 0x99,
-	0x1e, 0xa3, 0x52, 0x3c, 0x42, 0xba, 0x0f, 0x56, 0x1a, 0xdd, 0x3f, 0x84, 0xa6, 0xbd, 0xca, 0xaa,
-	0x69, 0x74, 0x1d, 0xd2, 0x23, 0xf8, 0x1f, 0xe7, 0xbc, 0x99, 0x50, 0xef, 0x37, 0xfc, 0x3c, 0xa2,
-	0xbf, 0x6e, 0x63, 0x1b, 0xbe, 0xff, 0x4a, 0xc0, 0x1a, 0x66, 0x6b, 0xa1, 0xe7, 0xd0, 0x64, 0x18,
-	0x08, 0x19, 0x4e, 0x4c, 0xd8, 0xcc, 0x3e, 0x3d, 0x28, 0xe4, 0xd9, 0xc2, 0x4e, 0xab, 0x00, 0x33,
-	0x54, 0x8b, 0xb9, 0xf6, 0x4a, 0x74, 0x04, 0x8d, 0x5b, 0x4c, 0xc2, 0xa2, 0x39, 0xbb, 0xa0, 0xfb,
-	0x65, 0xdb, 0xf9, 0x93, 0xf1, 0x4a, 0x17, 0x87, 0xef, 0x2b, 0x97, 0x7c, 0xac, 0x5c, 0xf2, 0xb9,
-	0x72, 0xc9, 0xdb, 0x97, 0x5b, 0xba, 0x6b, 0x63, 0x20, 0x54, 0x0f, 0xc3, 0x08, 0x8f, 0x13, 0x11,
-	0x62, 0xcf, 0xdc, 0x71, 0xfa, 0xcf, 0x9c, 0xe3, 0xe4, 0x3b, 0x00, 0x00, 0xff, 0xff, 0x80, 0x70,
-	0x7c, 0xbc, 0xd7, 0x01, 0x00, 0x00,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x91, 0xcf, 0x4a, 0x03, 0x31,
+	0x10, 0xc6, 0x37, 0xda, 0x76, 0x71, 0xaa, 0xb6, 0x8d, 0x0a, 0x65, 0x0f, 0x4b, 0xd9, 0x83, 0xb4,
+	0x07, 0x53, 0xa8, 0x17, 0x4f, 0x82, 0x62, 0x29, 0x82, 0xa5, 0x25, 0xd6, 0x8b, 0x17, 0x49, 0x37,
+	0xd3, 0x45, 0xe9, 0x6e, 0x96, 0x4d, 0x3c, 0xf8, 0x16, 0xe2, 0xc9, 0x47, 0xf2, 0xe8, 0x23, 0x48,
+	0x7d, 0x11, 0xe9, 0xfe, 0xd1, 0x15, 0xf4, 0x34, 0x49, 0xbe, 0x6f, 0xf2, 0xfd, 0x92, 0x81, 0xba,
+	0x58, 0x8a, 0x27, 0xc1, 0xe2, 0x44, 0x19, 0x45, 0xb7, 0x42, 0xd4, 0x1a, 0xa3, 0x00, 0x13, 0xa7,
+	0x95, 0x88, 0x85, 0x89, 0xe7, 0xfd, 0x75, 0xc9, 0x54, 0x67, 0xdb, 0x57, 0x61, 0xa8, 0xa2, 0x62,
+	0xa7, 0xe6, 0x0f, 0xe8, 0xe7, 0x9a, 0xf7, 0x42, 0xa0, 0x3e, 0x46, 0x23, 0x26, 0x31, 0x26, 0xc2,
+	0x20, 0x3d, 0x01, 0x5b, 0x65, 0xcb, 0x36, 0xe9, 0x90, 0xee, 0xee, 0xc0, 0x65, 0xdf, 0x77, 0xb3,
+	0x92, 0x91, 0xe5, 0x95, 0x17, 0x76, 0xda, 0x83, 0x4a, 0x88, 0x46, 0xb4, 0x37, 0x3a, 0xa4, 0x5b,
+	0x1f, 0x1c, 0x94, 0xda, 0x26, 0x69, 0xe0, 0xba, 0x99, 0xa7, 0x16, 0xcf, 0x05, 0xbb, 0xc8, 0xb3,
+	0x61, 0x73, 0x7a, 0x33, 0x6b, 0x5a, 0x14, 0xa0, 0x76, 0x31, 0xbc, 0x1a, 0xce, 0x86, 0x4d, 0xe2,
+	0x4d, 0x60, 0x67, 0x3a, 0xe2, 0x62, 0x61, 0xc6, 0xa8, 0xb5, 0x08, 0x90, 0xee, 0x41, 0x35, 0x0e,
+	0xee, 0xee, 0x65, 0xca, 0x54, 0xe1, 0x95, 0x38, 0xb8, 0x94, 0xb4, 0x07, 0x76, 0x98, 0xe9, 0x79,
+	0x66, 0x83, 0x65, 0x6f, 0x67, 0x79, 0x1b, 0x2f, 0xf4, 0xc1, 0x33, 0x81, 0xea, 0xd9, 0xfa, 0xbf,
+	0xe8, 0x29, 0x34, 0x39, 0xfa, 0x2a, 0x91, 0x3f, 0x50, 0xf4, 0x6f, 0x56, 0xa7, 0x55, 0x3a, 0xe6,
+	0xa8, 0x1f, 0x97, 0xc6, 0xb3, 0xe8, 0x08, 0x1a, 0xd7, 0x18, 0xc9, 0x32, 0x5c, 0xbb, 0xe4, 0xfb,
+	0x85, 0xed, 0xfc, 0xab, 0x78, 0xd6, 0xf9, 0xe1, 0xdb, 0xca, 0x25, 0xef, 0x2b, 0x97, 0x7c, 0xac,
+	0x5c, 0xf2, 0xfa, 0xe9, 0x5a, 0xb7, 0xfb, 0xe8, 0x2b, 0xdd, 0x47, 0x19, 0xe0, 0x51, 0xa4, 0x24,
+	0xf6, 0xd3, 0x01, 0xcf, 0x6b, 0xe9, 0x9c, 0x8e, 0xbf, 0x02, 0x00, 0x00, 0xff, 0xff, 0xe3, 0x3f,
+	0xed, 0x01, 0xf0, 0x01, 0x00, 0x00,
 }
 
-func (m *MetaData) Marshal() (dAtA []byte, err error) {
+func (m *MetaOperate) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -169,12 +203,12 @@ func (m *MetaData) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *MetaData) MarshalTo(dAtA []byte) (int, error) {
+func (m *MetaOperate) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *MetaData) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *MetaOperate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -183,24 +217,22 @@ func (m *MetaData) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if len(m.Attrs) > 0 {
-		for k := range m.Attrs {
-			v := m.Attrs[k]
-			baseI := i
-			i -= len(v)
-			copy(dAtA[i:], v)
-			i = encodeVarintAlaya(dAtA, i, uint64(len(v)))
-			i--
-			dAtA[i] = 0x12
-			i -= len(k)
-			copy(dAtA[i:], k)
-			i = encodeVarintAlaya(dAtA, i, uint64(len(k)))
-			i--
-			dAtA[i] = 0xa
-			i = encodeVarintAlaya(dAtA, i, uint64(baseI-i))
-			i--
-			dAtA[i] = 0xa
+	if m.Meta != nil {
+		{
+			size, err := m.Meta.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintAlaya(dAtA, i, uint64(size))
 		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Operate != 0 {
+		i = encodeVarintAlaya(dAtA, i, uint64(m.Operate))
+		i--
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -260,19 +292,18 @@ func encodeVarintAlaya(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return base
 }
-func (m *MetaData) Size() (n int) {
+func (m *MetaOperate) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if len(m.Attrs) > 0 {
-		for k, v := range m.Attrs {
-			_ = k
-			_ = v
-			mapEntrySize := 1 + len(k) + sovAlaya(uint64(len(k))) + 1 + len(v) + sovAlaya(uint64(len(v)))
-			n += mapEntrySize + 1 + sovAlaya(uint64(mapEntrySize))
-		}
+	if m.Operate != 0 {
+		n += 1 + sovAlaya(uint64(m.Operate))
+	}
+	if m.Meta != nil {
+		l = m.Meta.Size()
+		n += 1 + l + sovAlaya(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -305,7 +336,7 @@ func sovAlaya(x uint64) (n int) {
 func sozAlaya(x uint64) (n int) {
 	return sovAlaya(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
-func (m *MetaData) Unmarshal(dAtA []byte) error {
+func (m *MetaOperate) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -328,15 +359,34 @@ func (m *MetaData) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: MetaData: wiretype end group for non-group")
+			return fmt.Errorf("proto: MetaOperate: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: MetaData: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: MetaOperate: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Operate", wireType)
+			}
+			m.Operate = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAlaya
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Operate |= MetaOperate_Operate(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Attrs", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Meta", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -363,103 +413,12 @@ func (m *MetaData) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Attrs == nil {
-				m.Attrs = make(map[string]string)
+			if m.Meta == nil {
+				m.Meta = &object.ObjectMeta{}
 			}
-			var mapkey string
-			var mapvalue string
-			for iNdEx < postIndex {
-				entryPreIndex := iNdEx
-				var wire uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowAlaya
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					wire |= uint64(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				fieldNum := int32(wire >> 3)
-				if fieldNum == 1 {
-					var stringLenmapkey uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowAlaya
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapkey |= uint64(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapkey := int(stringLenmapkey)
-					if intStringLenmapkey < 0 {
-						return ErrInvalidLengthAlaya
-					}
-					postStringIndexmapkey := iNdEx + intStringLenmapkey
-					if postStringIndexmapkey < 0 {
-						return ErrInvalidLengthAlaya
-					}
-					if postStringIndexmapkey > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
-					iNdEx = postStringIndexmapkey
-				} else if fieldNum == 2 {
-					var stringLenmapvalue uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowAlaya
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapvalue |= uint64(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapvalue := int(stringLenmapvalue)
-					if intStringLenmapvalue < 0 {
-						return ErrInvalidLengthAlaya
-					}
-					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
-					if postStringIndexmapvalue < 0 {
-						return ErrInvalidLengthAlaya
-					}
-					if postStringIndexmapvalue > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
-					iNdEx = postStringIndexmapvalue
-				} else {
-					iNdEx = entryPreIndex
-					skippy, err := skipAlaya(dAtA[iNdEx:])
-					if err != nil {
-						return err
-					}
-					if (skippy < 0) || (iNdEx+skippy) < 0 {
-						return ErrInvalidLengthAlaya
-					}
-					if (iNdEx + skippy) > postIndex {
-						return io.ErrUnexpectedEOF
-					}
-					iNdEx += skippy
-				}
+			if err := m.Meta.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
-			m.Attrs[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

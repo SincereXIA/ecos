@@ -31,7 +31,8 @@ type Raft struct {
 	raftChan chan raftpb.Message
 	stopChan chan uint64
 
-	metaStorage MetaStorage
+	metaStorage   MetaStorage
+	metaApplyChan chan object.ObjectMeta
 
 	pipeline *pipeline.Pipeline
 	// rwMutex protect pipeline
@@ -69,6 +70,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 		pipeline:       nowPipe,
 		stopChan:       stopChan,
 		confChangeChan: make(chan raftpb.ConfChange, 100), // TODO: not ok
+		metaApplyChan:  make(chan object.ObjectMeta, 100),
 	}
 
 	var peers []raft.Peer
@@ -260,24 +262,44 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 
 func (r *Raft) process(entry raftpb.Entry) {
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var meta object.ObjectMeta
-		err := proto.Unmarshal(entry.Data, &meta)
+		var metaOperate MetaOperate
+		err := proto.Unmarshal(entry.Data, &metaOperate)
 		if err != nil {
 			logger.Warningf("alaya raft process object meta in entry err: %v", err)
 		}
-		logger.Infof("node %v, PG: %v, New object meta: %v", r.raftCfg.ID, r.pgID, meta.ObjId)
-		err = r.metaStorage.RecordMeta(&meta)
-		if err != nil {
-			logger.Warningf("alaya record object meta err: %v", err)
+		switch metaOperate.Operate {
+		case MetaOperate_PUT:
+			meta := metaOperate.Meta
+			logger.Infof("node %v, PG: %v, New object meta: %v", r.raftCfg.ID, r.pgID, meta.ObjId)
+			err = r.metaStorage.RecordMeta(meta)
+			if err != nil {
+				logger.Warningf("alaya record object meta err: %v", err)
+			}
+		case MetaOperate_DELETE:
+			// TODO (zhang) : delete meta
+			logger.Errorf("DELETE Meta not implement")
 		}
+		r.metaApplyChan <- *metaOperate.Meta
 	}
 }
 
-func (r *Raft) ProposeObjectMeta(meta *object.ObjectMeta) {
-	bytes, _ := proto.Marshal(meta)
+// ProposeObjectMetaOperate Propose a request to operate object meta to raft group,
+// and wait it applied into meta storage
+func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
+	bytes, _ := proto.Marshal(operate)
 	err := r.raft.Propose(r.ctx, bytes)
 	if err != nil {
 		logger.Warningf("raft propose err: %v", err)
+		return err
+	}
+	// TODO (zhang): Time out
+	for {
+		m := <-r.metaApplyChan
+		if m.ObjId != operate.Meta.ObjId {
+			r.metaApplyChan <- m
+		} else {
+			return nil
+		}
 	}
 }
 

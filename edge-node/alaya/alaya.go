@@ -66,7 +66,16 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 		return nil, ctx.Err()
 	default:
 		pgID := meta.PgId
-		a.getRaftNode(pgID).ProposeObjectMeta(meta)
+		err := a.getRaftNode(pgID).ProposeObjectMetaOperate(&MetaOperate{
+			Operate: MetaOperate_PUT,
+			Meta:    meta,
+		})
+		if err != nil {
+			return &common.Result{
+				Status:  common.Result_FAIL,
+				Message: err.Error(),
+			}, err
+		}
 		// TODO: 检查元数据是否同步成功
 		logger.Infof("Alaya record object meta success, obj_id: %v, size: %v", meta.ObjId, meta.ObjSize)
 	}

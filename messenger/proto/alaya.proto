@@ -12,8 +12,14 @@ service Alaya {
   rpc SendRaftMessage (PGRaftMessage) returns (PGRaftMessage) {}
 }
 
-message MetaData {
-  map<string, string> attrs = 1;
+
+message MetaOperate {
+  enum Operate {
+    PUT = 0;
+    DELETE = 1;
+  }
+  Operate operate = 1;
+  ObjectMeta meta = 2;
 }
 
 message PGRaftMessage {
