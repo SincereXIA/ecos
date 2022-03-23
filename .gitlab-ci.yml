@@ -31,9 +31,9 @@ build-job:       # This job runs in the build stage, which runs first.
     - export CGO_LDFLAGS="-L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd"
     - go mod tidy
     - go build -o build/bin/ecos
-    - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-client ecos/client
-    - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-cloud ecos/cloud
-    - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-edge-node ecos/edge-node
+    - go build -o build/bin/ecos-client ecos/client
+    - go build -o build/bin/ecos-cloud ecos/cloud
+    - go build -o build/bin/ecos-edge-node ecos/edge-node
     - echo "Compile complete."
   artifacts:
     paths:
