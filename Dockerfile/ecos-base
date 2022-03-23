@@ -1,0 +1,16 @@
+FROM harbor.sums.top/ecos/rocksdb-go:6.28.2-alpine  as builder
+
+WORKDIR /ecos
+
+# Use distroless as minimal base image to package the manager binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+
+FROM alpine:3.15.1
+
+WORKDIR /ecos
+
+RUN apk update \
+    && apk add snappy-dev bzip2-dev zlib-dev lz4-dev zstd-dev gflags-dev
+
+COPY --from=builder /usr/local/lib/librocksdb.so.6.28 /usr/local/lib/
+COPY --from=builder /usr/local/include/ /usr/local/include/
