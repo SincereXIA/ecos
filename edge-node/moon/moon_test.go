@@ -108,10 +108,6 @@ func TestMoon_Register(t *testing.T) {
 	dbBasePath := "./ecos-data/db/moon/"
 	moonNum := 5
 
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(dbBasePath)
-
 	port, sunRpc := messenger.NewRandomPortRpcServer()
 	sun.NewSun(sunRpc)
 	go func() {
@@ -138,10 +134,12 @@ func TestMoon_Register(t *testing.T) {
 	t.Cleanup(func() {
 		sunRpc.Stop()
 		for i := 0; i < moonNum; i++ {
-			rpcServers[i].Stop()
 			moons[i].Stop()
+			rpcServers[i].Stop()
 		}
+		_ = os.RemoveAll(dbBasePath)
 	})
+
 	waitMoonsOK(moons)
 	time.Sleep(4 * time.Second)
 	assertInfoStorageOK(t, moonNum, moons...)

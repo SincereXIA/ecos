@@ -213,7 +213,7 @@ func (a *Alaya) Run() {
 	}
 }
 
-func (a *Alaya) printPipelineInfo() {
+func (a *Alaya) PrintPipelineInfo() {
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
@@ -225,8 +225,13 @@ func (a *Alaya) printPipelineInfo() {
 // IsAllPipelinesOK check if pipelines in THIS alaya node is ok.
 // each raftNode should have leader, and each group should have exactly 3 nodes.
 func (a *Alaya) IsAllPipelinesOK() bool {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 	ok := true
 	length := 0
+	if a.InfoStorage.GetTermNow() == 0 || a.state != RUNNING {
+		return false
+	}
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
 		if raftNode.raft.Status().Lead != raftNode.getPipeline().RaftId[0] ||
@@ -237,9 +242,6 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 		length += 1
 		return true
 	})
-	if length == 0 {
-		return false
-	}
 	return ok
 }
 

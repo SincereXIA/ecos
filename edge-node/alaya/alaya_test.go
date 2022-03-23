@@ -84,7 +84,7 @@ func TestNewAlaya(t *testing.T) {
 
 	for i := 0; i < nodeNum; i++ { // for each node
 		a := alayas[i]
-		a.printPipelineInfo()
+		a.PrintPipelineInfo()
 	}
 
 	a := alayas[pipelines[0].RaftId[0]-1]
@@ -159,7 +159,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 
 	for i := 0; i < 6; i++ { // for each node
 		a := alayas[i]
-		a.printPipelineInfo()
+		a.PrintPipelineInfo()
 	}
 
 	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
@@ -198,7 +198,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]
-		a.printPipelineInfo()
+		a.PrintPipelineInfo()
 	}
 
 	pipelines := pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3)
@@ -239,14 +239,15 @@ func waiteAllAlayaOK(alayas []*Alaya) {
 		case <-timer:
 			logger.Warningf("Alayas not OK after time out")
 			for _, alaya := range alayas {
-				alaya.printPipelineInfo()
+				alaya.PrintPipelineInfo()
 			}
 			return
 		default:
 		}
 		ok := true
-		for _, alaya := range alayas {
+		for id, alaya := range alayas {
 			if !alaya.IsAllPipelinesOK() {
+				logger.Warningf("Alaya %v not ok", id+1)
 				ok = false
 				break
 			}

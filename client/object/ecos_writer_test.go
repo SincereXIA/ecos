@@ -8,9 +8,11 @@ import (
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/common"
+	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
+	"os"
 	"path"
 	"runtime"
 	"strconv"
@@ -44,10 +46,10 @@ func TestEcosWriter(t *testing.T) {
 			},
 			false,
 		},
-		{"writer 128M object",
+		{"writer 64M object",
 			args{
-				1024 * 1024 * 128, // 128M
-				"/path/128M_obj",
+				1024 * 1024 * 64, // 64M
+				"/path/64M_obj",
 			},
 			false,
 		},
@@ -79,9 +81,10 @@ func TestEcosWriter(t *testing.T) {
 			alayas[i].Stop()
 			rpcServers[i].Stop()
 		}
+		_ = os.RemoveAll(basePath)
 	})
 
-	time.Sleep(15 * time.Second) // ensure rpcServer running
+	waiteAllAlayaOK(alayas)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -163,4 +166,30 @@ func createServers(num int, sunAddr string, basePath string) ([]*node.NodeInfo,
 		}
 	}
 	return nodeInfos, moons, alayas, rpcServers, nil
+}
+
+func waiteAllAlayaOK(alayas []*alaya.Alaya) {
+	timer := time.After(60 * time.Second)
+	for {
+		select {
+		case <-timer:
+			logger.Warningf("Alayas not OK after time out")
+			for _, a := range alayas {
+				a.PrintPipelineInfo()
+			}
+			return
+		default:
+		}
+		ok := true
+		for _, a := range alayas {
+			if !a.IsAllPipelinesOK() {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return
+		}
+		time.Sleep(time.Millisecond * 200)
+	}
 }

@@ -294,16 +294,7 @@ func (r *Raft) RunAskForLeader() {
 			r.raftCfg.ID != r.getPipeline().RaftId[0] || !r.pipelineReady() {
 			continue
 		} else {
-			logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
-			msg := []raftpb.Message{
-				{
-					From: r.raftCfg.ID,
-					To:   r.raft.Status().Lead,
-					Type: raftpb.MsgTransferLeader,
-				},
-			}
-			r.sendMsgByRpc(msg)
-			time.Sleep(time.Second) //TODO (zhang): wait real
+			r.askForLeader()
 			needRemove, _ := calDiff(r.GetVotersID(), r.getPipeline().RaftId)
 			if len(needRemove) > 0 {
 				logger.Infof("raft: %v, PG: %v Start remove nodes: %v", r.raft.Status().ID, r.pgID, needRemove)
@@ -316,11 +307,28 @@ func (r *Raft) RunAskForLeader() {
 	}
 }
 
+func (r *Raft) askForLeader() {
+	logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
+	r.raft.TransferLeadership(r.ctx, r.raft.Status().Lead, r.raft.Status().ID)
+	for {
+		time.Sleep(time.Second)
+		if r.isLeader() {
+			return
+		}
+		logger.Infof("PG: %v, node %v not leader", r.pgID, r.raftCfg.ID)
+		r.raft.TransferLeadership(r.ctx, r.raft.Status().Lead, r.raft.Status().ID)
+	}
+}
+
 func (r *Raft) GetVotersID() (rs []uint64) {
 	for id := range r.raft.Status().Config.Voters.IDs() {
 		rs = append(rs, id)
 	}
 	return rs
+}
+
+func (r *Raft) isLeader() bool {
+	return r.raft.Status().Lead == r.raft.Status().ID
 }
 
 func (r *Raft) pipelineReady() bool {
