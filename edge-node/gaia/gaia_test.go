@@ -27,12 +27,13 @@ func TestNewGaia(t *testing.T) {
 	}
 	var rpcServers []*messenger.RpcServer
 	for i := 0; i < 5; i++ {
-		rpcServers = append(rpcServers, messenger.NewRpcServer(uint64(32670+i)))
+		port, rpcServer := messenger.NewRandomPortRpcServer()
+		rpcServers = append(rpcServers, rpcServer)
 		info := node.NodeInfo{
 			RaftId:   uint64(i + 1),
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",
-			RpcPort:  uint64(32670 + i),
+			RpcPort:  port,
 			Capacity: 10,
 		}
 		_ = storage.UpdateNodeInfo(&info, timestamp.Now())

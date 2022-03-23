@@ -128,7 +128,7 @@ func TestMoon_Register(t *testing.T) {
 		_ = os.RemoveAll(path)
 	}(dbBasePath)
 
-	sunRpc := messenger.NewRpcServer(3260)
+	port, sunRpc := messenger.NewRandomPortRpcServer()
 	sun.NewSun(sunRpc)
 	go func() {
 		err := sunRpc.Run()
@@ -138,7 +138,7 @@ func TestMoon_Register(t *testing.T) {
 	}()
 	time.Sleep(1 * time.Second)
 
-	moons, rpcServers, err := createMoons(moonNum, "127.0.0.1:3260", dbBasePath)
+	moons, rpcServers, err := createMoons(moonNum, "127.0.0.1:"+strconv.FormatUint(port, 10), dbBasePath)
 	assert.NoError(t, err)
 
 	for i := 0; i < moonNum; i++ {
@@ -197,8 +197,9 @@ func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenge
 		//	node.NewStableNodeInfoStorage(path.Join(basePath, "/nodeInfo", strconv.Itoa(i+1))))
 		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
 		stableStorages = append(stableStorages, NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
-		rpcServers = append(rpcServers, messenger.NewRpcServer(32670+raftID))
-		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", 32670+raftID))
+		port, rpcServer := messenger.NewRandomPortRpcServer()
+		rpcServers = append(rpcServers, rpcServer)
+		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", port))
 	}
 
 	moonConfig := DefaultConfig

@@ -13,7 +13,7 @@ import (
 
 type RpcServer struct {
 	*grpc.Server
-	listenPort uint64
+	ListenPort uint64
 	listen     net.Listener
 }
 
@@ -26,7 +26,7 @@ func NewRpcServer(listenPort uint64) *RpcServer {
 	}
 	server := &RpcServer{
 		Server:     s,
-		listenPort: listenPort,
+		ListenPort: listenPort,
 		listen:     lis,
 	}
 	return server
@@ -44,7 +44,7 @@ func NewRandomPortRpcServer() (port uint64, server *RpcServer) {
 	s := grpc.NewServer() // 创建gRPC服务器
 	server = &RpcServer{
 		Server:     s,
-		listenPort: port,
+		ListenPort: port,
 		listen:     lis,
 	}
 	return
@@ -52,16 +52,16 @@ func NewRandomPortRpcServer() (port uint64, server *RpcServer) {
 
 func (server *RpcServer) Run() error {
 	if server.listen == nil {
-		logger.Errorf("RpcServer run at %v fail, listener is nil", server.listenPort)
+		logger.Errorf("RpcServer run at %v fail, listener is nil", server.ListenPort)
 		return nil
 	}
 	reflection.Register(server) //在给定的gRPC服务器上注册服务器反射服务
 	// Serve方法在lis上接受传入连接，为每个连接创建一个ServerTransport和server的goroutine。
 	// 该goroutine读取gRPC请求，然后调用已注册的处理程序来响应它们。
-	logger.Infof("RpcServer running at: %v", server.listenPort)
+	logger.Infof("RpcServer running at: %v", server.ListenPort)
 	err := server.Serve(server.listen)
 	if err != nil {
-		logger.Errorf("RpcServer run at: %v error: %v", server.listenPort, err)
+		logger.Errorf("RpcServer run at: %v error: %v", server.ListenPort, err)
 		_ = server.listen.Close()
 		return err
 	}
@@ -69,7 +69,7 @@ func (server *RpcServer) Run() error {
 }
 
 func (server *RpcServer) Stop() {
-	logger.Infof("RpcServer stop: %v", server.listenPort)
+	logger.Infof("RpcServer stop: %v", server.ListenPort)
 	server.Server.Stop()
 }
 
