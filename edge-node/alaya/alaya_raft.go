@@ -304,7 +304,7 @@ func (r *Raft) RunAskForLeader() {
 			}
 			r.sendMsgByRpc(msg)
 			time.Sleep(time.Second) //TODO (zhang): wait real
-			needRemove, _ := calDiff(r.GetVotersID(), r.pipeline.RaftId)
+			needRemove, _ := calDiff(r.GetVotersID(), r.getPipeline().RaftId)
 			if len(needRemove) > 0 {
 				logger.Infof("raft: %v, PG: %v Start remove nodes: %v", r.raft.Status().ID, r.pgID, needRemove)
 				err := r.ProposeRemoveNodes(needRemove)
