@@ -76,6 +76,7 @@ func TestRaft(t *testing.T) {
 
 	// 等待共识
 	waitMoonsOK(moons)
+	time.Sleep(3 * time.Second)
 
 	// 判断集群是否达成共识
 	assertInfoStorageOK(t, len(moons), moons...)
