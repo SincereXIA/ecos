@@ -31,7 +31,8 @@ type Raft struct {
 	raftChan chan raftpb.Message
 	stopChan chan uint64
 
-	metaStorage MetaStorage
+	metaStorage   MetaStorage
+	metaApplyChan chan object.ObjectMeta
 
 	pipeline *pipeline.Pipeline
 	// rwMutex protect pipeline
@@ -69,6 +70,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 		pipeline:       nowPipe,
 		stopChan:       stopChan,
 		confChangeChan: make(chan raftpb.ConfChange, 100), // TODO: not ok
+		metaApplyChan:  make(chan object.ObjectMeta, 100),
 	}
 
 	var peers []raft.Peer
@@ -260,24 +262,44 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 
 func (r *Raft) process(entry raftpb.Entry) {
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var meta object.ObjectMeta
-		err := proto.Unmarshal(entry.Data, &meta)
+		var metaOperate MetaOperate
+		err := proto.Unmarshal(entry.Data, &metaOperate)
 		if err != nil {
 			logger.Warningf("alaya raft process object meta in entry err: %v", err)
 		}
-		logger.Infof("node %v, PG: %v, New object meta: %v", r.raftCfg.ID, r.pgID, meta.ObjId)
-		err = r.metaStorage.RecordMeta(&meta)
-		if err != nil {
-			logger.Warningf("alaya record object meta err: %v", err)
+		switch metaOperate.Operate {
+		case MetaOperate_PUT:
+			meta := metaOperate.Meta
+			logger.Infof("node %v, PG: %v, New object meta: %v", r.raftCfg.ID, r.pgID, meta.ObjId)
+			err = r.metaStorage.RecordMeta(meta)
+			if err != nil {
+				logger.Warningf("alaya record object meta err: %v", err)
+			}
+		case MetaOperate_DELETE:
+			// TODO (zhang) : delete meta
+			logger.Errorf("DELETE Meta not implement")
 		}
+		r.metaApplyChan <- *metaOperate.Meta
 	}
 }
 
-func (r *Raft) ProposeObjectMeta(meta *object.ObjectMeta) {
-	bytes, _ := proto.Marshal(meta)
+// ProposeObjectMetaOperate Propose a request to operate object meta to raft group,
+// and wait it applied into meta storage
+func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
+	bytes, _ := proto.Marshal(operate)
 	err := r.raft.Propose(r.ctx, bytes)
 	if err != nil {
 		logger.Warningf("raft propose err: %v", err)
+		return err
+	}
+	// TODO (zhang): Time out
+	for {
+		m := <-r.metaApplyChan
+		if m.ObjId != operate.Meta.ObjId {
+			r.metaApplyChan <- m
+		} else {
+			return nil
+		}
 	}
 }
 
@@ -294,17 +316,8 @@ func (r *Raft) RunAskForLeader() {
 			r.raftCfg.ID != r.getPipeline().RaftId[0] || !r.pipelineReady() {
 			continue
 		} else {
-			logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
-			msg := []raftpb.Message{
-				{
-					From: r.raftCfg.ID,
-					To:   r.raft.Status().Lead,
-					Type: raftpb.MsgTransferLeader,
-				},
-			}
-			r.sendMsgByRpc(msg)
-			time.Sleep(time.Second) //TODO (zhang): wait real
-			needRemove, _ := calDiff(r.GetVotersID(), r.pipeline.RaftId)
+			r.askForLeader()
+			needRemove, _ := calDiff(r.GetVotersID(), r.getPipeline().RaftId)
 			if len(needRemove) > 0 {
 				logger.Infof("raft: %v, PG: %v Start remove nodes: %v", r.raft.Status().ID, r.pgID, needRemove)
 				err := r.ProposeRemoveNodes(needRemove)
@@ -316,11 +329,28 @@ func (r *Raft) RunAskForLeader() {
 	}
 }
 
+func (r *Raft) askForLeader() {
+	logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
+	r.raft.TransferLeadership(r.ctx, r.raft.Status().Lead, r.raft.Status().ID)
+	for {
+		time.Sleep(time.Second)
+		if r.isLeader() {
+			return
+		}
+		logger.Infof("PG: %v, node %v not leader", r.pgID, r.raftCfg.ID)
+		r.raft.TransferLeadership(r.ctx, r.raft.Status().Lead, r.raft.Status().ID)
+	}
+}
+
 func (r *Raft) GetVotersID() (rs []uint64) {
 	for id := range r.raft.Status().Config.Voters.IDs() {
 		rs = append(rs, id)
 	}
 	return rs
+}
+
+func (r *Raft) isLeader() bool {
+	return r.raft.Status().Lead == r.raft.Status().ID
 }
 
 func (r *Raft) pipelineReady() bool {

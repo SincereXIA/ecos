@@ -6,19 +6,17 @@ import (
 	"ecos/messenger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"testing"
 	"time"
 )
 
 func TestSun_MoonRegister(t *testing.T) {
-	rpc := messenger.NewRpcServer(3260)
+	port, rpc := messenger.NewRandomPortRpcServer()
 	NewSun(rpc)
 	go rpc.Run()
 	time.Sleep(time.Millisecond * 300)
 
-	conn, err := grpc.Dial("127.0.0.1:3260", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := messenger.GetRpcConn("127.0.0.1", port)
 	if err != nil {
 		t.Errorf("faild to connect: %v", err)
 		return
@@ -30,14 +28,14 @@ func TestSun_MoonRegister(t *testing.T) {
 		RaftId:   0,
 		Uuid:     uuid.New().String(),
 		IpAddr:   "127.0.0.1",
-		RpcPort:  3261,
+		RpcPort:  port,
 		Capacity: 0,
 	}
 	node2 := node.NodeInfo{
 		RaftId:   0,
 		Uuid:     uuid.New().String(),
 		IpAddr:   "127.0.0.1",
-		RpcPort:  3261,
+		RpcPort:  port,
 		Capacity: 0,
 	}
 	result1, err := c.MoonRegister(context.Background(), &node1)
@@ -53,7 +51,7 @@ func TestSun_MoonRegister(t *testing.T) {
 			RaftId:   0,
 			Uuid:     node1.Uuid,
 			IpAddr:   "127.0.0.1",
-			RpcPort:  3261,
+			RpcPort:  port,
 			Capacity: 0,
 		}
 		result1, err := c.MoonRegister(context.Background(), &node1)

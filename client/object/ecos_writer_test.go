@@ -8,10 +8,11 @@ import (
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/common"
+	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
-	"net"
+	"os"
 	"path"
 	"runtime"
 	"strconv"
@@ -24,8 +25,6 @@ func TestEcosWriter(t *testing.T) {
 	t.Logf("Current test filename: %s", filename)
 	type args struct {
 		objectSize int
-		nodeAddr   string
-		port       int
 		key        string
 	}
 	tests := []struct {
@@ -36,8 +35,6 @@ func TestEcosWriter(t *testing.T) {
 		{"writer 8M object",
 			args{
 				1024 * 1024 * 8, // 8M
-				"127.0.0.1",
-				32801,
 				"/path/8M_obj",
 			},
 			false,
@@ -45,18 +42,14 @@ func TestEcosWriter(t *testing.T) {
 		{"writer 8.1M object",
 			args{
 				1024*1024*8 + 1024*100, // 8.1M
-				"127.0.0.1",
-				32801,
 				"/path/8.1M_obj",
 			},
 			false,
 		},
-		{"writer 128M object",
+		{"writer 64M object",
 			args{
-				1024 * 1024 * 128, // 128M
-				"127.0.0.1",
-				32801,
-				"/path/128M_obj",
+				1024 * 1024 * 64, // 64M
+				"/path/64M_obj",
 			},
 			false,
 		},
@@ -88,15 +81,16 @@ func TestEcosWriter(t *testing.T) {
 			alayas[i].Stop()
 			rpcServers[i].Stop()
 		}
+		_ = os.RemoveAll(basePath)
 	})
 
-	time.Sleep(15 * time.Second) // ensure rpcServer running
+	waiteAllAlayaOK(alayas)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := config.DefaultConfig
-			conf.NodeAddr = tt.args.nodeAddr
-			conf.NodePort = uint64(tt.args.port)
+			conf.NodeAddr = moons[0].SelfInfo.IpAddr
+			conf.NodePort = moons[0].SelfInfo.RpcPort
 			factory := NewEcosWriterFactory(conf)
 			writer := factory.GetEcosWriter(tt.args.key)
 			data := genTestData(tt.args.objectSize)
@@ -130,17 +124,8 @@ func genTestData(size int) []byte {
 	return data
 }
 
-func TestPortClose(t *testing.T) {
-	for port := 32801; port < 32804; port++ {
-		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(port), time.Second)
-		if err == nil && conn != nil {
-			t.Errorf("port %v not close!", port)
-		}
-	}
-	t.Log("All ports closed!")
-}
-
-func createServers(num int, sunAddr string, basePath string) ([]*node.NodeInfo, []*moon.Moon, []*alaya.Alaya, []*messenger.RpcServer, error) {
+func createServers(num int, sunAddr string, basePath string) ([]*node.NodeInfo,
+	[]*moon.Moon, []*alaya.Alaya, []*messenger.RpcServer, error) {
 	err := common.InitAndClearPath(basePath)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -156,8 +141,9 @@ func createServers(num int, sunAddr string, basePath string) ([]*node.NodeInfo, 
 		raftID := uint64(i + 1)
 		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
 		stableStorages = append(stableStorages, moon.NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
-		rpcServers = append(rpcServers, messenger.NewRpcServer(32800+raftID))
-		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", 32800+raftID))
+		port, rpcServer := messenger.NewRandomPortRpcServer()
+		rpcServers = append(rpcServers, rpcServer)
+		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", port))
 		alayas = append(alayas, alaya.NewAlaya(nodeInfos[i], infoStorages[i], alaya.NewMemoryMetaStorage(), rpcServers[i]))
 	}
 
@@ -180,4 +166,30 @@ func createServers(num int, sunAddr string, basePath string) ([]*node.NodeInfo, 
 		}
 	}
 	return nodeInfos, moons, alayas, rpcServers, nil
+}
+
+func waiteAllAlayaOK(alayas []*alaya.Alaya) {
+	timer := time.After(60 * time.Second)
+	for {
+		select {
+		case <-timer:
+			logger.Warningf("Alayas not OK after time out")
+			for _, a := range alayas {
+				a.PrintPipelineInfo()
+			}
+			return
+		default:
+		}
+		ok := true
+		for _, a := range alayas {
+			if !a.IsAllPipelinesOK() {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return
+		}
+		time.Sleep(time.Millisecond * 200)
+	}
 }

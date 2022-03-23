@@ -1,6 +1,6 @@
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM alpine:3.15.0
+FROM harbor.sums.top/ecos/ecos-base:v0.1
 WORKDIR /ecos
 COPY build/bin/ecos-cloud .
 

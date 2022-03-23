@@ -1,1 +1,0 @@
-{"SelfInfo":{"raft_id":1,"uuid":"c9ac61ed-1e80-4970-ba5c-0d6f4896b200","ip_addr":"192.168.1.224","rpc_port":3267,"capacity":10},"RpcPort":3267,"HttpPort":3268,"StoragePath":"./ecos-data","MoonConfig":{"SunAddr":"","GroupInfo":{},"NodeInfoCommitInterval":1000000000},"GaiaConfig":{"BasePath":"./ecos-data/gaia/"}}

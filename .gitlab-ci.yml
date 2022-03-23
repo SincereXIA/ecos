@@ -31,15 +31,15 @@ build-job:       # This job runs in the build stage, which runs first.
     - export CGO_LDFLAGS="-L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd"
     - go mod tidy
     - go build -o build/bin/ecos
-    - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-client ecos/client
-    - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-cloud ecos/cloud
-    - go build -a -ldflags '-extldflags "-static"' -o build/bin/ecos-edge-node ecos/edge-node
+    - go build -o build/bin/ecos-client ecos/client
+    - go build -o build/bin/ecos-cloud ecos/cloud
+    - go build -o build/bin/ecos-edge-node ecos/edge-node
     - echo "Compile complete."
   artifacts:
     paths:
       - build/
     when: always
-    expire_in: 4 weeks
+    expire_in: 1 weeks
   cache:
     key: ecos_go_env
     paths:
@@ -51,11 +51,11 @@ unit-test-job:   # This job runs in the test stage.
   needs: []
   script:
     - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct GOCACHE=$(pwd)/.go_cache/
-    - echo "Running unit tests... This will take about 60 seconds."
+    - echo "Running unit tests..."
     - golangci-lint --version
     - golangci-lint run --out-format checkstyle ./... > report.xml & # run in background
     - go mod tidy
-    - go test ./...  -parallel 1 -p 1  -coverprofile=cover.out -race  # enable race test default
+    - go test ./...  -coverprofile=cover.out -race  # enable race test default
     - ls
   artifacts:
     paths:
@@ -72,7 +72,7 @@ unit-test-job:   # This job runs in the test stage.
 sonarqube-check:
   stage: test
   needs: [unit-test-job]
-  image: 
+  image:
     name: sonarsource/sonar-scanner-cli:latest
     entrypoint: [""]
   variables:
@@ -82,10 +82,10 @@ sonarqube-check:
     key: "${CI_JOB_NAME}"
     paths:
       - .sonar/cache
-  script: 
+  script:
     - sonar-scanner -Dsonar.branch.name=$CI_COMMIT_REF_NAME
   allow_failure: true
-  
+
 
 ecos-docker-build:
   stage: docker-build

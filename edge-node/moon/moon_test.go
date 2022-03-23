@@ -5,6 +5,7 @@ import (
 	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/common"
+	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -43,23 +44,7 @@ func TestRaft(t *testing.T) {
 	})
 
 	// 等待选主
-	leader := -1
-	for {
-		ok := true
-		for i := 0; i < 3; i++ {
-			if moons[i].GetLeaderID() == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != 3 {
-				ok = false
-			}
-			leader = int(moons[i].GetLeaderID())
-		}
-		if !ok {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		} else {
-			t.Logf("leader: %v", leader)
-			break
-		}
-	}
+	leader := waitMoonsOK(moons)
 
 	time.Sleep(2 * time.Second) // wait for InfoStorage apply
 	assertInfoStorageOK(t, len(moons), moons...)
@@ -90,7 +75,8 @@ func TestRaft(t *testing.T) {
 	go node4.Run()
 
 	// 等待共识
-	time.Sleep(5 * time.Second)
+	waitMoonsOK(moons)
+	time.Sleep(3 * time.Second)
 
 	// 判断集群是否达成共识
 	assertInfoStorageOK(t, len(moons), moons...)
@@ -104,7 +90,6 @@ func TestRaft(t *testing.T) {
 		t.Log(anotherInfo)
 	}
 	t.Log("Reach agreement success")
-
 }
 
 func assertInfoStorageOK(t *testing.T, nodeNum int, moons ...*Moon) {
@@ -124,11 +109,7 @@ func TestMoon_Register(t *testing.T) {
 	dbBasePath := "./ecos-data/db/moon/"
 	moonNum := 5
 
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(dbBasePath)
-
-	sunRpc := messenger.NewRpcServer(3260)
+	port, sunRpc := messenger.NewRandomPortRpcServer()
 	sun.NewSun(sunRpc)
 	go func() {
 		err := sunRpc.Run()
@@ -138,7 +119,7 @@ func TestMoon_Register(t *testing.T) {
 	}()
 	time.Sleep(1 * time.Second)
 
-	moons, rpcServers, err := createMoons(moonNum, "127.0.0.1:3260", dbBasePath)
+	moons, rpcServers, err := createMoons(moonNum, "127.0.0.1:"+strconv.FormatUint(port, 10), dbBasePath)
 	assert.NoError(t, err)
 
 	for i := 0; i < moonNum; i++ {
@@ -154,16 +135,23 @@ func TestMoon_Register(t *testing.T) {
 	t.Cleanup(func() {
 		sunRpc.Stop()
 		for i := 0; i < moonNum; i++ {
-			rpcServers[i].Stop()
 			moons[i].Stop()
+			rpcServers[i].Stop()
 		}
+		_ = os.RemoveAll(dbBasePath)
 	})
 
+	waitMoonsOK(moons)
+	time.Sleep(4 * time.Second)
+	assertInfoStorageOK(t, moonNum, moons...)
+}
+
+func waitMoonsOK(moons []*Moon) int {
 	leader := -1
 	for {
 		ok := true
-		for i := 0; i < moonNum; i++ {
-			if moons[i].GetLeaderID() == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != moonNum {
+		for i := 0; i < len(moons); i++ {
+			if moons[i].GetLeaderID() == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != len(moons) {
 				ok = false
 			}
 			leader = int(moons[i].GetLeaderID())
@@ -172,12 +160,11 @@ func TestMoon_Register(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		} else {
-			t.Logf("leader: %v", leader)
+			logger.Infof("leader: %v", leader)
 			break
 		}
 	}
-	time.Sleep(2 * time.Second)
-	assertInfoStorageOK(t, moonNum, moons...)
+	return leader
 }
 
 func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenger.RpcServer, error) {
@@ -197,8 +184,9 @@ func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenge
 		//	node.NewStableNodeInfoStorage(path.Join(basePath, "/nodeInfo", strconv.Itoa(i+1))))
 		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
 		stableStorages = append(stableStorages, NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
-		rpcServers = append(rpcServers, messenger.NewRpcServer(32670+raftID))
-		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", 32670+raftID))
+		port, rpcServer := messenger.NewRandomPortRpcServer()
+		rpcServers = append(rpcServers, rpcServer)
+		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", port))
 	}
 
 	moonConfig := DefaultConfig

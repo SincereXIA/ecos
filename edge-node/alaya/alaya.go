@@ -66,7 +66,16 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 		return nil, ctx.Err()
 	default:
 		pgID := meta.PgId
-		a.getRaftNode(pgID).ProposeObjectMeta(meta)
+		err := a.getRaftNode(pgID).ProposeObjectMetaOperate(&MetaOperate{
+			Operate: MetaOperate_PUT,
+			Meta:    meta,
+		})
+		if err != nil {
+			return &common.Result{
+				Status:  common.Result_FAIL,
+				Message: err.Error(),
+			}, err
+		}
 		// TODO: 检查元数据是否同步成功
 		logger.Infof("Alaya record object meta success, obj_id: %v, size: %v", meta.ObjId, meta.ObjSize)
 	}
@@ -77,6 +86,11 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 }
 
 func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (*PGRaftMessage, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	pgID := pgMessage.PgId
 	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
 		msgChan.(chan raftpb.Message) <- *pgMessage.Message
@@ -208,13 +222,36 @@ func (a *Alaya) Run() {
 	}
 }
 
-func (a *Alaya) printPipelineInfo() {
+func (a *Alaya) PrintPipelineInfo() {
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
 		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v", a.SelfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
 		return true
 	})
+}
+
+// IsAllPipelinesOK check if pipelines in THIS alaya node is ok.
+// each raftNode should have leader, and each group should have exactly 3 nodes.
+func (a *Alaya) IsAllPipelinesOK() bool {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	ok := true
+	length := 0
+	if a.InfoStorage.GetTermNow() == 0 || a.state != RUNNING {
+		return false
+	}
+	a.PGRaftNode.Range(func(key, value interface{}) bool {
+		raftNode := value.(*Raft)
+		if raftNode.raft.Status().Lead != raftNode.getPipeline().RaftId[0] ||
+			len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
+			ok = false
+			return false
+		}
+		length += 1
+		return true
+	})
+	return ok
 }
 
 // MakeAlayaRaftInPipeline Make a new raft node for a single pipeline (PG), it will:

@@ -10,6 +10,10 @@ message Block {
   repeated bytes data = 1;
 }
 
+message MetaData {
+  map<string, string> attrs = 1;
+}
+
 message ObjectMeta {
   string obj_id = 1;
   uint64  obj_size = 2;
@@ -18,6 +22,7 @@ message ObjectMeta {
   uint64 pg_id = 5;
   repeated BlockInfo blocks = 6;
   uint64 term = 7;
+  MetaData meta_data = 8;
 }
 
 message BlockInfo {

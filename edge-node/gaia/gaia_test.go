@@ -6,6 +6,7 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
+	"ecos/messenger/common"
 	"ecos/utils/timestamp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -26,12 +27,13 @@ func TestNewGaia(t *testing.T) {
 	}
 	var rpcServers []*messenger.RpcServer
 	for i := 0; i < 5; i++ {
-		rpcServers = append(rpcServers, messenger.NewRpcServer(uint64(32670+i)))
+		port, rpcServer := messenger.NewRandomPortRpcServer()
+		rpcServers = append(rpcServers, rpcServer)
 		info := node.NodeInfo{
 			RaftId:   uint64(i + 1),
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",
-			RpcPort:  uint64(32670 + i),
+			RpcPort:  port,
 			Capacity: 10,
 		}
 		_ = storage.UpdateNodeInfo(&info, timestamp.Now())
@@ -61,7 +63,7 @@ func TestNewGaia(t *testing.T) {
 		}
 	})
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Millisecond * 100)
 
 	pipelines := pipeline.GenPipelines(storage.GetGroupInfo(0), 10, 3)
 	wait := sync.WaitGroup{}
@@ -128,8 +130,10 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, storage node.InfoStorag
 	if err != nil {
 		t.Errorf("Send stream err: %v", err)
 	}
-
-	time.Sleep(1 * time.Second)
+	result, err := stream.CloseAndRecv()
+	if err != nil || result.Status != common.Result_OK {
+		t.Errorf("receive close stream message fail: %v", err)
+	}
 	assertFilesOK(t, blockInfo.BlockId, blockInfo.BlockSize, p, basePaths)
 }
 

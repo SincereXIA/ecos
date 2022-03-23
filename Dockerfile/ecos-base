@@ -2,16 +2,6 @@ FROM harbor.sums.top/ecos/rocksdb-go:6.28.2-alpine  as builder
 
 WORKDIR /ecos
 
-COPY go.mod ./
-
-RUN GOPROXY=https://goproxy.io,direct go mod download
-
-COPY . ./
-RUN GOPROXY=https://goproxy.io,direct go mod tidy
-
-# Build
-RUN GOOS=linux GO111MODULE=on go build -o build/bin/ecos-cloud ecos/cloud
-
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 
@@ -24,8 +14,3 @@ RUN apk update \
 
 COPY --from=builder /usr/local/lib/librocksdb.so.6.28 /usr/local/lib/
 COPY --from=builder /usr/local/include/ /usr/local/include/
-COPY --from=builder /ecos/build/bin/ecos-cloud .
-
-ENTRYPOINT ["./ecos-cloud"]
-EXPOSE 3267
-EXPOSE 3268

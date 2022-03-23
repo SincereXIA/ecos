@@ -50,6 +50,7 @@ const (
 	CodeNoTransporter int32 = GaiaError + iota
 	CodeTransporterWriteFail
 	CodeGaiaClosed
+	CodeRemoteGaiaFail
 )
 
 var (
@@ -74,6 +75,7 @@ var (
 	NoTransporterErr     = newErr(CodeNoTransporter, "no transporter available")
 	TransporterWriteFail = newErr(CodeTransporterWriteFail, "transporter write fail")
 	GaiaClosedErr        = newErr(CodeGaiaClosed, "gaia context done")
+	RemoteGaiaFail       = newErr(CodeRemoteGaiaFail, "remote gaia fail")
 )
 
 type Errno struct {

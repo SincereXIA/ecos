@@ -1,0 +1,35 @@
+FROM golang:1.17.8-alpine3.15 as builder
+
+RUN apk update \
+    && apk add make g++ musl-dev snappy-dev bzip2-dev zlib-dev lz4-dev zstd-dev gflags-dev libstdc++ bash linux-headers
+
+RUN wget -O rocksdb.tar.gz "https://ghproxy.com/https://github.com/facebook/rocksdb/archive/refs/tags/v6.28.2.tar.gz" \
+    && mkdir -p ~/rocksdb \
+    && tar -zxvf rocksdb.tar.gz -C ~/rocksdb
+
+RUN bash -c "cd ~/rocksdb/rocksdb-6.28.2 \
+    && ls \
+    && PORTABLE=1 make -j8 shared_lib \
+    && PORTABLE=1 make -j8 static_lib"
+
+RUN bash -c "cd ~/rocksdb/rocksdb-6.28.2 \
+    && apk add coreutils \
+    && make install-shared \
+    && make install-static \
+    && cd include \
+    && cp -r rocksdb /usr/local/lib \
+    && cd ~ && rm -rf rocksdb"
+
+RUN ls /usr/local/lib/
+
+FROM golang:1.17.8-alpine3.15
+
+RUN apk update \
+    && apk add g++ musl-dev snappy-dev bzip2-dev zlib-dev lz4-dev zstd-dev gflags-dev libstdc++
+
+COPY --from=builder /usr/local/lib/ /usr/local/lib/
+COPY --from=builder /usr/local/include/ /usr/local/include/
+RUN ls /usr/local/lib/
+RUN GOPROXY=https://goproxy.cn,direct go get -u github.com/SUMStudio/grocksdb
+RUN apk add curl
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.44.2

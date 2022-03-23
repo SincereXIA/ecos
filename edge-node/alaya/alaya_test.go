@@ -7,6 +7,7 @@ import (
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	"ecos/utils/common"
+	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -15,15 +16,6 @@ import (
 	"testing"
 	"time"
 )
-import "github.com/sincerexia/gocrush"
-
-const (
-	ROOT        = 0
-	DATA_CENTER = 1
-	RACK        = 2
-	NODE        = 3
-	DISK        = 4
-)
 
 func TestNewAlaya(t *testing.T) {
 	nodeInfoDir := "./NodeInfoStorage"
@@ -31,35 +23,36 @@ func TestNewAlaya(t *testing.T) {
 	//infoStorage := node.NewStableNodeInfoStorage(nodeInfoDir)
 	infoStorage := node.NewMemoryNodeInfoStorage()
 	defer infoStorage.Close()
+
+	nodeNum := 9
+	var rpcServers []messenger.RpcServer
 	groupInfo := node.GroupInfo{
 		Term:            1,
 		LeaderInfo:      nil,
 		NodesInfo:       []*node.NodeInfo{},
 		UpdateTimestamp: timestamp.Now(),
 	}
-	for i := 0; i < 9; i++ {
+	for i := 0; i < nodeNum; i++ {
+		port, server := messenger.NewRandomPortRpcServer()
+		rpcServers = append(rpcServers, *server)
 		info := node.NodeInfo{
 			RaftId:   uint64(i) + 1,
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",
-			RpcPort:  uint64(32671 + i),
+			RpcPort:  port,
 			Capacity: 1,
 		}
 		_ = infoStorage.UpdateNodeInfo(&info, timestamp.Now())
 		groupInfo.NodesInfo = append(groupInfo.NodesInfo, &info)
 	}
+
 	infoStorage.Commit(1)
 	infoStorage.Apply()
 	pipelines := pipeline.GenPipelines(&groupInfo, 10, 3)
-	var rpcServers []messenger.RpcServer
-	for _, info := range groupInfo.NodesInfo {
-		server := messenger.NewRpcServer(info.RpcPort)
-		rpcServers = append(rpcServers, *server)
-	}
 
 	var alayas []*Alaya
-	os.Mkdir("./testMetaStorage/", os.ModePerm)
-	for i := 0; i < 9; i++ { // for each node
+	_ = os.Mkdir("./testMetaStorage/", os.ModePerm)
+	for i := 0; i < nodeNum; i++ { // for each node
 		info := groupInfo.NodesInfo[i]
 		dataBaseDir := "./testMetaStorage/" + strconv.FormatUint(info.RaftId, 10)
 		metaStorage := NewStableMetaStorage(dataBaseDir)
@@ -70,7 +63,7 @@ func TestNewAlaya(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		for i := 0; i < 9; i++ { // for each node
+		for i := 0; i < nodeNum; i++ { // for each node
 			alaya := alayas[i]
 			alaya.Stop()
 			server := rpcServers[i]
@@ -82,16 +75,16 @@ func TestNewAlaya(t *testing.T) {
 	})
 
 	t.Log("Alayas init done, start run")
-	for i := 0; i < 9; i++ {
+	for i := 0; i < nodeNum; i++ {
 		a := alayas[i]
 		go a.Run()
 	}
-	time.Sleep(time.Second * 8)
+	waiteAllAlayaOK(alayas)
 	assertAlayasOK(t, alayas, pipelines)
 
-	for i := 0; i < 9; i++ { // for each node
+	for i := 0; i < nodeNum; i++ { // for each node
 		a := alayas[i]
-		a.printPipelineInfo()
+		a.PrintPipelineInfo()
 	}
 
 	a := alayas[pipelines[0].RaftId[0]-1]
@@ -117,7 +110,6 @@ func TestNewAlaya(t *testing.T) {
 	meta2, err := a2.MetaStorage.GetMeta("/volume/bucket/testObj")
 
 	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
-
 }
 
 func TestAlaya_UpdatePipeline(t *testing.T) {
@@ -127,15 +119,16 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 	var term uint64
 
 	for i := 0; i < 9; i++ {
+		port, rpcServer := messenger.NewRandomPortRpcServer()
+		rpcServers = append(rpcServers, rpcServer)
 		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
 		nodeInfos = append(nodeInfos, node.NodeInfo{
 			RaftId:   uint64(i + 1),
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",
-			RpcPort:  uint64(32670 + i + 1),
+			RpcPort:  port,
 			Capacity: 10,
 		})
-		rpcServers = append(rpcServers, messenger.NewRpcServer(uint64(32670+i+1)))
 	}
 
 	// UP 6 Alaya
@@ -156,26 +149,17 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		go alayas[i].Run()
 	}
 
-	t.Cleanup(func() {
-		for i := 0; i < 9; i++ { // for each node
-			server := rpcServers[i]
-			server.Stop()
-			alaya := alayas[i]
-			alaya.Stop()
-		}
-	})
-
 	time.Sleep(time.Second * 1)
 	for i := 0; i < 6; i++ {
 		t.Logf("Apply new groupInfo for: %v", i+1)
 		go infoStorages[i].Apply()
 	}
 
-	time.Sleep(time.Second * 15)
+	waiteAllAlayaOK(alayas)
 
 	for i := 0; i < 6; i++ { // for each node
 		a := alayas[i]
-		a.printPipelineInfo()
+		a.PrintPipelineInfo()
 	}
 
 	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
@@ -210,16 +194,23 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		t.Logf("Apply new groupInfo for: %v", i+1)
 		go infoStorages[i].Apply()
 	}
-	time.Sleep(time.Second * 15)
+	waiteAllAlayaOK(alayas)
 	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]
-		a.printPipelineInfo()
+		a.PrintPipelineInfo()
 	}
 
 	pipelines := pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3)
 	for _, p := range pipelines {
 		t.Logf("PG: %v, id: %v, %v, %v", p.PgId, p.RaftId[0], p.RaftId[1], p.RaftId[2])
+	}
+
+	for i := 0; i < 9; i++ { // for each node
+		server := rpcServers[i]
+		server.Stop()
+		alaya := alayas[i]
+		alaya.Stop()
 	}
 }
 
@@ -241,44 +232,29 @@ func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipelin
 	}
 }
 
-func TestAlaya_RecordObjectMeta(t *testing.T) {
-	tree := makeStrawTree()
-	nodes := gocrush.Select(tree, 868, 3, NODE, nil)
-	for _, n := range nodes {
-		t.Logf("node: %v", n.GetId())
+func waiteAllAlayaOK(alayas []*Alaya) {
+	timer := time.After(60 * time.Second)
+	for {
+		select {
+		case <-timer:
+			logger.Warningf("Alayas not OK after time out")
+			for _, alaya := range alayas {
+				alaya.PrintPipelineInfo()
+			}
+			return
+		default:
+		}
+		ok := true
+		for id, alaya := range alayas {
+			if !alaya.IsAllPipelinesOK() {
+				logger.Warningf("Alaya %v not ok", id+1)
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return
+		}
+		time.Sleep(time.Millisecond * 200)
 	}
-	checkUnique(t, nodes)
-	nodes = gocrush.Select(tree, 11, 3, NODE, nil)
-	for _, n := range nodes {
-		t.Logf("node: %v", n.GetId())
-	}
-	checkUnique(t, nodes)
-}
-
-func checkUnique(t *testing.T, nodes []gocrush.Node) {
-	m := make(map[string]int)
-	for _, n := range nodes {
-		m[n.GetId()] = 1
-	}
-	assert.Equal(t, len(m), len(nodes))
-}
-
-func makeStrawTree() *gocrush.TestingNode {
-	var parent = new(gocrush.TestingNode)
-	parent.Id = "ROOT"
-	parent.Type = ROOT
-	parent.Weight = 0
-	parent.Children = make([]gocrush.Node, 50)
-	for dc := 0; dc < 50; dc++ {
-		var node = new(gocrush.TestingNode)
-		node.Parent = parent
-		node.Weight = 10
-		node.Type = NODE
-		node.Id = parent.Id + ":NODE" + strconv.Itoa(dc)
-
-		parent.Children[dc] = node
-		node.Selector = gocrush.NewStrawSelector(node)
-	}
-	parent.Selector = gocrush.NewStrawSelector(parent)
-	return parent
 }
