@@ -233,11 +233,15 @@ func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipelin
 }
 
 func waiteAllAlayaOK(alayas []*Alaya) {
-	timmer := time.After(60 * time.Second)
+	timer := time.After(60 * time.Second)
 	for {
 		select {
-		case <-timmer:
+		case <-timer:
 			logger.Warningf("Alayas not OK after time out")
+			for _, alaya := range alayas {
+				alaya.printPipelineInfo()
+			}
+			return
 		default:
 		}
 		ok := true

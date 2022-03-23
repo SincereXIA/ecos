@@ -229,7 +229,8 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 	length := 0
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
-		if raftNode.raft.Status().Lead != raftNode.getPipeline().RaftId[0] || len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
+		if raftNode.raft.Status().Lead != raftNode.getPipeline().RaftId[0] ||
+			len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
 			ok = false
 			return false
 		}
