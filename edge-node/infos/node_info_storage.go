@@ -1,4 +1,4 @@
-package node
+package infos
 
 import (
 	"ecos/utils/timestamp"
@@ -9,22 +9,22 @@ import (
 	"sync"
 )
 
-type ID uint64
+type NodeID uint64
 
-// InfoStorage 实现有任期的边缘节点信息存储
+// NodeInfoStorage 实现有任期的边缘节点信息存储
 //
-type InfoStorage interface {
+type NodeInfoStorage interface {
 	UpdateNodeInfo(info *NodeInfo, time *timestamp.Timestamp) error
-	DeleteNodeInfo(nodeId ID, time *timestamp.Timestamp) error
-	GetNodeInfo(nodeId ID) (*NodeInfo, error)
-	SetLeader(nodeId ID, time *timestamp.Timestamp) error
+	DeleteNodeInfo(nodeId NodeID, time *timestamp.Timestamp) error
+	GetNodeInfo(nodeId NodeID) (*NodeInfo, error)
+	SetLeader(nodeId NodeID, time *timestamp.Timestamp) error
 	// Commit 提交缓存区的节点信息，至此该 term 无法再变化，但提交尚未生效
 	Commit(newTerm uint64)
 	// Apply 使得已经 Commit 的节点信息马上生效
 	Apply()
 
 	// ListAllNodeInfo 用于节点间通信时获取节点信息
-	ListAllNodeInfo() map[ID]*NodeInfo
+	ListAllNodeInfo() map[NodeID]*NodeInfo
 	// GetGroupInfo 用于为 Crush 算法提供集群信息
 	// 默认
 	GetGroupInfo(term uint64) *GroupInfo
@@ -57,7 +57,7 @@ func (storage *MemoryNodeInfoStorage) UpdateNodeInfo(info *NodeInfo, time *times
 	return nil
 }
 
-func (storage *MemoryNodeInfoStorage) DeleteNodeInfo(nodeId ID, time *timestamp.Timestamp) error {
+func (storage *MemoryNodeInfoStorage) DeleteNodeInfo(nodeId NodeID, time *timestamp.Timestamp) error {
 	storage.rwMutex.Lock()
 	delete(storage.uncommittedState.InfoMap, uint64(nodeId))
 	storage.updateTimestamp(time)
@@ -65,7 +65,7 @@ func (storage *MemoryNodeInfoStorage) DeleteNodeInfo(nodeId ID, time *timestamp.
 	return nil
 }
 
-func (storage *MemoryNodeInfoStorage) GetNodeInfo(nodeId ID) (*NodeInfo, error) {
+func (storage *MemoryNodeInfoStorage) GetNodeInfo(nodeId NodeID) (*NodeInfo, error) {
 	storage.rwMutex.RLock()
 	defer storage.rwMutex.RUnlock()
 	if nodeInfo, ok := storage.uncommittedState.InfoMap[uint64(nodeId)]; ok {
@@ -74,12 +74,12 @@ func (storage *MemoryNodeInfoStorage) GetNodeInfo(nodeId ID) (*NodeInfo, error) 
 	return nil, errors.New("node not found")
 }
 
-func (storage *MemoryNodeInfoStorage) ListAllNodeInfo() map[ID]*NodeInfo {
-	tempMap := make(map[ID]*NodeInfo)
+func (storage *MemoryNodeInfoStorage) ListAllNodeInfo() map[NodeID]*NodeInfo {
+	tempMap := make(map[NodeID]*NodeInfo)
 	storage.rwMutex.RLock()
 	defer storage.rwMutex.RUnlock()
 	for k, v := range storage.uncommittedState.InfoMap {
-		tempMap[ID(k)] = v
+		tempMap[NodeID(k)] = v
 	}
 	return tempMap
 }
@@ -125,7 +125,7 @@ func (storage *MemoryNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
 	return storage.history.HistoryMap[term]
 }
 
-func (storage *MemoryNodeInfoStorage) SetLeader(nodeId ID, time *timestamp.Timestamp) error {
+func (storage *MemoryNodeInfoStorage) SetLeader(nodeId NodeID, time *timestamp.Timestamp) error {
 	storage.rwMutex.Lock()
 	defer storage.rwMutex.Unlock()
 	if _, ok := storage.uncommittedState.InfoMap[uint64(nodeId)]; ok {

@@ -4,7 +4,7 @@ import (
 	clientNode "ecos/client/node"
 	"ecos/client/user"
 	"ecos/edge-node/gaia"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/utils/common"
@@ -36,7 +36,7 @@ type Block struct {
 
 	// These infos are for BlockInfo
 	key        string
-	groupInfo  *node.GroupInfo
+	groupInfo  *infos.GroupInfo
 	blockCount int
 	needHash   bool
 	blockPipes []*pipeline.Pipeline

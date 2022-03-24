@@ -1,7 +1,7 @@
 package pipeline
 
 import (
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/utils/timestamp"
 	"github.com/stretchr/testify/assert"
 	"reflect"
@@ -22,15 +22,15 @@ func TestGenPipelines(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(pipelines, pipelines2))
 }
 
-func genGroupInfo() *node.GroupInfo {
-	group := node.GroupInfo{
+func genGroupInfo() *infos.GroupInfo {
+	group := infos.GroupInfo{
 		Term:            0,
 		LeaderInfo:      nil,
-		NodesInfo:       []*node.NodeInfo{},
+		NodesInfo:       []*infos.NodeInfo{},
 		UpdateTimestamp: timestamp.Now(),
 	}
 	for i := 1; i <= 20; i++ {
-		group.NodesInfo = append(group.NodesInfo, &node.NodeInfo{
+		group.NodesInfo = append(group.NodesInfo, &infos.NodeInfo{
 			RaftId:   uint64(i),
 			Uuid:     strconv.Itoa(i) + "test",
 			IpAddr:   "127.0.0.1",

@@ -2,7 +2,7 @@ package moon
 
 import (
 	"ecos/cloud/sun"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/logger"
@@ -23,7 +23,7 @@ func TestRaft(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 先起三个节点
-	var nodeInfos []*node.NodeInfo
+	var nodeInfos []*infos.NodeInfo
 	for i := 0; i < 3; i++ {
 		index := i
 		nodeInfos = append(nodeInfos, moons[i].SelfInfo)
@@ -46,20 +46,20 @@ func TestRaft(t *testing.T) {
 	// 等待选主
 	leader := waitMoonsOK(moons)
 
-	time.Sleep(2 * time.Second) // wait for InfoStorage apply
+	time.Sleep(2 * time.Second) // wait for NodeInfoStorage apply
 	assertInfoStorageOK(t, len(moons), moons...)
 
 	// Node4
-	node4Info := node.NewSelfInfo(0x04, "127.0.0.1", 32674)
+	node4Info := infos.NewSelfInfo(0x04, "127.0.0.1", 32674)
 	rpcServer4 := messenger.NewRpcServer(32674)
 	moonConfig := DefaultConfig
-	moonConfig.GroupInfo = node.GroupInfo{
+	moonConfig.GroupInfo = infos.GroupInfo{
 		Term:            0,
 		LeaderInfo:      moons[leader-1].SelfInfo,
 		NodesInfo:       nodeInfos,
 		UpdateTimestamp: nil,
 	}
-	node4 := NewMoon(node4Info, moonConfig, rpcServer4, node.NewMemoryNodeInfoStorage(),
+	node4 := NewMoon(node4Info, moonConfig, rpcServer4, infos.NewMemoryNodeInfoStorage(),
 		NewStorage(path.Join(basePath, "/raft", "/4")))
 	moons = append(moons, node4)
 	rpcServers = append(rpcServers, rpcServer4)
@@ -172,26 +172,26 @@ func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenge
 	if err != nil {
 		return nil, nil, err
 	}
-	var infoStorages []node.InfoStorage
+	var infoStorages []infos.NodeInfoStorage
 	var stableStorages []Storage
 	var rpcServers []*messenger.RpcServer
 	var moons []*Moon
-	var nodeInfos []*node.NodeInfo
+	var nodeInfos []*infos.NodeInfo
 
 	for i := 0; i < num; i++ {
 		raftID := uint64(i + 1)
 		//infoStorages = append(infoStorages,
-		//	node.NewStableNodeInfoStorage(path.Join(basePath, "/nodeInfo", strconv.Itoa(i+1))))
-		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
+		//	infos.NewStableNodeInfoStorage(path.Join(basePath, "/nodeInfo", strconv.Itoa(i+1))))
+		infoStorages = append(infoStorages, infos.NewMemoryNodeInfoStorage())
 		stableStorages = append(stableStorages, NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
 		port, rpcServer := messenger.NewRandomPortRpcServer()
 		rpcServers = append(rpcServers, rpcServer)
-		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", port))
+		nodeInfos = append(nodeInfos, infos.NewSelfInfo(raftID, "127.0.0.1", port))
 	}
 
 	moonConfig := DefaultConfig
 	moonConfig.SunAddr = sunAddr
-	moonConfig.GroupInfo = node.GroupInfo{
+	moonConfig.GroupInfo = infos.GroupInfo{
 		Term:            0,
 		LeaderInfo:      nil,
 		UpdateTimestamp: timestamp.Now(),

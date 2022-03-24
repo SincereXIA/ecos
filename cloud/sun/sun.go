@@ -2,7 +2,7 @@ package sun
 
 import (
 	"context"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/logger"
@@ -14,19 +14,19 @@ import (
 type Sun struct {
 	rpc *messenger.RpcServer
 	Server
-	leaderInfo *node.NodeInfo
-	groupInfo  *node.GroupInfo
+	leaderInfo *infos.NodeInfo
+	groupInfo  *infos.GroupInfo
 	lastRaftID uint64
 	mu         sync.Mutex
-	cachedInfo map[string]*node.NodeInfo //cache node info by uuid
+	cachedInfo map[string]*infos.NodeInfo //cache node info by uuid
 }
 
 type Server struct {
 	UnimplementedSunServer
 }
 
-// MoonRegister give a Raft ID to a new edge node
-func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*RegisterResult, error) {
+// MoonRegister give a Raft NodeID to a new edge node
+func (s *Sun) MoonRegister(_ context.Context, nodeInfo *infos.NodeInfo) (*RegisterResult, error) {
 	hasLeader := true
 
 	// Check Leader info
@@ -49,7 +49,7 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*Registe
 		}, nil
 	}
 
-	// Gen a new Raft ID
+	// Gen a new Raft NodeID
 	raftID := atomic.AddUint64(&s.lastRaftID, 1)
 	nodeInfo.RaftId = raftID
 
@@ -67,11 +67,11 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*Registe
 	return &result, nil
 }
 
-func (s *Sun) GetLeaderInfo(_ context.Context, nodeInfo *node.NodeInfo) (*node.NodeInfo, error) {
+func (s *Sun) GetLeaderInfo(_ context.Context, nodeInfo *infos.NodeInfo) (*infos.NodeInfo, error) {
 	return s.groupInfo.LeaderInfo, nil
 }
 
-func (s *Sun) ReportGroupInfo(_ context.Context, groupInfo *node.GroupInfo) (*common.Result, error) {
+func (s *Sun) ReportGroupInfo(_ context.Context, groupInfo *infos.GroupInfo) (*common.Result, error) {
 	s.mu.Lock()
 	s.groupInfo = groupInfo
 	s.mu.Unlock()
@@ -85,13 +85,13 @@ func NewSun(rpc *messenger.RpcServer) *Sun {
 	sun := Sun{
 		rpc:        rpc,
 		leaderInfo: nil,
-		groupInfo: &node.GroupInfo{
+		groupInfo: &infos.GroupInfo{
 			LeaderInfo: nil,
 			NodesInfo:  nil,
 		},
 		lastRaftID: 0,
 		mu:         sync.Mutex{},
-		cachedInfo: map[string]*node.NodeInfo{},
+		cachedInfo: map[string]*infos.NodeInfo{},
 	}
 	RegisterSunServer(rpc, &sun)
 	return &sun

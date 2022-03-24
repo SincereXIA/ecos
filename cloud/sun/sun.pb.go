@@ -4,7 +4,7 @@
 package sun
 
 import (
-	node "ecos/edge-node/node"
+	infos "ecos/edge-node/infos"
 	common "ecos/messenger/common"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
@@ -25,13 +25,13 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type RegisterResult struct {
-	Result               *common.Result  `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	RaftId               uint64          `protobuf:"varint,2,opt,name=raft_id,json=raftId,proto3" json:"raft_id,omitempty"`
-	HasLeader            bool            `protobuf:"varint,3,opt,name=has_leader,json=hasLeader,proto3" json:"has_leader,omitempty"`
-	GroupInfo            *node.GroupInfo `protobuf:"bytes,4,opt,name=group_info,json=groupInfo,proto3" json:"group_info,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	Result               *common.Result   `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	RaftId               uint64           `protobuf:"varint,2,opt,name=raft_id,json=raftId,proto3" json:"raft_id,omitempty"`
+	HasLeader            bool             `protobuf:"varint,3,opt,name=has_leader,json=hasLeader,proto3" json:"has_leader,omitempty"`
+	GroupInfo            *infos.GroupInfo `protobuf:"bytes,4,opt,name=group_info,json=groupInfo,proto3" json:"group_info,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
+	XXX_unrecognized     []byte           `json:"-"`
+	XXX_sizecache        int32            `json:"-"`
 }
 
 func (m *RegisterResult) Reset()         { *m = RegisterResult{} }
@@ -88,7 +88,7 @@ func (m *RegisterResult) GetHasLeader() bool {
 	return false
 }
 
-func (m *RegisterResult) GetGroupInfo() *node.GroupInfo {
+func (m *RegisterResult) GetGroupInfo() *infos.GroupInfo {
 	if m != nil {
 		return m.GroupInfo
 	}
@@ -368,7 +368,7 @@ func (m *RegisterResult) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.GroupInfo == nil {
-				m.GroupInfo = &node.GroupInfo{}
+				m.GroupInfo = &infos.GroupInfo{}
 			}
 			if err := m.GroupInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err

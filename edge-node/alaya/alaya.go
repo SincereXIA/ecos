@@ -2,8 +2,8 @@ package alaya
 
 import (
 	"context"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
-	"ecos/edge-node/node"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
@@ -25,7 +25,7 @@ type Alaya struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	SelfInfo       *node.NodeInfo
+	SelfInfo       *infos.NodeInfo
 	PGMessageChans sync.Map
 	// PGRaftNode save all raft node on this edge.
 	// pgID -> Raft node
@@ -34,7 +34,7 @@ type Alaya struct {
 	mutex            sync.Mutex
 	raftNodeStopChan chan uint64 // 内部 raft node 主动退出时，使用该 chan 通知 alaya
 
-	InfoStorage node.InfoStorage
+	InfoStorage infos.NodeInfoStorage
 	MetaStorage MetaStorage
 
 	state State
@@ -112,7 +112,7 @@ func (a *Alaya) Stop() {
 	a.cancel()
 }
 
-func (a *Alaya) ApplyNewGroupInfo(groupInfo *node.GroupInfo) {
+func (a *Alaya) ApplyNewGroupInfo(groupInfo *infos.GroupInfo) {
 	// TODO: (zhang) make pgNum configurable
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
@@ -181,7 +181,7 @@ func NewAlayaByMoon(moon *moon.Moon, storage MetaStorage, server *messenger.RpcS
 	return NewAlaya(moon.SelfInfo, moon.InfoStorage, storage, server)
 }
 
-func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage MetaStorage,
+func NewAlaya(selfInfo *infos.NodeInfo, infoStorage infos.NodeInfoStorage, metaStorage MetaStorage,
 	rpcServer *messenger.RpcServer) *Alaya {
 	ctx, cancel := context.WithCancel(context.Background())
 	a := Alaya{
@@ -227,6 +227,7 @@ func (a *Alaya) PrintPipelineInfo() {
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
 		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v", a.SelfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
+
 		return true
 	})
 }

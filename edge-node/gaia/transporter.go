@@ -2,7 +2,7 @@ package gaia
 
 import (
 	"context"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
@@ -28,7 +28,7 @@ type PrimaryCopyTransporter struct {
 //
 // when pipeline contains only self node, it will only write to local
 func NewPrimaryCopyTransporter(ctx context.Context, info *object.BlockInfo, pipeline *pipeline.Pipeline,
-	selfID uint64, groupInfo *node.GroupInfo, basePath string) (t *PrimaryCopyTransporter, err error) {
+	selfID uint64, groupInfo *infos.GroupInfo, basePath string) (t *PrimaryCopyTransporter, err error) {
 	var localWriter io.Writer
 	// 创建远端 writer
 	var remoteWriters []io.Writer
@@ -98,9 +98,9 @@ type RemoteWriter struct {
 }
 
 // NewRemoteWriter return a new RemoteWriter.
-func NewRemoteWriter(ctx context.Context, blockInfo *object.BlockInfo, nodeInfo *node.NodeInfo,
+func NewRemoteWriter(ctx context.Context, blockInfo *object.BlockInfo, nodeInfo *infos.NodeInfo,
 	p *pipeline.Pipeline) (*RemoteWriter, error) {
-	conn, err := messenger.GetRpcConnByInfo(nodeInfo)
+	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 	if err != nil {
 		// TODO: return err
 	}
@@ -151,7 +151,7 @@ func (w *RemoteWriter) Close() error {
 	return err
 }
 
-func getNodeInfo(groupInfo *node.GroupInfo, nodeID uint64) *node.NodeInfo {
+func getNodeInfo(groupInfo *infos.GroupInfo, nodeID uint64) *infos.NodeInfo {
 	for _, info := range groupInfo.NodesInfo {
 		if info.RaftId == nodeID {
 			return info
@@ -160,7 +160,7 @@ func getNodeInfo(groupInfo *node.GroupInfo, nodeID uint64) *node.NodeInfo {
 	return nil
 }
 
-func makeSingleNodePipeline(info *node.NodeInfo, p *pipeline.Pipeline) *pipeline.Pipeline {
+func makeSingleNodePipeline(info *infos.NodeInfo, p *pipeline.Pipeline) *pipeline.Pipeline {
 	return &pipeline.Pipeline{
 		PgId:     p.PgId,
 		RaftId:   []uint64{info.RaftId},

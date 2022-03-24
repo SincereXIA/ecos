@@ -1,13 +1,13 @@
 package moon
 
 import (
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"time"
 )
 
 type Config struct {
 	SunAddr                string
-	GroupInfo              node.GroupInfo
+	GroupInfo              infos.GroupInfo
 	NodeInfoCommitInterval time.Duration
 }
 
@@ -16,7 +16,7 @@ var DefaultConfig *Config
 func init() {
 	DefaultConfig = &Config{
 		SunAddr:                "",
-		GroupInfo:              node.GroupInfo{},
+		GroupInfo:              infos.GroupInfo{},
 		NodeInfoCommitInterval: time.Second,
 	}
 }

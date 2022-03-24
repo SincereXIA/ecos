@@ -4,7 +4,7 @@ package moon
 
 import (
 	context "context"
-	node "ecos/edge-node/node"
+	infos "ecos/edge-node/infos"
 	raftpb "go.etcd.io/etcd/raft/v3/raftpb"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -21,8 +21,8 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MoonClient interface {
 	SendRaftMessage(ctx context.Context, in *raftpb.Message, opts ...grpc.CallOption) (*raftpb.Message, error)
-	AddNodeToGroup(ctx context.Context, in *node.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error)
-	GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, opts ...grpc.CallOption) (*node.GroupInfo, error)
+	AddNodeToGroup(ctx context.Context, in *infos.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error)
+	GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, opts ...grpc.CallOption) (*infos.GroupInfo, error)
 }
 
 type moonClient struct {
@@ -42,7 +42,7 @@ func (c *moonClient) SendRaftMessage(ctx context.Context, in *raftpb.Message, op
 	return out, nil
 }
 
-func (c *moonClient) AddNodeToGroup(ctx context.Context, in *node.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error) {
+func (c *moonClient) AddNodeToGroup(ctx context.Context, in *infos.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error) {
 	out := new(AddNodeReply)
 	err := c.cc.Invoke(ctx, "/messenger.Moon/AddNodeToGroup", in, out, opts...)
 	if err != nil {
@@ -51,8 +51,8 @@ func (c *moonClient) AddNodeToGroup(ctx context.Context, in *node.NodeInfo, opts
 	return out, nil
 }
 
-func (c *moonClient) GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, opts ...grpc.CallOption) (*node.GroupInfo, error) {
-	out := new(node.GroupInfo)
+func (c *moonClient) GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, opts ...grpc.CallOption) (*infos.GroupInfo, error) {
+	out := new(infos.GroupInfo)
 	err := c.cc.Invoke(ctx, "/messenger.Moon/GetGroupInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -65,8 +65,8 @@ func (c *moonClient) GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, 
 // for forward compatibility
 type MoonServer interface {
 	SendRaftMessage(context.Context, *raftpb.Message) (*raftpb.Message, error)
-	AddNodeToGroup(context.Context, *node.NodeInfo) (*AddNodeReply, error)
-	GetGroupInfo(context.Context, *GetGroupInfoRequest) (*node.GroupInfo, error)
+	AddNodeToGroup(context.Context, *infos.NodeInfo) (*AddNodeReply, error)
+	GetGroupInfo(context.Context, *GetGroupInfoRequest) (*infos.GroupInfo, error)
 	mustEmbedUnimplementedMoonServer()
 }
 
@@ -77,10 +77,10 @@ type UnimplementedMoonServer struct {
 func (UnimplementedMoonServer) SendRaftMessage(context.Context, *raftpb.Message) (*raftpb.Message, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendRaftMessage not implemented")
 }
-func (UnimplementedMoonServer) AddNodeToGroup(context.Context, *node.NodeInfo) (*AddNodeReply, error) {
+func (UnimplementedMoonServer) AddNodeToGroup(context.Context, *infos.NodeInfo) (*AddNodeReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddNodeToGroup not implemented")
 }
-func (UnimplementedMoonServer) GetGroupInfo(context.Context, *GetGroupInfoRequest) (*node.GroupInfo, error) {
+func (UnimplementedMoonServer) GetGroupInfo(context.Context, *GetGroupInfoRequest) (*infos.GroupInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGroupInfo not implemented")
 }
 func (UnimplementedMoonServer) mustEmbedUnimplementedMoonServer() {}
@@ -115,7 +115,7 @@ func _Moon_SendRaftMessage_Handler(srv interface{}, ctx context.Context, dec fun
 }
 
 func _Moon_AddNodeToGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(node.NodeInfo)
+	in := new(infos.NodeInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func _Moon_AddNodeToGroup_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: "/messenger.Moon/AddNodeToGroup",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MoonServer).AddNodeToGroup(ctx, req.(*node.NodeInfo))
+		return srv.(MoonServer).AddNodeToGroup(ctx, req.(*infos.NodeInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }

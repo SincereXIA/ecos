@@ -1,20 +1,20 @@
 package node
 
 import (
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 )
 
 // ClientNodeInfoStorage provides way to query NodeInfo and GroupInfo for a specific Term
 type ClientNodeInfoStorage struct {
-	curGroupInfo *node.GroupInfo
-	curNodesInfo map[uint64]*node.NodeInfo
-	history      map[uint64]*node.GroupInfo
+	curGroupInfo *infos.GroupInfo
+	curNodesInfo map[uint64]*infos.NodeInfo
+	history      map[uint64]*infos.GroupInfo
 }
 
 // NewClientNodeInfoStorage generates server-independent NodeInfoStorage
 func NewClientNodeInfoStorage() (*ClientNodeInfoStorage, error) {
 	return &ClientNodeInfoStorage{
-		history: map[uint64]*node.GroupInfo{},
+		history: map[uint64]*infos.GroupInfo{},
 	}, nil
 }
 
@@ -28,15 +28,15 @@ func init() {
 }
 
 // SaveGroupInfo save GroupInfo into history
-func (s *ClientNodeInfoStorage) SaveGroupInfo(groupInfo *node.GroupInfo) {
+func (s *ClientNodeInfoStorage) SaveGroupInfo(groupInfo *infos.GroupInfo) {
 	s.history[groupInfo.Term] = groupInfo
 }
 
 // SaveGroupInfoWithTerm same as SaveGroupInfo, shall check para term and groupInfo.Term
-func (s *ClientNodeInfoStorage) SaveGroupInfoWithTerm(term uint64, groupInfo *node.GroupInfo) {
+func (s *ClientNodeInfoStorage) SaveGroupInfoWithTerm(term uint64, groupInfo *infos.GroupInfo) {
 	if term == 0 {
 		s.curGroupInfo = groupInfo
-		s.curNodesInfo = make(map[uint64]*node.NodeInfo)
+		s.curNodesInfo = make(map[uint64]*infos.NodeInfo)
 		for _, info := range s.curGroupInfo.NodesInfo {
 			s.curNodesInfo[info.RaftId] = info
 		}
@@ -51,7 +51,7 @@ func (s *ClientNodeInfoStorage) SaveGroupInfoWithTerm(term uint64, groupInfo *no
 // If term is 0, this shall return current GroupInfo
 //
 // CAN return NIL
-func (s *ClientNodeInfoStorage) GetGroupInfo(term uint64) *node.GroupInfo {
+func (s *ClientNodeInfoStorage) GetGroupInfo(term uint64) *infos.GroupInfo {
 	if term == 0 {
 		return s.curGroupInfo
 	}
@@ -63,7 +63,7 @@ func (s *ClientNodeInfoStorage) GetGroupInfo(term uint64) *node.GroupInfo {
 // If term is 0, this shall search in the current GroupInfo
 //
 // CAN return NIL
-func (s *ClientNodeInfoStorage) GetNodeInfo(term uint64, nodeId uint64) *node.NodeInfo {
+func (s *ClientNodeInfoStorage) GetNodeInfo(term uint64, nodeId uint64) *infos.NodeInfo {
 	if term == 0 {
 		return s.curNodesInfo[nodeId]
 	}

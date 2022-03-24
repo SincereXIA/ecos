@@ -4,11 +4,10 @@
 package moon
 
 import (
-	node "ecos/edge-node/node"
+	infos "ecos/edge-node/infos"
 	common "ecos/messenger/common"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
-	_ "go.etcd.io/etcd/raft/v3/raftpb"
 	io "io"
 	math "math"
 	math_bits "math/bits"
@@ -26,11 +25,11 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type AddNodeReply struct {
-	Result               *common.Result `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	LeaderInfo           *node.NodeInfo `protobuf:"bytes,2,opt,name=leaderInfo,proto3" json:"leaderInfo,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Result               *common.Result  `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	LeaderInfo           *infos.NodeInfo `protobuf:"bytes,2,opt,name=leaderInfo,proto3" json:"leaderInfo,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
 }
 
 func (m *AddNodeReply) Reset()         { *m = AddNodeReply{} }
@@ -73,7 +72,7 @@ func (m *AddNodeReply) GetResult() *common.Result {
 	return nil
 }
 
-func (m *AddNodeReply) GetLeaderInfo() *node.NodeInfo {
+func (m *AddNodeReply) GetLeaderInfo() *infos.NodeInfo {
 	if m != nil {
 		return m.LeaderInfo
 	}
@@ -388,7 +387,7 @@ func (m *AddNodeReply) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.LeaderInfo == nil {
-				m.LeaderInfo = &node.NodeInfo{}
+				m.LeaderInfo = &infos.NodeInfo{}
 			}
 			if err := m.LeaderInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err

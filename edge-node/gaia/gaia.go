@@ -2,7 +2,7 @@ package gaia
 
 import (
 	"context"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/errno"
@@ -18,8 +18,8 @@ type Gaia struct {
 
 	ctx         context.Context
 	cancel      context.CancelFunc
-	selfInfo    *node.NodeInfo
-	infoStorage node.InfoStorage
+	selfInfo    *infos.NodeInfo
+	infoStorage infos.NodeInfoStorage
 
 	config *Config
 }
@@ -126,7 +126,7 @@ func (g *Gaia) processChunk(chunk *UploadBlockRequest_Chunk, transporter *Primar
 	return nil
 }
 
-func NewGaia(rpcServer *messenger.RpcServer, selfInfo *node.NodeInfo, infoStorage node.InfoStorage,
+func NewGaia(rpcServer *messenger.RpcServer, selfInfo *infos.NodeInfo, infoStorage infos.NodeInfoStorage,
 	config *Config) *Gaia {
 	ctx, cancel := context.WithCancel(context.Background())
 	g := Gaia{

@@ -1,7 +1,7 @@
 syntax = "proto3";
 package messenger;
 
-option go_package = "ecos/edge-node/node";
+option go_package = "ecos/edge-node/infos";
 
 message NodeInfo {
   uint64 raft_id= 1;

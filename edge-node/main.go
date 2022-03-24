@@ -4,8 +4,8 @@ import (
 	"ecos/edge-node/alaya"
 	edgeNodeConfig "ecos/edge-node/config"
 	"ecos/edge-node/gaia"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
-	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/config"
 	"ecos/utils/logger"
@@ -53,7 +53,7 @@ func action(c *cli.Context) error {
 	// init moon node
 	logger.Infof("Start init moon node ...")
 	nodeInfoDBPath := path.Join(dbBasePath, "/nodeInfo")
-	infoStorage := node.NewStableNodeInfoStorage(nodeInfoDBPath)
+	infoStorage := infos.NewStableNodeInfoStorage(nodeInfoDBPath)
 	selfInfo := conf.SelfInfo
 	rpcServer := messenger.NewRpcServer(conf.RpcPort)
 	stableStorage := moon.NewStorage(path.Join(dbBasePath, "/raft/moon"))

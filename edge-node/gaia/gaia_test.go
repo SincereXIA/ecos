@@ -2,7 +2,7 @@ package gaia
 
 import (
 	"context"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
@@ -21,7 +21,7 @@ import (
 
 func TestNewGaia(t *testing.T) {
 	var basePaths []string
-	storage := node.NewMemoryNodeInfoStorage()
+	storage := infos.NewMemoryNodeInfoStorage()
 	for i := 0; i < 5; i++ {
 		basePaths = append(basePaths, "./ecos-data/gaia-"+strconv.Itoa(i))
 	}
@@ -29,7 +29,7 @@ func TestNewGaia(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		port, rpcServer := messenger.NewRandomPortRpcServer()
 		rpcServers = append(rpcServers, rpcServer)
-		info := node.NodeInfo{
+		info := infos.NodeInfo{
 			RaftId:   uint64(i + 1),
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",
@@ -41,7 +41,7 @@ func TestNewGaia(t *testing.T) {
 	storage.Commit(1)
 	storage.Apply()
 	for i := 0; i < 5; i++ {
-		info, _ := storage.GetNodeInfo(node.ID(i + 1))
+		info, _ := storage.GetNodeInfo(infos.NodeID(i + 1))
 		config := Config{BasePath: basePaths[i]}
 		NewGaia(rpcServers[i], info, storage, &config)
 		go func(rpcServer *messenger.RpcServer) {
@@ -78,10 +78,10 @@ func TestNewGaia(t *testing.T) {
 	wait.Wait()
 }
 
-func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, storage node.InfoStorage, basePaths []string) {
+func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, storage infos.NodeInfoStorage, basePaths []string) {
 	id := p.RaftId[0]
-	info, _ := storage.GetNodeInfo(node.ID(id))
-	conn, _ := messenger.GetRpcConnByInfo(info)
+	info, _ := storage.GetNodeInfo(infos.NodeID(id))
+	conn, _ := messenger.GetRpcConnByNodeInfo(info)
 
 	client := NewGaiaClient(conn)
 	stream, err := client.UploadBlockData(context.TODO())

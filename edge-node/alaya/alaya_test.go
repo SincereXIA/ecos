@@ -2,7 +2,7 @@ package alaya
 
 import (
 	"context"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
@@ -20,22 +20,22 @@ import (
 func TestNewAlaya(t *testing.T) {
 	nodeInfoDir := "./NodeInfoStorage"
 	_ = common.InitAndClearPath(nodeInfoDir)
-	//infoStorage := node.NewStableNodeInfoStorage(nodeInfoDir)
-	infoStorage := node.NewMemoryNodeInfoStorage()
+	//infoStorage := infos.NewStableNodeInfoStorage(nodeInfoDir)
+	infoStorage := infos.NewMemoryNodeInfoStorage()
 	defer infoStorage.Close()
 
 	nodeNum := 9
 	var rpcServers []messenger.RpcServer
-	groupInfo := node.GroupInfo{
+	groupInfo := infos.GroupInfo{
 		Term:            1,
 		LeaderInfo:      nil,
-		NodesInfo:       []*node.NodeInfo{},
+		NodesInfo:       []*infos.NodeInfo{},
 		UpdateTimestamp: timestamp.Now(),
 	}
 	for i := 0; i < nodeNum; i++ {
 		port, server := messenger.NewRandomPortRpcServer()
 		rpcServers = append(rpcServers, *server)
-		info := node.NodeInfo{
+		info := infos.NodeInfo{
 			RaftId:   uint64(i) + 1,
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",
@@ -113,16 +113,16 @@ func TestNewAlaya(t *testing.T) {
 }
 
 func TestAlaya_UpdatePipeline(t *testing.T) {
-	var infoStorages []node.InfoStorage
-	var nodeInfos []node.NodeInfo
+	var infoStorages []infos.NodeInfoStorage
+	var nodeInfos []infos.NodeInfo
 	var rpcServers []*messenger.RpcServer
 	var term uint64
 
 	for i := 0; i < 9; i++ {
 		port, rpcServer := messenger.NewRandomPortRpcServer()
 		rpcServers = append(rpcServers, rpcServer)
-		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
-		nodeInfos = append(nodeInfos, node.NodeInfo{
+		infoStorages = append(infoStorages, infos.NewMemoryNodeInfoStorage())
+		nodeInfos = append(nodeInfos, infos.NodeInfo{
 			RaftId:   uint64(i + 1),
 			Uuid:     uuid.New().String(),
 			IpAddr:   "127.0.0.1",

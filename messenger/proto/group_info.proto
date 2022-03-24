@@ -4,7 +4,7 @@ package messenger;
 import "node_info.proto";
 import "timestamp.proto";
 
-option go_package = "ecos/edge-node/node";
+option go_package = "ecos/edge-node/infos";
 
 
 message GroupInfo{
@@ -12,4 +12,15 @@ message GroupInfo{
   NodeInfo leader_info = 2;
   repeated NodeInfo nodes_info = 3;
   Timestamp update_timestamp = 4;
+}
+
+message InfoStorageState {
+  uint64 Term = 1;
+  uint64 LeaderID = 2;
+  map<uint64, NodeInfo> InfoMap = 3;
+  Timestamp UpdateTimeStamp = 4;
+}
+
+message History{
+  map<uint64, GroupInfo> historyMap = 1;
 }

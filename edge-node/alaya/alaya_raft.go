@@ -2,7 +2,7 @@ package alaya
 
 import (
 	"context"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/utils/logger"
@@ -22,7 +22,7 @@ type Raft struct {
 	pgID        uint64
 	ctx         context.Context //context
 	cancel      context.CancelFunc
-	InfoStorage node.InfoStorage
+	InfoStorage infos.NodeInfoStorage
 	raftStorage *raft.MemoryStorage //raft需要的内存结构
 	raftCfg     *raft.Config        //raft需要的配置
 	raft        raft.Node
@@ -42,7 +42,7 @@ type Raft struct {
 }
 
 func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
-	infoStorage node.InfoStorage, metaStorage MetaStorage,
+	infoStorage infos.NodeInfoStorage, metaStorage MetaStorage,
 	raftChan chan raftpb.Message, stopChan chan uint64) *Raft {
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -230,7 +230,7 @@ func (r *Raft) Stop() {
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 	for _, message := range messages {
-		nodeId := node.ID(message.To)
+		nodeId := infos.NodeID(message.To)
 		nodeInfo, err := r.InfoStorage.GetNodeInfo(nodeId)
 		if err != nil {
 			logger.Errorf("Get nodeInfo: %v fail: %v", nodeId, err)

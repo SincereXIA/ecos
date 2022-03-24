@@ -5,8 +5,8 @@ import (
 	"crypto/sha256"
 	"ecos/client/config"
 	clientNode "ecos/client/node"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
-	"ecos/edge-node/node"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
@@ -33,7 +33,7 @@ func (c *localChunk) Close() error {
 // EcosWriter When creating an object, use EcosWriter as a Writer
 // EcosWriter.Write can take []byte as input to create Chunk and Block for Object
 type EcosWriter struct {
-	groupInfo *node.GroupInfo
+	groupInfo *infos.GroupInfo
 	key       string
 	config    *config.ClientConfig
 	Status    BlockStatus
@@ -219,7 +219,7 @@ func (w *EcosWriter) Close() error {
 	return nil
 }
 
-func (w *EcosWriter) checkObjNodeByPg() *node.NodeInfo {
+func (w *EcosWriter) checkObjNodeByPg() *infos.NodeInfo {
 	logger.Infof("META PG: %v, NODE: %v", w.meta.PgId, w.objPipes[w.meta.PgId-1].RaftId)
 	return clientNode.InfoStorage.GetNodeInfo(0, w.objPipes[w.meta.PgId-1].RaftId[0])
 }
@@ -227,7 +227,7 @@ func (w *EcosWriter) checkObjNodeByPg() *node.NodeInfo {
 // EcosWriterFactory Generates EcosWriter with ClientConfig
 type EcosWriterFactory struct {
 	config     *config.ClientConfig
-	groupInfo  *node.GroupInfo
+	groupInfo  *infos.GroupInfo
 	objPipes   []*pipeline.Pipeline
 	blockPipes []*pipeline.Pipeline
 }

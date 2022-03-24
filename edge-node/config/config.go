@@ -2,8 +2,8 @@ package config
 
 import (
 	"ecos/edge-node/gaia"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
-	"ecos/edge-node/node"
 	"ecos/utils/common"
 	"ecos/utils/config"
 	"errors"
@@ -18,7 +18,7 @@ const httpPort = 3268
 
 type Config struct {
 	config.Config
-	SelfInfo    *node.NodeInfo
+	SelfInfo    *infos.NodeInfo
 	RpcPort     uint64
 	HttpPort    uint64
 	StoragePath string
@@ -33,7 +33,7 @@ func init() {
 	_, ipAddr := getSelfIpAddr()
 	DefaultConfig = &Config{
 		Config: config.Config{},
-		SelfInfo: &node.NodeInfo{
+		SelfInfo: &infos.NodeInfo{
 			RaftId:   1,
 			Uuid:     uuid.New().String(),
 			IpAddr:   ipAddr,

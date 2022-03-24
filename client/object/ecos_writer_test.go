@@ -4,8 +4,8 @@ import (
 	"ecos/client/config"
 	"ecos/edge-node/alaya"
 	"ecos/edge-node/gaia"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
-	"ecos/edge-node/node"
 	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/logger"
@@ -124,32 +124,32 @@ func genTestData(size int) []byte {
 	return data
 }
 
-func createServers(num int, sunAddr string, basePath string) ([]*node.NodeInfo,
+func createServers(num int, sunAddr string, basePath string) ([]*infos.NodeInfo,
 	[]*moon.Moon, []*alaya.Alaya, []*messenger.RpcServer, error) {
 	err := common.InitAndClearPath(basePath)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	var infoStorages []node.InfoStorage
+	var infoStorages []infos.NodeInfoStorage
 	var stableStorages []moon.Storage
 	var rpcServers []*messenger.RpcServer
 	var moons []*moon.Moon
-	var nodeInfos []*node.NodeInfo
+	var nodeInfos []*infos.NodeInfo
 	var alayas []*alaya.Alaya
 
 	for i := 0; i < num; i++ {
 		raftID := uint64(i + 1)
-		infoStorages = append(infoStorages, node.NewMemoryNodeInfoStorage())
+		infoStorages = append(infoStorages, infos.NewMemoryNodeInfoStorage())
 		stableStorages = append(stableStorages, moon.NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1))))
 		port, rpcServer := messenger.NewRandomPortRpcServer()
 		rpcServers = append(rpcServers, rpcServer)
-		nodeInfos = append(nodeInfos, node.NewSelfInfo(raftID, "127.0.0.1", port))
+		nodeInfos = append(nodeInfos, infos.NewSelfInfo(raftID, "127.0.0.1", port))
 		alayas = append(alayas, alaya.NewAlaya(nodeInfos[i], infoStorages[i], alaya.NewMemoryMetaStorage(), rpcServers[i]))
 	}
 
 	moonConfig := moon.DefaultConfig
 	moonConfig.SunAddr = sunAddr
-	moonConfig.GroupInfo = node.GroupInfo{
+	moonConfig.GroupInfo = infos.GroupInfo{
 		Term:            0,
 		LeaderInfo:      nil,
 		UpdateTimestamp: timestamp.Now(),

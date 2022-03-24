@@ -1,0 +1,22 @@
+syntax = "proto3";
+package messenger;
+
+option go_package = "ecos/edge-node/infos";
+
+// Bucket 标识和权限
+message BucketInfo {
+  string volume_id = 1;
+  string bucket_id = 2;
+  string user_id = 3;
+  string group_id = 4;
+  int32 mode = 5;
+}
+
+// Bucket 读写策略
+message BucketConfig {
+  int32 key_slot_num = 1;
+  uint64 block_size = 2;
+  bool block_hash_enable = 3;
+  bool object_hash_enable = 4;
+  bool history_version_enable = 5;
+}

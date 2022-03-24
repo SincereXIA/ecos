@@ -4,25 +4,25 @@ import (
 	"context"
 	"ecos/client/config"
 	"ecos/edge-node/alaya"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/messenger"
 	"ecos/messenger/common"
 )
 
 type MetaClient struct {
-	serverNode *node.NodeInfo
+	serverNode *infos.NodeInfo
 	client     alaya.AlayaClient
 	context    context.Context
 	cancel     context.CancelFunc
 }
 
 // NewMetaClient create a client with config
-func NewMetaClient(serverNode *node.NodeInfo) (*MetaClient, error) {
+func NewMetaClient(serverNode *infos.NodeInfo) (*MetaClient, error) {
 	var newClient = MetaClient{
 		serverNode: serverNode,
 	}
-	conn, err := messenger.GetRpcConnByInfo(serverNode)
+	conn, err := messenger.GetRpcConnByNodeInfo(serverNode)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package node
+package infos
 
 import (
 	"ecos/utils/common"
@@ -22,7 +22,7 @@ func TestNodeInfoStorage(t *testing.T) {
 	_ = os.RemoveAll(testDataBaseDir)
 }
 
-func testStorage(storage InfoStorage, t *testing.T) {
+func testStorage(storage NodeInfoStorage, t *testing.T) {
 	hookInfoNum := 0
 	t.Run("test init", func(t *testing.T) {
 		groupInfo := storage.GetGroupInfo(0)

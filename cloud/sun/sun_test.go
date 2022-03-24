@@ -2,7 +2,7 @@ package sun
 
 import (
 	"context"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -24,14 +24,14 @@ func TestSun_MoonRegister(t *testing.T) {
 	defer conn.Close()
 	c := NewSunClient(conn)
 
-	node1 := node.NodeInfo{
+	node1 := infos.NodeInfo{
 		RaftId:   0,
 		Uuid:     uuid.New().String(),
 		IpAddr:   "127.0.0.1",
 		RpcPort:  port,
 		Capacity: 0,
 	}
-	node2 := node.NodeInfo{
+	node2 := infos.NodeInfo{
 		RaftId:   0,
 		Uuid:     uuid.New().String(),
 		IpAddr:   "127.0.0.1",
@@ -47,7 +47,7 @@ func TestSun_MoonRegister(t *testing.T) {
 	assert.NotEqual(t, result1.RaftId, result2.RaftId)
 
 	t.Run("Multi time Register", func(t *testing.T) {
-		node3 := node.NodeInfo{
+		node3 := infos.NodeInfo{
 			RaftId:   0,
 			Uuid:     node1.Uuid,
 			IpAddr:   "127.0.0.1",

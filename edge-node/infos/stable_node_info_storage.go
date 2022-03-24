@@ -1,4 +1,4 @@
-package node
+package infos
 
 import (
 	"ecos/utils/common"
@@ -44,7 +44,7 @@ func (s *StableNodeInfoStorage) UpdateNodeInfo(info *NodeInfo, time *timestamp.T
 	return nil
 }
 
-func (s *StableNodeInfoStorage) DeleteNodeInfo(nodeId ID, time *timestamp.Timestamp) error {
+func (s *StableNodeInfoStorage) DeleteNodeInfo(nodeId NodeID, time *timestamp.Timestamp) error {
 	err := s.MemoryNodeInfoStorage.DeleteNodeInfo(nodeId, time)
 	if err != nil {
 		return err
