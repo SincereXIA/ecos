@@ -84,16 +84,17 @@ func (f *EcosIOFactory) GetEcosWriter(key string) *EcosWriter {
 func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 	maxChunkId := f.config.Object.BlockSize/f.config.Object.ChunkSize - 1
 	return &EcosReader{
-		groupInfo:   f.groupInfo,
-		key:         key,
-		blockPipes:  nil,
-		curBlockId:  0,
-		maxBlockId:  0,
-		meta:        nil,
-		objPipes:    f.objPipes,
-		curChunkId:  0,
-		maxChunkId:  maxChunkId,
-		sizeOfChunk: f.config.Object.ChunkSize,
-		chunkOffset: 0,
+		groupInfo:         f.groupInfo,
+		key:               key,
+		blockPipes:        nil,
+		curBlockId:        0,
+		meta:              nil,
+		objPipes:          f.objPipes,
+		curChunkIdInBlock: 0,
+		maxChunkIdInBlock: maxChunkId,
+		curChunk:          0,
+		sizeOfChunk:       f.config.Object.ChunkSize,
+		chunkOffset:       0,
+		alreadyReadBytes:  0,
 	}
 }

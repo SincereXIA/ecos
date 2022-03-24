@@ -8,5 +8,5 @@ type Config struct {
 var DefaultConfig *Config
 
 func init() {
-	DefaultConfig = &Config{BasePath: "./ecos-data/gaia/", ChunkSize: 1024 * 1024}
+	DefaultConfig = &Config{BasePath: "./ecos-data/gaia/", ChunkSize: 1 << 20}
 }

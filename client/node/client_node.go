@@ -1,7 +1,11 @@
 package node
 
 import (
+	"context"
+	"ecos/edge-node/moon"
 	"ecos/edge-node/node"
+	"ecos/messenger"
+	"ecos/utils/logger"
 )
 
 // ClientNodeInfoStorage provides way to query NodeInfo and GroupInfo for a specific Term
@@ -54,6 +58,18 @@ func (s *ClientNodeInfoStorage) SaveGroupInfoWithTerm(term uint64, groupInfo *no
 func (s *ClientNodeInfoStorage) GetGroupInfo(term uint64) *node.GroupInfo {
 	if term == 0 {
 		return s.curGroupInfo
+	}
+	if s.history[term] == nil {
+		conn, err := messenger.GetRpcConnByInfo(s.curNodesInfo[1])
+		if err != nil {
+			logger.Errorf("err: %v", err)
+		}
+		moonClient := moon.NewMoonClient(conn)
+		groupInfo, err := moonClient.GetGroupInfo(context.Background(), &moon.GetGroupInfoRequest{Term: term})
+		if err != nil {
+			logger.Errorf("get group info failed, err: %v", err)
+		}
+		s.SaveGroupInfoWithTerm(term, groupInfo)
 	}
 	return s.history[term]
 }

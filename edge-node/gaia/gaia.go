@@ -86,15 +86,15 @@ func (g *Gaia) GetBlockData(req *GetBlockRequest, server Gaia_GetBlockDataServer
 	startChunk := req.CurChunk
 	curChunk := 0
 	chunkSize := g.config.ChunkSize
-	chunk := make([]byte, chunkSize)
 	for {
+		chunk := make([]byte, chunkSize)
 		readBytes, err := r.Read(chunk)
 		if err != nil && err != io.EOF {
 			logger.Errorf("read panic, err: $v", err)
 			return err
 		}
 		if readBytes == 0 {
-			continue
+			return io.EOF
 		}
 		// read this block finished
 		if err == io.EOF {
@@ -112,7 +112,6 @@ func (g *Gaia) GetBlockData(req *GetBlockRequest, server Gaia_GetBlockDataServer
 			},
 		})
 		// clear chunk for next send
-		chunk = chunk[:0]
 	}
 
 	return nil

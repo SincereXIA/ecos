@@ -11,9 +11,11 @@ import (
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"math/rand"
 	"os"
 	"path"
+	"reflect"
 	"runtime"
 	"strconv"
 	"testing"
@@ -25,8 +27,6 @@ func TestEcosWriterAndReader(t *testing.T) {
 	t.Logf("Current test filename: %s", filename)
 	type args struct {
 		objectSize int
-		nodeAddr   string
-		port       int
 		key        string
 	}
 	tests := []struct {
@@ -65,7 +65,7 @@ func TestEcosWriterAndReader(t *testing.T) {
 	for i := 0; i < 9; i++ {
 		infoStorage := moons[i].InfoStorage
 		gaia.NewGaia(rpcServers[i], infos[i], infoStorage,
-			&gaia.Config{BasePath: path.Join(basePath, "gaia", strconv.Itoa(i+1))})
+			&gaia.Config{BasePath: path.Join(basePath, "gaia", strconv.Itoa(i+1)), ChunkSize: 1 << 20})
 		i := i
 		go func(rpc *messenger.RpcServer) {
 			err := rpc.Run()
@@ -77,15 +77,6 @@ func TestEcosWriterAndReader(t *testing.T) {
 		go alayas[i].Run()
 	}
 
-	t.Cleanup(func() {
-		for i := 0; i < 9; i++ {
-			moons[i].Stop()
-			alayas[i].Stop()
-			rpcServers[i].Stop()
-		}
-		_ = os.RemoveAll(basePath)
-	})
-
 	waiteAllAlayaOK(alayas)
 
 	for _, tt := range tests {
@@ -93,7 +84,7 @@ func TestEcosWriterAndReader(t *testing.T) {
 			conf := config.DefaultConfig
 			conf.NodeAddr = moons[0].SelfInfo.IpAddr
 			conf.NodePort = moons[0].SelfInfo.RpcPort
-			factory := NewEcosWriterFactory(conf)
+			factory := NewEcosIOFactory(conf)
 			writer := factory.GetEcosWriter(tt.args.key)
 			reader := factory.GetEcosReader(tt.args.key)
 			data := genTestData(tt.args.objectSize)
@@ -106,12 +97,31 @@ func TestEcosWriterAndReader(t *testing.T) {
 				t.Errorf("PutObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			readData := make([]byte, tt.args.objectSize)
-			readSize, err := reader.Read(readData)
+			readData := make([]byte, 0, tt.args.objectSize)
+			readSize, err := reader.Read(&readData)
+			assert.Equal(t, io.EOF, err)
+			assert.Equal(t, true, reflect.DeepEqual(readData, data))
+			//err = ioutil.WriteFile("./ecos-data/data", data, 0644)
+			//if err != nil {
+			//	panic(err)
+			//}
+			//err = ioutil.WriteFile("./ecos-data/read-data", readData, 0644)
+			//if err != nil {
+			//	panic(err)
+			//}
 			assert.Equal(t, tt.args.objectSize, readSize)
 
 		})
 	}
+
+	t.Cleanup(func() {
+		for i := 0; i < 9; i++ {
+			moons[i].Stop()
+			alayas[i].Stop()
+			rpcServers[i].Stop()
+		}
+		_ = os.RemoveAll(basePath)
+	})
 }
 
 func genTestData(size int) []byte {
