@@ -2,7 +2,7 @@ syntax = "proto3";
 package messenger;
 
 import "node_info.proto";
-import "group_info.proto";
+import "cluster_info.proto";
 import "common.proto";
 
 option go_package = "ecos/cloud/sun";
@@ -11,7 +11,7 @@ option go_package = "ecos/cloud/sun";
 service Sun {
   rpc MoonRegister(NodeInfo) returns (RegisterResult) {}
   rpc GetLeaderInfo(NodeInfo) returns (NodeInfo) {}
-  rpc ReportGroupInfo(GroupInfo) returns (Result) {}
+  rpc ReportClusterInfo(ClusterInfo) returns (Result) {}
 }
 
 
@@ -19,5 +19,5 @@ message RegisterResult {
   Result result = 1;
   uint64 raft_id = 2;
   bool has_leader = 3;
-  GroupInfo group_info = 4;
+  ClusterInfo cluster_info = 4;
 }

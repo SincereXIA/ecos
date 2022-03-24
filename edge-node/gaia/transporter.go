@@ -28,7 +28,7 @@ type PrimaryCopyTransporter struct {
 //
 // when pipeline contains only self node, it will only write to local
 func NewPrimaryCopyTransporter(ctx context.Context, info *object.BlockInfo, pipeline *pipeline.Pipeline,
-	selfID uint64, groupInfo *infos.GroupInfo, basePath string) (t *PrimaryCopyTransporter, err error) {
+	selfID uint64, clusterInfo *infos.ClusterInfo, basePath string) (t *PrimaryCopyTransporter, err error) {
 	var localWriter io.Writer
 	// 创建远端 writer
 	var remoteWriters []io.Writer
@@ -43,7 +43,7 @@ func NewPrimaryCopyTransporter(ctx context.Context, info *object.BlockInfo, pipe
 			}
 			continue
 		}
-		nodeInfo := getNodeInfo(groupInfo, nodeID)
+		nodeInfo := getNodeInfo(clusterInfo, nodeID)
 		if nodeInfo == nil {
 			// TODO: return err
 		}
@@ -151,8 +151,8 @@ func (w *RemoteWriter) Close() error {
 	return err
 }
 
-func getNodeInfo(groupInfo *infos.GroupInfo, nodeID uint64) *infos.NodeInfo {
-	for _, info := range groupInfo.NodesInfo {
+func getNodeInfo(clusterInfo *infos.ClusterInfo, nodeID uint64) *infos.NodeInfo {
+	for _, info := range clusterInfo.NodesInfo {
 		if info.RaftId == nodeID {
 			return info
 		}

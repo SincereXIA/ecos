@@ -25,11 +25,11 @@ type NodeInfoStorage interface {
 
 	// ListAllNodeInfo 用于节点间通信时获取节点信息
 	ListAllNodeInfo() map[NodeID]*NodeInfo
-	// GetGroupInfo 用于为 Crush 算法提供集群信息
+	// GetClusterInfo 用于为 Crush 算法提供集群信息
 	// 默认
-	GetGroupInfo(term uint64) *GroupInfo
+	GetClusterInfo(term uint64) *ClusterInfo
 
-	SetOnGroupApply(hookFunc func(info *GroupInfo))
+	SetOnGroupApply(hookFunc func(info *ClusterInfo))
 
 	GetTermNow() uint64
 	GetTermList() []uint64
@@ -43,7 +43,7 @@ type MemoryNodeInfoStorage struct {
 	committedState   *InfoStorageState
 	uncommittedState *InfoStorageState
 
-	onGroupApplyHookFunc func(info *GroupInfo)
+	onGroupApplyHookFunc func(info *ClusterInfo)
 
 	rwMutex sync.RWMutex
 }
@@ -99,23 +99,23 @@ func (storage *MemoryNodeInfoStorage) Apply() {
 	cpy := deepcopy.Copy(storage.committedState)
 	storage.rwMutex.RUnlock()
 
-	nowGroupInfo := storage.GetGroupInfo(0)
+	nowClusterInfo := storage.GetClusterInfo(0)
 
 	storage.rwMutex.Lock()
-	storage.history.HistoryMap[storage.nowState.Term] = nowGroupInfo
+	storage.history.HistoryMap[storage.nowState.Term] = nowClusterInfo
 	storage.nowState = cpy.(*InfoStorageState)
 	storage.rwMutex.Unlock()
 	if storage.onGroupApplyHookFunc != nil {
-		storage.onGroupApplyHookFunc(storage.GetGroupInfo(0))
+		storage.onGroupApplyHookFunc(storage.GetClusterInfo(0))
 	}
 }
 
-func (storage *MemoryNodeInfoStorage) GetGroupInfo(term uint64) *GroupInfo {
+func (storage *MemoryNodeInfoStorage) GetClusterInfo(term uint64) *ClusterInfo {
 	storage.rwMutex.RLock()
 	defer storage.rwMutex.RUnlock()
 	if term == 0 || term == storage.nowState.Term {
 		leaderInfo := storage.nowState.InfoMap[storage.nowState.LeaderID]
-		return &GroupInfo{
+		return &ClusterInfo{
 			Term:            storage.nowState.Term,
 			LeaderInfo:      leaderInfo,
 			NodesInfo:       map2Slice(storage.nowState.InfoMap),
@@ -137,7 +137,7 @@ func (storage *MemoryNodeInfoStorage) SetLeader(nodeId NodeID, time *timestamp.T
 	return nil
 }
 
-func (storage *MemoryNodeInfoStorage) SetOnGroupApply(hookFunc func(info *GroupInfo)) {
+func (storage *MemoryNodeInfoStorage) SetOnGroupApply(hookFunc func(info *ClusterInfo)) {
 	storage.rwMutex.Lock()
 	defer storage.rwMutex.Unlock()
 	storage.onGroupApplyHookFunc = hookFunc
@@ -185,7 +185,7 @@ func NewMemoryNodeInfoStorage() *MemoryNodeInfoStorage {
 			UpdateTimeStamp: timestamp.Now(),
 		},
 		history: History{
-			HistoryMap: map[uint64]*GroupInfo{},
+			HistoryMap: map[uint64]*ClusterInfo{},
 		},
 		rwMutex: sync.RWMutex{},
 	}

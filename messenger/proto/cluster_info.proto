@@ -7,7 +7,7 @@ import "timestamp.proto";
 option go_package = "ecos/edge-node/infos";
 
 
-message GroupInfo{
+message ClusterInfo{
   uint64 term = 1;
   NodeInfo leader_info = 2;
   repeated NodeInfo nodes_info = 3;
@@ -22,5 +22,5 @@ message InfoStorageState {
 }
 
 message History{
-  map<uint64, GroupInfo> historyMap = 1;
+  map<uint64, ClusterInfo> historyMap = 1;
 }

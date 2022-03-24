@@ -33,10 +33,10 @@ func (c *localChunk) Close() error {
 // EcosWriter When creating an object, use EcosWriter as a Writer
 // EcosWriter.Write can take []byte as input to create Chunk and Block for Object
 type EcosWriter struct {
-	groupInfo *infos.GroupInfo
-	key       string
-	config    *config.ClientConfig
-	Status    BlockStatus
+	clusterInfo *infos.ClusterInfo
+	key         string
+	config      *config.ClientConfig
+	Status      BlockStatus
 
 	chunks     *common.Pool
 	curChunk   *localChunk
@@ -65,7 +65,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 			status:      0,
 			chunks:      nil,
 			key:         w.key,
-			groupInfo:   w.groupInfo,
+			clusterInfo: w.clusterInfo,
 			blockCount:  w.blockCount,
 			needHash:    w.config.Object.BlockHash,
 			blockPipes:  w.blockPipes,
@@ -168,7 +168,7 @@ func (w *EcosWriter) commitMeta() error {
 	w.meta.ObjId = GenObjectId(w.key)
 	// w.meta.ObjSize has been set in EcosWriter.Write
 	w.meta.UpdateTime = timestamp.Now()
-	w.meta.Term = w.groupInfo.Term
+	w.meta.Term = w.clusterInfo.Term
 	if w.config.Object.ObjectHash {
 		w.meta.ObjHash = hex.EncodeToString(w.objHash.Sum(nil))
 	} else {
@@ -226,35 +226,35 @@ func (w *EcosWriter) checkObjNodeByPg() *infos.NodeInfo {
 
 // EcosWriterFactory Generates EcosWriter with ClientConfig
 type EcosWriterFactory struct {
-	config     *config.ClientConfig
-	groupInfo  *infos.GroupInfo
-	objPipes   []*pipeline.Pipeline
-	blockPipes []*pipeline.Pipeline
+	config      *config.ClientConfig
+	clusterInfo *infos.ClusterInfo
+	objPipes    []*pipeline.Pipeline
+	blockPipes  []*pipeline.Pipeline
 }
 
 // NewEcosWriterFactory Constructor for EcosWriterFactory
 //
-// nodeAddr shall provide the address to get GroupInfo from
+// nodeAddr shall provide the address to get ClusterInfo from
 func NewEcosWriterFactory(config *config.ClientConfig) *EcosWriterFactory {
 	conn, err := messenger.GetRpcConn(config.NodeAddr, config.NodePort)
 	if err != nil {
 		return nil
 	}
 	moonClient := moon.NewMoonClient(conn)
-	groupInfo, err := moonClient.GetGroupInfo(context.Background(), &moon.GetGroupInfoRequest{Term: 0})
+	clusterInfo, err := moonClient.GetClusterInfo(context.Background(), &moon.GetClusterInfoRequest{Term: 0})
 	if err != nil {
 		logger.Errorf("get group info fail: %v", err)
 		return nil
 	}
 	// TODO: Retry?
-	clientNode.InfoStorage.SaveGroupInfoWithTerm(0, groupInfo)
+	clientNode.InfoStorage.SaveClusterInfoWithTerm(0, clusterInfo)
 	const groupNum = 3
 	// TODO: Get pgNum, groupNum from moon
 	ret := &EcosWriterFactory{
-		groupInfo:  groupInfo,
-		config:     config,
-		objPipes:   pipeline.GenPipelines(groupInfo, objPgNum, groupNum),
-		blockPipes: pipeline.GenPipelines(groupInfo, blockPgNum, groupNum),
+		clusterInfo: clusterInfo,
+		config:      config,
+		objPipes:    pipeline.GenPipelines(clusterInfo, objPgNum, groupNum),
+		blockPipes:  pipeline.GenPipelines(clusterInfo, blockPgNum, groupNum),
 	}
 	return ret
 }
@@ -268,13 +268,13 @@ func (f *EcosWriterFactory) GetEcosWriter(key string) EcosWriter {
 	maxChunk := uint(f.config.UploadBuffer / f.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(f.newLocalChunk, maxChunk, int(maxChunk))
 	return EcosWriter{
-		groupInfo:  f.groupInfo,
-		key:        key,
-		config:     f.config,
-		Status:     READING,
-		chunks:     chunkPool,
-		blocks:     map[int]*Block{},
-		blockPipes: f.blockPipes,
+		clusterInfo: f.clusterInfo,
+		key:         key,
+		config:      f.config,
+		Status:      READING,
+		chunks:      chunkPool,
+		blocks:      map[int]*Block{},
+		blockPipes:  f.blockPipes,
 		meta: &object.ObjectMeta{
 			ObjId:      "",
 			ObjSize:    0,

@@ -137,8 +137,8 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 	return &raftpb.Message{}, nil
 }
 
-func (m *Moon) GetGroupInfo(_ context.Context, getGroupReq *GetGroupInfoRequest) (*infos.GroupInfo, error) {
-	return m.InfoStorage.GetGroupInfo(getGroupReq.Term), nil
+func (m *Moon) GetClusterInfo(_ context.Context, getGroupReq *GetClusterInfoRequest) (*infos.ClusterInfo, error) {
+	return m.InfoStorage.GetClusterInfo(getGroupReq.Term), nil
 }
 
 func (m *Moon) RequestJoinGroup(leaderInfo *infos.NodeInfo) error {
@@ -207,18 +207,18 @@ func (m *Moon) Register(sunAddr string) (leaderInfo *infos.NodeInfo, err error) 
 	m.SelfInfo.RaftId = result.RaftId
 
 	if result.HasLeader {
-		m.infoMap[result.GroupInfo.LeaderInfo.RaftId] = result.GroupInfo.LeaderInfo
-		err = m.RequestJoinGroup(result.GroupInfo.LeaderInfo)
+		m.infoMap[result.ClusterInfo.LeaderInfo.RaftId] = result.ClusterInfo.LeaderInfo
+		err = m.RequestJoinGroup(result.ClusterInfo.LeaderInfo)
 		if err != nil {
-			return result.GroupInfo.LeaderInfo, err
+			return result.ClusterInfo.LeaderInfo, err
 		}
 	}
 
-	for _, nodeInfo := range result.GroupInfo.NodesInfo {
+	for _, nodeInfo := range result.ClusterInfo.NodesInfo {
 		m.infoMap[nodeInfo.RaftId] = nodeInfo
 	}
 
-	return result.GroupInfo.LeaderInfo, nil
+	return result.ClusterInfo.LeaderInfo, nil
 }
 
 func NewMoon(selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
@@ -244,7 +244,7 @@ func NewMoon(selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcS
 		config:        config,
 		status:        StatusInit,
 	}
-	leaderInfo := config.GroupInfo.LeaderInfo
+	leaderInfo := config.ClusterInfo.LeaderInfo
 	if leaderInfo != nil {
 		m.leaderID = leaderInfo.RaftId
 	}
@@ -254,7 +254,7 @@ func NewMoon(selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcS
 	if leaderInfo != nil {
 		m.infoMap[leaderInfo.RaftId] = leaderInfo
 	}
-	for _, info := range config.GroupInfo.NodesInfo {
+	for _, info := range config.ClusterInfo.NodesInfo {
 		m.infoMap[info.RaftId] = info
 	}
 	return m

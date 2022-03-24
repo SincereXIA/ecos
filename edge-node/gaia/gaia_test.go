@@ -65,7 +65,7 @@ func TestNewGaia(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 
-	pipelines := pipeline.GenPipelines(storage.GetGroupInfo(0), 10, 3)
+	pipelines := pipeline.GenPipelines(storage.GetClusterInfo(0), 10, 3)
 	wait := sync.WaitGroup{}
 	for i := 0; i < 10; i++ {
 		p := pipelines[i]

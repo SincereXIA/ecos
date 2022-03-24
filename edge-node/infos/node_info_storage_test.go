@@ -25,11 +25,11 @@ func TestNodeInfoStorage(t *testing.T) {
 func testStorage(storage NodeInfoStorage, t *testing.T) {
 	hookInfoNum := 0
 	t.Run("test init", func(t *testing.T) {
-		groupInfo := storage.GetGroupInfo(0)
-		assert.Equal(t, groupInfo.Term, uint64(0))
+		clusterInfo := storage.GetClusterInfo(0)
+		assert.Equal(t, clusterInfo.Term, uint64(0))
 		_, err := storage.GetNodeInfo(0)
 		assert.NotNil(t, err)
-		storage.SetOnGroupApply(func(info *GroupInfo) {
+		storage.SetOnGroupApply(func(info *ClusterInfo) {
 			hookInfoNum = len(info.NodesInfo)
 		})
 	})
@@ -52,7 +52,7 @@ func testStorage(storage NodeInfoStorage, t *testing.T) {
 		assert.NoError(t, storage.UpdateNodeInfo(&info2, timestamp.Now()))
 		infos := storage.ListAllNodeInfo()
 		assert.Equal(t, len(infos), 2)
-		group := storage.GetGroupInfo(0)
+		group := storage.GetClusterInfo(0)
 		assert.Empty(t, group.NodesInfo)
 	})
 	t.Run("test update leader info", func(t *testing.T) {
@@ -60,12 +60,12 @@ func testStorage(storage NodeInfoStorage, t *testing.T) {
 	})
 	t.Run("test info commit", func(t *testing.T) {
 		storage.Commit(uint64(time.Now().UnixNano()))
-		group := storage.GetGroupInfo(0)
+		group := storage.GetClusterInfo(0)
 		assert.Empty(t, group.NodesInfo)
 	})
 	t.Run("test info apply", func(t *testing.T) {
 		storage.Apply()
-		group := storage.GetGroupInfo(0)
+		group := storage.GetClusterInfo(0)
 		assert.NotEmpty(t, group.NodesInfo)
 		t.Logf("Old term: %v, new term: %v", 0, group.Term)
 		assert.NotEqual(t, group.Term, uint64(0))
@@ -78,13 +78,13 @@ func testStorage(storage NodeInfoStorage, t *testing.T) {
 			Capacity: 8888,
 		}
 		assert.NoError(t, storage.UpdateNodeInfo(&info3, timestamp.Now()))
-		group = storage.GetGroupInfo(0)
+		group = storage.GetClusterInfo(0)
 		assert.Equal(t, len(group.NodesInfo), 2)
 		storage.Commit(uint64(time.Now().UnixNano()))
 		// TODO:  rocksdb 的 infoStorage 完成后，取消下面注释
 		assert.Equal(t, len(group.NodesInfo), 2)
 		storage.Apply()
-		group = storage.GetGroupInfo(0)
+		group = storage.GetClusterInfo(0)
 		t.Logf("Old term: %v, new term: %v", term, group.Term)
 		assert.NotEqual(t, group.Term, term)
 		assert.Equal(t, len(group.NodesInfo), 3)

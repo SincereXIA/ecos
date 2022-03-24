@@ -149,7 +149,7 @@ func createServers(num int, sunAddr string, basePath string) ([]*infos.NodeInfo,
 
 	moonConfig := moon.DefaultConfig
 	moonConfig.SunAddr = sunAddr
-	moonConfig.GroupInfo = infos.GroupInfo{
+	moonConfig.ClusterInfo = infos.ClusterInfo{
 		Term:            0,
 		LeaderInfo:      nil,
 		UpdateTimestamp: timestamp.Now(),
@@ -160,7 +160,7 @@ func createServers(num int, sunAddr string, basePath string) ([]*infos.NodeInfo,
 			moons = append(moons, moon.NewMoon(nodeInfos[i], moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		} else {
-			moonConfig.GroupInfo.NodesInfo = nodeInfos
+			moonConfig.ClusterInfo.NodesInfo = nodeInfos
 			moons = append(moons, moon.NewMoon(nodeInfos[i], moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		}

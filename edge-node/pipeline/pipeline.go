@@ -6,11 +6,11 @@ import (
 	"github.com/sincerexia/gocrush"
 )
 
-func GenPipelines(groupInfo *infos.GroupInfo, pgNum uint64, groupSize uint64) []*Pipeline {
+func GenPipelines(clusterInfo *infos.ClusterInfo, pgNum uint64, groupSize uint64) []*Pipeline {
 	var rs []*Pipeline
 	rootNode := infos.NewRootNode()
 	rootNode.Root = rootNode
-	for _, info := range groupInfo.NodesInfo {
+	for _, info := range clusterInfo.NodesInfo {
 		rootNode.Children = append(rootNode.Children,
 			&infos.EcosNode{
 				NodeInfo: info,

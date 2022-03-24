@@ -6,8 +6,8 @@
   - `moon`：集群状态共识代理，负责新节点加入集群、监控节点上下线
   - `node`：节点信息相关
     - `NodeInfo`：单个节点信息
-    - `GroupInfo`： 集群节点信息
-      - `Term`：集群状态任期，同一个 Term 期间 `GroupInfo` 保持不变
+    - `ClusterInfo`： 集群节点信息
+      - `Term`：集群状态任期，同一个 Term 期间 `ClusterInfo` 保持不变
       - `LeaderInfo`： 作为领导节点的信息
       - `NodesInfo`：提供存储能力的节点信息
     - `EcosNode`：`NodeInfo`的包装，包含CRUSH算法相关信息

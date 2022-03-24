@@ -43,7 +43,7 @@ func TestSun_MoonRegister(t *testing.T) {
 
 	assert.False(t, result1.HasLeader)
 	assert.True(t, result2.HasLeader)
-	assert.Equal(t, node1.Uuid, result2.GroupInfo.LeaderInfo.Uuid)
+	assert.Equal(t, node1.Uuid, result2.ClusterInfo.LeaderInfo.Uuid)
 	assert.NotEqual(t, result1.RaftId, result2.RaftId)
 
 	t.Run("Multi time Register", func(t *testing.T) {

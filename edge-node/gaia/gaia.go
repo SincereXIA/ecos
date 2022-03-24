@@ -77,7 +77,7 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 	case ControlMessage_BEGIN:
 		// 建立与同组 Node 的连接，准备转发
 		t, err := NewPrimaryCopyTransporter(g.ctx, msg.Block, p, g.selfInfo.RaftId,
-			g.infoStorage.GetGroupInfo(msg.Term), g.config.BasePath)
+			g.infoStorage.GetClusterInfo(msg.Term), g.config.BasePath)
 		if err != nil {
 			return err
 		}

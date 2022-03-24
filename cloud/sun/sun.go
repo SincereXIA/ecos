@@ -14,11 +14,11 @@ import (
 type Sun struct {
 	rpc *messenger.RpcServer
 	Server
-	leaderInfo *infos.NodeInfo
-	groupInfo  *infos.GroupInfo
-	lastRaftID uint64
-	mu         sync.Mutex
-	cachedInfo map[string]*infos.NodeInfo //cache node info by uuid
+	leaderInfo  *infos.NodeInfo
+	clusterInfo *infos.ClusterInfo
+	lastRaftID  uint64
+	mu          sync.Mutex
+	cachedInfo  map[string]*infos.NodeInfo //cache node info by uuid
 }
 
 type Server struct {
@@ -35,7 +35,7 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *infos.NodeInfo) (*Regist
 	if s.leaderInfo == nil { // This is new leader
 		hasLeader = false
 		s.leaderInfo = nodeInfo
-		s.groupInfo.LeaderInfo = s.leaderInfo
+		s.clusterInfo.LeaderInfo = s.leaderInfo
 	}
 
 	if info, ok := s.cachedInfo[nodeInfo.Uuid]; ok {
@@ -43,9 +43,9 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *infos.NodeInfo) (*Regist
 			Result: &common.Result{
 				Status: common.Result_OK,
 			},
-			RaftId:    info.RaftId,
-			HasLeader: hasLeader,
-			GroupInfo: s.groupInfo,
+			RaftId:      info.RaftId,
+			HasLeader:   hasLeader,
+			ClusterInfo: s.clusterInfo,
 		}, nil
 	}
 
@@ -57,23 +57,23 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *infos.NodeInfo) (*Regist
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
-		RaftId:    raftID,
-		HasLeader: hasLeader,
-		GroupInfo: s.groupInfo,
+		RaftId:      raftID,
+		HasLeader:   hasLeader,
+		ClusterInfo: s.clusterInfo,
 	}
 
 	s.cachedInfo[nodeInfo.Uuid] = nodeInfo
-	logger.Infof("Register moon success, raftID: %v, leader: %v", raftID, result.GroupInfo.LeaderInfo.RaftId)
+	logger.Infof("Register moon success, raftID: %v, leader: %v", raftID, result.ClusterInfo.LeaderInfo.RaftId)
 	return &result, nil
 }
 
 func (s *Sun) GetLeaderInfo(_ context.Context, nodeInfo *infos.NodeInfo) (*infos.NodeInfo, error) {
-	return s.groupInfo.LeaderInfo, nil
+	return s.clusterInfo.LeaderInfo, nil
 }
 
-func (s *Sun) ReportGroupInfo(_ context.Context, groupInfo *infos.GroupInfo) (*common.Result, error) {
+func (s *Sun) ReportClusterInfo(_ context.Context, clusterInfo *infos.ClusterInfo) (*common.Result, error) {
 	s.mu.Lock()
-	s.groupInfo = groupInfo
+	s.clusterInfo = clusterInfo
 	s.mu.Unlock()
 	result := common.Result{
 		Status: common.Result_OK,
@@ -85,7 +85,7 @@ func NewSun(rpc *messenger.RpcServer) *Sun {
 	sun := Sun{
 		rpc:        rpc,
 		leaderInfo: nil,
-		groupInfo: &infos.GroupInfo{
+		clusterInfo: &infos.ClusterInfo{
 			LeaderInfo: nil,
 			NodesInfo:  nil,
 		},

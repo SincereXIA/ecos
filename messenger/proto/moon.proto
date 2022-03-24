@@ -4,14 +4,14 @@ package messenger;
 import "raftpb/raft.proto";
 import "node_info.proto";
 import "common.proto";
-import "group_info.proto";
+import "cluster_info.proto";
 
 option go_package = "ecos/edge-node/moon";
 
 service Moon {
   rpc SendRaftMessage (raftpb.Message) returns (raftpb.Message) {}
   rpc AddNodeToGroup (NodeInfo) returns (AddNodeReply) {}
-  rpc GetGroupInfo(GetGroupInfoRequest) returns (GroupInfo) {};
+  rpc GetClusterInfo(GetClusterInfoRequest) returns (ClusterInfo) {};
 }
 
 message AddNodeReply {
@@ -19,6 +19,6 @@ message AddNodeReply {
   NodeInfo leaderInfo = 2;
 }
 
-message GetGroupInfoRequest {
+message GetClusterInfoRequest {
   uint64 term = 1;
 }

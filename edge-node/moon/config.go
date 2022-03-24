@@ -7,7 +7,7 @@ import (
 
 type Config struct {
 	SunAddr                string
-	GroupInfo              infos.GroupInfo
+	ClusterInfo            infos.ClusterInfo
 	NodeInfoCommitInterval time.Duration
 }
 
@@ -16,7 +16,7 @@ var DefaultConfig *Config
 func init() {
 	DefaultConfig = &Config{
 		SunAddr:                "",
-		GroupInfo:              infos.GroupInfo{},
+		ClusterInfo:            infos.ClusterInfo{},
 		NodeInfoCommitInterval: time.Second,
 	}
 }

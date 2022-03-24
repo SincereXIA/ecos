@@ -10,7 +10,7 @@ import (
 )
 
 func TestGenPipelines(t *testing.T) {
-	group := genGroupInfo()
+	group := genClusterInfo()
 	pipelines := GenPipelines(group, 10, 3)
 	for _, pipeline := range pipelines {
 		t.Logf("PG: %v, id: %v, %v, %v", pipeline.PgId, pipeline.RaftId[0], pipeline.RaftId[1], pipeline.RaftId[2])
@@ -22,8 +22,8 @@ func TestGenPipelines(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(pipelines, pipelines2))
 }
 
-func genGroupInfo() *infos.GroupInfo {
-	group := infos.GroupInfo{
+func genClusterInfo() *infos.ClusterInfo {
+	group := infos.ClusterInfo{
 		Term:            0,
 		LeaderInfo:      nil,
 		NodesInfo:       []*infos.NodeInfo{},

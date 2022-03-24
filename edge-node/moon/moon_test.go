@@ -53,7 +53,7 @@ func TestRaft(t *testing.T) {
 	node4Info := infos.NewSelfInfo(0x04, "127.0.0.1", 32674)
 	rpcServer4 := messenger.NewRpcServer(32674)
 	moonConfig := DefaultConfig
-	moonConfig.GroupInfo = infos.GroupInfo{
+	moonConfig.ClusterInfo = infos.ClusterInfo{
 		Term:            0,
 		LeaderInfo:      moons[leader-1].SelfInfo,
 		NodesInfo:       nodeInfos,
@@ -93,14 +93,14 @@ func TestRaft(t *testing.T) {
 }
 
 func assertInfoStorageOK(t *testing.T, nodeNum int, moons ...*Moon) {
-	firstGroupInfo := moons[0].InfoStorage.GetGroupInfo(0)
+	firstClusterInfo := moons[0].InfoStorage.GetClusterInfo(0)
 	for _, moon := range moons {
 		storage := moon.InfoStorage
-		groupInfo := storage.GetGroupInfo(0)
-		if diff := cmp.Diff(firstGroupInfo, groupInfo, protocmp.Transform()); diff != "" {
+		clusterInfo := storage.GetClusterInfo(0)
+		if diff := cmp.Diff(firstClusterInfo, clusterInfo, protocmp.Transform()); diff != "" {
 			t.Errorf("Group info not equal, diff: %v", diff)
 		}
-		assert.Equal(t, nodeNum, len(groupInfo.NodesInfo),
+		assert.Equal(t, nodeNum, len(clusterInfo.NodesInfo),
 			"node num in group info should same as real node num")
 	}
 }
@@ -191,7 +191,7 @@ func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenge
 
 	moonConfig := DefaultConfig
 	moonConfig.SunAddr = sunAddr
-	moonConfig.GroupInfo = infos.GroupInfo{
+	moonConfig.ClusterInfo = infos.ClusterInfo{
 		Term:            0,
 		LeaderInfo:      nil,
 		UpdateTimestamp: timestamp.Now(),
@@ -202,7 +202,7 @@ func createMoons(num int, sunAddr string, basePath string) ([]*Moon, []*messenge
 			moons = append(moons, NewMoon(nodeInfos[i], moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		} else {
-			moonConfig.GroupInfo.NodesInfo = nodeInfos
+			moonConfig.ClusterInfo.NodesInfo = nodeInfos
 			moons = append(moons, NewMoon(nodeInfos[i], moonConfig, rpcServers[i], infoStorages[i],
 				stableStorages[i]))
 		}

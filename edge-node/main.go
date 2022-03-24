@@ -24,11 +24,11 @@ var Gaia *gaia.Gaia
 
 func NewRouter() *gin.Engine {
 	router := gin.Default()
-	router.GET("/", getGroupInfo)
+	router.GET("/", getClusterInfo)
 	return router
 }
 
-func getGroupInfo(c *gin.Context) {
+func getClusterInfo(c *gin.Context) {
 	if Moon == nil {
 		c.String(http.StatusBadGateway, "Edge Node Not Ready")
 	}

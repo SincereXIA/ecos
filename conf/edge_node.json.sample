@@ -9,7 +9,7 @@
   "StoragePath": "/data/ecos",
   "MoonConfig": {
     "SunAddr": "ecos-cloud-dev:3267",
-    "GroupInfo": {},
+    "ClusterInfo": {},
     "NodeInfoCommitInterval": 20000000000
   },
   "GaiaConfig": {

@@ -35,11 +35,11 @@ type Block struct {
 	chunks []*localChunk
 
 	// These infos are for BlockInfo
-	key        string
-	groupInfo  *infos.GroupInfo
-	blockCount int
-	needHash   bool
-	blockPipes []*pipeline.Pipeline
+	key         string
+	clusterInfo *infos.ClusterInfo
+	blockCount  int
+	needHash    bool
+	blockPipes  []*pipeline.Pipeline
 
 	// These are for Upload and Release
 	uploadCount int
@@ -55,7 +55,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 				Code:     gaia.ControlMessage_BEGIN,
 				Block:    &b.BlockInfo,
 				Pipeline: b.blockPipes[b.PgId],
-				Term:     b.groupInfo.Term,
+				Term:     b.clusterInfo.Term,
 			},
 		},
 	}
@@ -89,7 +89,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 				Code:     gaia.ControlMessage_EOF,
 				Block:    &b.BlockInfo,
 				Pipeline: b.blockPipes[b.PgId],
-				Term:     b.groupInfo.Term,
+				Term:     b.clusterInfo.Term,
 			},
 		},
 	}
@@ -141,7 +141,7 @@ func (b *Block) updateBlockInfo() error {
 		b.BlockInfo.BlockId = GenBlockId()
 	}
 	logger.Debugf("Gen block info success: %v", &b.BlockInfo)
-	// TODO: Calculate Place Group from Block Info and GroupInfo
+	// TODO: Calculate Place Group from Block Info and ClusterInfo
 	b.BlockInfo.PgId = GenBlockPG(&b.BlockInfo)
 	return nil
 }

@@ -112,7 +112,7 @@ func (a *Alaya) Stop() {
 	a.cancel()
 }
 
-func (a *Alaya) ApplyNewGroupInfo(groupInfo *infos.GroupInfo) {
+func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 	// TODO: (zhang) make pgNum configurable
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
@@ -120,14 +120,14 @@ func (a *Alaya) ApplyNewGroupInfo(groupInfo *infos.GroupInfo) {
 	oldPipelines := a.pipelines
 	terms := a.InfoStorage.GetTermList()
 	if len(terms) > 0 {
-		oldGroupInfo := a.InfoStorage.GetGroupInfo(terms[len(terms)-1])
-		oldPipelines = pipeline.GenPipelines(oldGroupInfo, 10, 3)
+		oldClusterInfo := a.InfoStorage.GetClusterInfo(terms[len(terms)-1])
+		oldPipelines = pipeline.GenPipelines(oldClusterInfo, 10, 3)
 	}
-	if len(groupInfo.NodesInfo) == 0 {
-		logger.Warningf("Empty groupInfo when alaya apply new groupInfo")
+	if len(clusterInfo.NodesInfo) == 0 {
+		logger.Warningf("Empty clusterInfo when alaya apply new clusterInfo")
 		return
 	}
-	p := pipeline.GenPipelines(groupInfo, 10, 3)
+	p := pipeline.GenPipelines(clusterInfo, 10, 3)
 	a.ApplyNewPipelines(p, oldPipelines)
 	a.state = RUNNING
 }
@@ -196,8 +196,8 @@ func NewAlaya(selfInfo *infos.NodeInfo, infoStorage infos.NodeInfoStorage, metaS
 		raftNodeStopChan: make(chan uint64),
 	}
 	RegisterAlayaServer(rpcServer, &a)
-	a.ApplyNewGroupInfo(infoStorage.GetGroupInfo(0))
-	infoStorage.SetOnGroupApply(a.ApplyNewGroupInfo)
+	a.ApplyNewClusterInfo(infoStorage.GetClusterInfo(0))
+	infoStorage.SetOnGroupApply(a.ApplyNewClusterInfo)
 	a.state = READY
 	return &a
 }

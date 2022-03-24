@@ -26,7 +26,7 @@ func TestNewAlaya(t *testing.T) {
 
 	nodeNum := 9
 	var rpcServers []messenger.RpcServer
-	groupInfo := infos.GroupInfo{
+	clusterInfo := infos.ClusterInfo{
 		Term:            1,
 		LeaderInfo:      nil,
 		NodesInfo:       []*infos.NodeInfo{},
@@ -43,17 +43,17 @@ func TestNewAlaya(t *testing.T) {
 			Capacity: 1,
 		}
 		_ = infoStorage.UpdateNodeInfo(&info, timestamp.Now())
-		groupInfo.NodesInfo = append(groupInfo.NodesInfo, &info)
+		clusterInfo.NodesInfo = append(clusterInfo.NodesInfo, &info)
 	}
 
 	infoStorage.Commit(1)
 	infoStorage.Apply()
-	pipelines := pipeline.GenPipelines(&groupInfo, 10, 3)
+	pipelines := pipeline.GenPipelines(&clusterInfo, 10, 3)
 
 	var alayas []*Alaya
 	_ = os.Mkdir("./testMetaStorage/", os.ModePerm)
 	for i := 0; i < nodeNum; i++ { // for each node
-		info := groupInfo.NodesInfo[i]
+		info := clusterInfo.NodesInfo[i]
 		dataBaseDir := "./testMetaStorage/" + strconv.FormatUint(info.RaftId, 10)
 		metaStorage := NewStableMetaStorage(dataBaseDir)
 		a := NewAlaya(info, infoStorage, metaStorage, &rpcServers[i])
@@ -151,7 +151,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 
 	time.Sleep(time.Second * 1)
 	for i := 0; i < 6; i++ {
-		t.Logf("Apply new groupInfo for: %v", i+1)
+		t.Logf("Apply new clusterInfo for: %v", i+1)
 		go infoStorages[i].Apply()
 	}
 
@@ -162,7 +162,7 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		a.PrintPipelineInfo()
 	}
 
-	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
+	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetClusterInfo(0), 10, 3))
 
 	for i := 6; i < 9; i++ {
 		for j := 0; j < 6; j++ {
@@ -191,17 +191,17 @@ func TestAlaya_UpdatePipeline(t *testing.T) {
 		infoStorages[i].Commit(term)
 	}
 	for i := 0; i < 9; i++ {
-		t.Logf("Apply new groupInfo for: %v", i+1)
+		t.Logf("Apply new clusterInfo for: %v", i+1)
 		go infoStorages[i].Apply()
 	}
 	waiteAllAlayaOK(alayas)
-	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3))
+	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetClusterInfo(0), 10, 3))
 	for i := 0; i < 9; i++ { // for each node
 		a := alayas[i]
 		a.PrintPipelineInfo()
 	}
 
-	pipelines := pipeline.GenPipelines(infoStorages[0].GetGroupInfo(0), 10, 3)
+	pipelines := pipeline.GenPipelines(infoStorages[0].GetClusterInfo(0), 10, 3)
 	for _, p := range pipelines {
 		t.Logf("PG: %v, id: %v, %v, %v", p.PgId, p.RaftId[0], p.RaftId[1], p.RaftId[2])
 	}
