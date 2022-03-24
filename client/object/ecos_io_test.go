@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-func TestEcosWriter(t *testing.T) {
+func TestEcosWriterAndReader(t *testing.T) {
 	_, filename, _, _ := runtime.Caller(0)
 	t.Logf("Current test filename: %s", filename)
 	type args struct {
@@ -95,6 +95,7 @@ func TestEcosWriter(t *testing.T) {
 			conf.NodePort = moons[0].SelfInfo.RpcPort
 			factory := NewEcosWriterFactory(conf)
 			writer := factory.GetEcosWriter(tt.args.key)
+			reader := factory.GetEcosReader(tt.args.key)
 			data := genTestData(tt.args.objectSize)
 			writeSize, err := writer.Write(data)
 			assert.NoError(t, err)
@@ -105,6 +106,10 @@ func TestEcosWriter(t *testing.T) {
 				t.Errorf("PutObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			readData := make([]byte, tt.args.objectSize)
+			readSize, err := reader.Read(readData)
+			assert.Equal(t, tt.args.objectSize, readSize)
+
 		})
 	}
 }
