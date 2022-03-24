@@ -1,4 +1,4 @@
-image: harbor.sums.top/ecos/rocksdb-go:v6.28.2
+image: harbor.sums.top/ecos/rocksdb-go:6.28.2-alpine
 stages:          # List of stages for jobs, and their order of execution
   - build
   - test
