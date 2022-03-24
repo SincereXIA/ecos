@@ -61,7 +61,7 @@ func TestEcosWriter(t *testing.T) {
 		t.Errorf("RpcServer error = %v", err)
 	}
 	for i := 0; i < 9; i++ {
-		infoStorage := moons[i].InfoStorage
+		infoStorage := moons[i].NodeInfoStorage
 		gaia.NewGaia(rpcServers[i], infos[i], infoStorage,
 			&gaia.Config{BasePath: path.Join(basePath, "gaia", strconv.Itoa(i+1))})
 		i := i

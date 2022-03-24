@@ -80,10 +80,10 @@ func TestRaft(t *testing.T) {
 
 	// 判断集群是否达成共识
 	assertInfoStorageOK(t, len(moons), moons...)
-	info := moons[0].InfoStorage.ListAllNodeInfo()
+	info := moons[0].NodeInfoStorage.ListAllNodeInfo()
 	t.Log(info)
 	for i := 1; i < 4; i++ {
-		anotherInfo := moons[i].InfoStorage.ListAllNodeInfo()
+		anotherInfo := moons[i].NodeInfoStorage.ListAllNodeInfo()
 		if diff := cmp.Diff(info, anotherInfo, protocmp.Transform()); diff != "" {
 			t.Errorf("Node Info Not Equal")
 		}
@@ -93,9 +93,9 @@ func TestRaft(t *testing.T) {
 }
 
 func assertInfoStorageOK(t *testing.T, nodeNum int, moons ...*Moon) {
-	firstClusterInfo := moons[0].InfoStorage.GetClusterInfo(0)
+	firstClusterInfo := moons[0].NodeInfoStorage.GetClusterInfo(0)
 	for _, moon := range moons {
-		storage := moon.InfoStorage
+		storage := moon.NodeInfoStorage
 		clusterInfo := storage.GetClusterInfo(0)
 		if diff := cmp.Diff(firstClusterInfo, clusterInfo, protocmp.Transform()); diff != "" {
 			t.Errorf("Group info not equal, diff: %v", diff)
@@ -151,7 +151,7 @@ func waitMoonsOK(moons []*Moon) int {
 	for {
 		ok := true
 		for i := 0; i < len(moons); i++ {
-			if moons[i].GetLeaderID() == 0 || len(moons[i].InfoStorage.ListAllNodeInfo()) != len(moons) {
+			if moons[i].GetLeaderID() == 0 || len(moons[i].NodeInfoStorage.ListAllNodeInfo()) != len(moons) {
 				ok = false
 			}
 			leader = int(moons[i].GetLeaderID())

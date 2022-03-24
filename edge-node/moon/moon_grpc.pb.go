@@ -23,6 +23,11 @@ type MoonClient interface {
 	SendRaftMessage(ctx context.Context, in *raftpb.Message, opts ...grpc.CallOption) (*raftpb.Message, error)
 	AddNodeToGroup(ctx context.Context, in *infos.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error)
 	GetClusterInfo(ctx context.Context, in *GetClusterInfoRequest, opts ...grpc.CallOption) (*infos.ClusterInfo, error)
+	// ProposeInfo 用于向集群中提交一个 Info 共识，该 Info 将会在集群所有节点上同步
+	// 目前可以提交的 Info: NodeInfo, BucketInfo
+	ProposeInfo(ctx context.Context, in *ProposeInfoRequest, opts ...grpc.CallOption) (*ProposeInfoReply, error)
+	// GetInfo 从对应 InfoStorage 中取得 Info
+	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoReply, error)
 }
 
 type moonClient struct {
@@ -60,6 +65,24 @@ func (c *moonClient) GetClusterInfo(ctx context.Context, in *GetClusterInfoReque
 	return out, nil
 }
 
+func (c *moonClient) ProposeInfo(ctx context.Context, in *ProposeInfoRequest, opts ...grpc.CallOption) (*ProposeInfoReply, error) {
+	out := new(ProposeInfoReply)
+	err := c.cc.Invoke(ctx, "/messenger.Moon/ProposeInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *moonClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoReply, error) {
+	out := new(GetInfoReply)
+	err := c.cc.Invoke(ctx, "/messenger.Moon/GetInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MoonServer is the server API for Moon service.
 // All implementations must embed UnimplementedMoonServer
 // for forward compatibility
@@ -67,6 +90,11 @@ type MoonServer interface {
 	SendRaftMessage(context.Context, *raftpb.Message) (*raftpb.Message, error)
 	AddNodeToGroup(context.Context, *infos.NodeInfo) (*AddNodeReply, error)
 	GetClusterInfo(context.Context, *GetClusterInfoRequest) (*infos.ClusterInfo, error)
+	// ProposeInfo 用于向集群中提交一个 Info 共识，该 Info 将会在集群所有节点上同步
+	// 目前可以提交的 Info: NodeInfo, BucketInfo
+	ProposeInfo(context.Context, *ProposeInfoRequest) (*ProposeInfoReply, error)
+	// GetInfo 从对应 InfoStorage 中取得 Info
+	GetInfo(context.Context, *GetInfoRequest) (*GetInfoReply, error)
 	mustEmbedUnimplementedMoonServer()
 }
 
@@ -82,6 +110,12 @@ func (UnimplementedMoonServer) AddNodeToGroup(context.Context, *infos.NodeInfo) 
 }
 func (UnimplementedMoonServer) GetClusterInfo(context.Context, *GetClusterInfoRequest) (*infos.ClusterInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClusterInfo not implemented")
+}
+func (UnimplementedMoonServer) ProposeInfo(context.Context, *ProposeInfoRequest) (*ProposeInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProposeInfo not implemented")
+}
+func (UnimplementedMoonServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
 }
 func (UnimplementedMoonServer) mustEmbedUnimplementedMoonServer() {}
 
@@ -150,6 +184,42 @@ func _Moon_GetClusterInfo_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Moon_ProposeInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProposeInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MoonServer).ProposeInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/messenger.Moon/ProposeInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MoonServer).ProposeInfo(ctx, req.(*ProposeInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Moon_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MoonServer).GetInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/messenger.Moon/GetInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MoonServer).GetInfo(ctx, req.(*GetInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Moon_ServiceDesc is the grpc.ServiceDesc for Moon service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -168,6 +238,14 @@ var Moon_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetClusterInfo",
 			Handler:    _Moon_GetClusterInfo_Handler,
+		},
+		{
+			MethodName: "ProposeInfo",
+			Handler:    _Moon_ProposeInfo_Handler,
+		},
+		{
+			MethodName: "GetInfo",
+			Handler:    _Moon_GetInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

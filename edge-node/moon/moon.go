@@ -13,30 +13,34 @@ import (
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"sync"
 	"time"
 )
 
 type Moon struct {
-	id            uint64 //raft节点的id
-	SelfInfo      *infos.NodeInfo
-	ctx           context.Context //context
-	cancel        context.CancelFunc
-	InfoStorage   infos.NodeInfoStorage
-	raftStorage   *raft.MemoryStorage //raft需要的内存结构
-	stableStorage Storage
-	cfg           *raft.Config //raft需要的配置
-	raft          raft.Node
-	ticker        <-chan time.Time //定时器，提供周期时钟源和超时触发能力
-	infoMap       map[uint64]*infos.NodeInfo
-	leaderID      uint64 // 注册时的 leader 信息
+	// Moon Rpc
+	UnimplementedMoonServer
+
+	id              uint64 //raft节点的id
+	SelfInfo        *infos.NodeInfo
+	ctx             context.Context //context
+	cancel          context.CancelFunc
+	NodeInfoStorage infos.NodeInfoStorage
+	raftStorage     *raft.MemoryStorage //raft需要的内存结构
+	stableStorage   Storage
+	cfg             *raft.Config //raft需要的配置
+	raft            raft.Node
+	ticker          <-chan time.Time //定时器，提供周期时钟源和超时触发能力
+	infoMap         map[uint64]*infos.NodeInfo
+	leaderID        uint64 // 注册时的 leader 信息
+
+	infoStorage infos.Storage
 
 	// InfoStorageTimer trigger infoStorage to commit
 	InfoStorageTimer *time.Timer
-
-	// Moon Rpc
-	UnimplementedMoonServer
 
 	sunAddr  string
 	raftChan chan raftpb.Message
@@ -48,7 +52,7 @@ type Moon struct {
 
 type ActionType int
 
-type Message struct {
+type Message2 struct {
 	Action    ActionType
 	NodeInfo  infos.NodeInfo
 	Term      uint64
@@ -70,6 +74,13 @@ const (
 	StatusOK
 )
 
+func (m *Moon) ProposeInfo(context.Context, *ProposeInfoRequest) (*ProposeInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProposeInfo not implemented")
+}
+func (m *Moon) GetInfo(context.Context, *GetInfoRequest) (*GetInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
+}
+
 func (m *Moon) AddNodeToGroup(_ context.Context, info *infos.NodeInfo) (*AddNodeReply, error) {
 	m.mutex.Lock() // only one node can add to group at same time
 	defer m.mutex.Unlock()
@@ -79,13 +90,15 @@ func (m *Moon) AddNodeToGroup(_ context.Context, info *infos.NodeInfo) (*AddNode
 		},
 		LeaderInfo: nil,
 	}
-	msg := Message{
-		Action:    UpdateNodeInfo,
-		NodeInfo:  *info,
-		Term:      m.InfoStorage.GetTermNow(),
-		TimeStamp: timestamp.Now(),
+	msg := ProposeInfoRequest{
+		Head: &common.Head{
+			Timestamp: timestamp.Now(),
+			Term:      m.NodeInfoStorage.GetTermNow(),
+		},
+		Operate: ProposeInfoRequest_ADD,
+		Info:    &ProposeInfoRequest_NodeInfo{NodeInfo: info},
 	}
-	js, _ := json.Marshal(&msg)
+	js, _ := msg.Marshal()
 	if m.raft == nil {
 		reply.Result.Status = common.Result_FAIL
 		reply.Result.Message = errno.MoonRaftNotReady.Error()
@@ -101,7 +114,7 @@ func (m *Moon) AddNodeToGroup(_ context.Context, info *infos.NodeInfo) (*AddNode
 	// TODO (zhang): check it by channel
 	isReady := false
 	for i := 0; i < 10; i++ {
-		nodeInfo, err := m.InfoStorage.GetNodeInfo(infos.NodeID(info.RaftId))
+		nodeInfo, err := m.NodeInfoStorage.GetNodeInfo(infos.NodeID(info.RaftId))
 		if err != nil || info.Uuid != nodeInfo.Uuid {
 			time.Sleep(1 * time.Second)
 		} else {
@@ -138,7 +151,7 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 }
 
 func (m *Moon) GetClusterInfo(_ context.Context, getGroupReq *GetClusterInfoRequest) (*infos.ClusterInfo, error) {
-	return m.InfoStorage.GetClusterInfo(getGroupReq.Term), nil
+	return m.NodeInfoStorage.GetClusterInfo(getGroupReq.Term), nil
 }
 
 func (m *Moon) RequestJoinGroup(leaderInfo *infos.NodeInfo) error {
@@ -228,21 +241,21 @@ func NewMoon(selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcS
 	raftChan := make(chan raftpb.Message)
 	sunAddr := config.SunAddr
 	m := &Moon{
-		id:            0, // set raft id after register
-		SelfInfo:      selfInfo,
-		ctx:           ctx,
-		cancel:        cancel,
-		InfoStorage:   infoStorage,
-		raftStorage:   storage,
-		stableStorage: stableStorage,
-		cfg:           nil, // set raft cfg after register
-		ticker:        time.NewTicker(time.Millisecond * 300).C,
-		raftChan:      raftChan,
-		sunAddr:       sunAddr,
-		mutex:         sync.RWMutex{},
-		infoMap:       make(map[uint64]*infos.NodeInfo),
-		config:        config,
-		status:        StatusInit,
+		id:              0, // set raft id after register
+		SelfInfo:        selfInfo,
+		ctx:             ctx,
+		cancel:          cancel,
+		NodeInfoStorage: infoStorage,
+		raftStorage:     storage,
+		stableStorage:   stableStorage,
+		cfg:             nil, // set raft cfg after register
+		ticker:          time.NewTicker(time.Millisecond * 300).C,
+		raftChan:        raftChan,
+		sunAddr:         sunAddr,
+		mutex:           sync.RWMutex{},
+		infoMap:         make(map[uint64]*infos.NodeInfo),
+		config:          config,
+		status:          StatusInit,
 	}
 	leaderInfo := config.ClusterInfo.LeaderInfo
 	if leaderInfo != nil {
@@ -270,7 +283,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		var nodeInfo *infos.NodeInfo
 		var ok bool
 		if nodeInfo, ok = m.infoMap[message.To]; !ok { // infoMap always have latest
-			nodeInfo, err = m.InfoStorage.GetNodeInfo(nodeId) // else get from infoStorage
+			nodeInfo, err = m.NodeInfoStorage.GetNodeInfo(nodeId) // else get from infoStorage
 			if err != nil {
 				logger.Warningf("Get Node Info fail: %v", err)
 				return
@@ -325,7 +338,7 @@ func (m *Moon) waitAndCommitStorage() {
 	}
 }
 
-// waitAndCommitStorage wait all follower finish InfoStorage commit,
+// waitAndCommitStorage wait all follower finish NodeInfoStorage commit,
 // and start to propose a StorageApply log. (if this node is leader)
 func (m *Moon) waitAndApplyStorage(commitMessage *Message) {
 	if !m.IsLeader() {
@@ -348,24 +361,44 @@ func (m *Moon) waitAndApplyStorage(commitMessage *Message) {
 
 func (m *Moon) process(entry raftpb.Entry) {
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var msg Message
-		err := json.Unmarshal(entry.Data, &msg)
+		var msg ProposeInfoRequest
+		err := msg.Unmarshal(entry.Data)
+		if err != nil {
+			logger.Errorf("unmarshal entry data fail: %v", err)
+		}
+		info, err := infos.NewInformation(msg.Info)
+		// TODO err
+		switch msg.Operate {
+		case ProposeInfoRequest_ADD:
+			m.infoStorage.Update(info)
+		case ProposeInfoRequest_UPDATE:
+			m.infoStorage.Update(info)
+		case ProposeInfoRequest_DELETE:
+			m.infoStorage.Delete(info)
+		}
+
+		switch msg.Info.(type) {
+		case *ProposeInfoRequest_NodeInfo:
+		case *ProposeInfoRequest_BucketInfo:
+		case *ProposeInfoRequest_ClusterInfo:
+		}
+
 		switch msg.Action {
 		case UpdateNodeInfo:
 			nodeInfo := msg.NodeInfo
 			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
-			_ = m.InfoStorage.UpdateNodeInfo(&nodeInfo, msg.TimeStamp)
+			_ = m.NodeInfoStorage.UpdateNodeInfo(&nodeInfo, msg.TimeStamp)
 			m.waitAndCommitStorage()
 		case DeleteNodeInfo:
 			nodeInfo := msg.NodeInfo
 			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
-			_ = m.InfoStorage.DeleteNodeInfo(infos.NodeID(nodeInfo.RaftId), msg.TimeStamp)
+			_ = m.NodeInfoStorage.DeleteNodeInfo(infos.NodeID(nodeInfo.RaftId), msg.TimeStamp)
 			m.waitAndCommitStorage()
 		case StorageCommit:
-			m.InfoStorage.Commit(msg.Term)
+			m.NodeInfoStorage.Commit(msg.Term)
 			m.waitAndApplyStorage(&msg)
 		case StorageApply:
-			m.InfoStorage.Apply()
+			m.NodeInfoStorage.Apply()
 		}
 		if err != nil {
 			logger.Errorf("Moon process moon message err: %v", err.Error())
@@ -483,7 +516,7 @@ func (m *Moon) Run() {
 func (m *Moon) Stop() {
 	m.cancel()
 	m.stableStorage.Close()
-	m.InfoStorage.Close()
+	m.NodeInfoStorage.Close()
 }
 
 func (m *Moon) reportSelfInfo() {
@@ -495,7 +528,7 @@ func (m *Moon) reportSelfInfo() {
 	message := Message{
 		Action:    UpdateNodeInfo,
 		NodeInfo:  *m.SelfInfo,
-		Term:      m.InfoStorage.GetTermNow(),
+		Term:      m.NodeInfoStorage.GetTermNow(),
 		TimeStamp: timestamp.Now(),
 	}
 	js, _ := json.Marshal(message)
