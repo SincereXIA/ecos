@@ -92,8 +92,10 @@ func (builder *StorageRegisterBuilder) GetStorageRegister() *StorageRegister {
 
 func NewStorageRegisterBuilder(factory StorageFactory) *StorageRegisterBuilder {
 	return &StorageRegisterBuilder{
-		actionMap:      map[InfoType]StorageUpdateFunc{},
-		register:       &StorageRegister{},
+		actionMap: map[InfoType]StorageUpdateFunc{},
+		register: &StorageRegister{
+			storageMap: map[InfoType]Storage{},
+		},
 		storageFactory: factory,
 	}
 }

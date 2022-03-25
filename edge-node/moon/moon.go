@@ -7,6 +7,7 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
+	"errors"
 	"github.com/google/go-cmp/cmp"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
@@ -32,9 +33,10 @@ type Moon struct {
 	infoMap       map[uint64]*infos.NodeInfo
 	leaderID      uint64 // 注册时的 leader 信息
 
-	infoStorageRegister *infos.StorageRegister
-	raftChan            chan raftpb.Message
-	appliedRequestChan  chan *ProposeInfoRequest
+	infoStorageRegister   *infos.StorageRegister
+	raftChan              chan raftpb.Message
+	appliedRequestChan    chan *ProposeInfoRequest
+	appliedConfChangeChan chan raftpb.ConfChange
 
 	mutex  sync.RWMutex
 	config *Config
@@ -59,6 +61,10 @@ const (
 )
 
 func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*ProposeInfoReply, error) {
+	if request.Id == "" {
+		return nil, errors.New("info key is empty")
+	}
+
 	data, err := request.Marshal()
 	if err != nil {
 		// TODO
@@ -70,9 +76,11 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 	for {
 		applied := <-m.appliedRequestChan
 		if cmp.Equal(applied.BaseInfo, request.BaseInfo, protocmp.Transform()) {
+			logger.Infof("get applied: %v", applied.Id)
 			break
 		} else {
 			m.appliedRequestChan <- applied
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 
@@ -104,12 +112,19 @@ func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoRepl
 	}, nil
 }
 
-func (m *Moon) ProposeConfChangeAddNode(_ context.Context, nodeID uint64) error {
-	return m.raft.ProposeConfChange(m.ctx, raftpb.ConfChange{
+func (m *Moon) ProposeConfChangeAddNode(_ context.Context, nodeInfo *infos.NodeInfo) error {
+	data, _ := nodeInfo.Marshal()
+	err := m.raft.ProposeConfChange(m.ctx, raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
-		NodeID:  nodeID,
-		Context: nil,
+		NodeID:  nodeInfo.RaftId,
+		Context: data,
 	})
+	if err != nil {
+		return err
+	}
+	// TODO: add time out
+	<-m.appliedConfChangeChan
+	return nil
 }
 
 func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raftpb.Message, error) {
@@ -122,21 +137,22 @@ func NewMoon(selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcS
 	ctx, cancel := context.WithCancel(context.Background())
 	storage := raft.NewMemoryStorage()
 	m := &Moon{
-		id:                  0, // set raft id after register
-		SelfInfo:            selfInfo,
-		ctx:                 ctx,
-		cancel:              cancel,
-		raftStorage:         storage,
-		stableStorage:       stableStorage,
-		cfg:                 nil, // set raft cfg after register
-		ticker:              time.NewTicker(time.Millisecond * 300).C,
-		mutex:               sync.RWMutex{},
-		infoMap:             make(map[uint64]*infos.NodeInfo),
-		config:              config,
-		status:              StatusInit,
-		infoStorageRegister: register,
-		raftChan:            make(chan raftpb.Message),
-		appliedRequestChan:  make(chan *ProposeInfoRequest, 100),
+		id:                    0, // set raft id after register
+		SelfInfo:              selfInfo,
+		ctx:                   ctx,
+		cancel:                cancel,
+		raftStorage:           storage,
+		stableStorage:         stableStorage,
+		cfg:                   nil, // set raft cfg after register
+		ticker:                time.NewTicker(time.Millisecond * 200).C,
+		mutex:                 sync.RWMutex{},
+		infoMap:               make(map[uint64]*infos.NodeInfo),
+		config:                config,
+		status:                StatusInit,
+		infoStorageRegister:   register,
+		raftChan:              make(chan raftpb.Message),
+		appliedRequestChan:    make(chan *ProposeInfoRequest, 100),
+		appliedConfChangeChan: make(chan raftpb.ConfChange, 100),
 	}
 	leaderInfo := config.ClusterInfo.LeaderInfo
 	if leaderInfo != nil {
@@ -212,6 +228,7 @@ func (m *Moon) process(entry raftpb.Entry) {
 			m.infoStorageRegister.Delete(info.GetInfoType(), msg.Id)
 		}
 		// let request know it is already applied
+		logger.Infof("applied: %v", msg.Id)
 		m.appliedRequestChan <- &msg
 		if err != nil {
 			logger.Errorf("Moon process moon message err: %v", err.Error())
@@ -224,6 +241,7 @@ func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	defer m.mutex.Unlock()
 	m.status = StatusRegistering
 
+	m.infoMap[leaderInfo.RaftId] = leaderInfo
 	for _, nodeInfo := range peersInfo {
 		m.infoMap[nodeInfo.RaftId] = nodeInfo
 	}
@@ -243,25 +261,30 @@ func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 
 	m.infoMap[m.SelfInfo.RaftId] = m.SelfInfo
 
-	for _, nodeInfo := range m.infoMap {
-		if nodeInfo.RaftId != m.id {
-			// 非常奇怪，除了第一个节点之外，其他节点不能有集群的完整信息，否则后续 propose 无法被提交
-			peers = append(peers, raft.Peer{
-				ID:      nodeInfo.RaftId,
-				Context: nil,
-			})
-		}
-	}
+	//for _, nodeInfo := range m.infoMap {
+	//	if nodeInfo.RaftId != m.id {
+	//		// 非常奇怪，除了第一个节点之外，其他节点不能有集群的完整信息，否则后续 propose 无法被提交
+	//		peers = append(peers, raft.Peer{
+	//			ID:      nodeInfo.RaftId,
+	//			Context: nil,
+	//		})
+	//	}
+	//}
 	logger.Tracef("leaderInfo: %v", leaderInfo)
 
-	if leaderInfo == nil || leaderInfo.RaftId == m.id {
-		// 非常奇怪，还必须得保证在只有一个节点的时候，peers 得加入自身，否则选不出 leader
-		peers = append(peers, raft.Peer{
-			ID:      m.id,
-			Context: nil,
-		})
-	}
+	//if leaderInfo == nil || leaderInfo.RaftId == m.id {
+	// 非常奇怪，还必须得保证在只有一个节点的时候，peers 得加入自身，否则选不出 leader
+	peers = append(peers, raft.Peer{
+		ID:      m.id,
+		Context: nil,
+	})
 
+	peers = append(peers, raft.Peer{
+		ID:      leaderInfo.RaftId,
+		Context: nil,
+	})
+	//}
+	// 新增节点时，不用传入 peer list 启动节点
 	m.raft = raft.StartNode(m.cfg, peers)
 	return
 }
@@ -301,6 +324,9 @@ func (m *Moon) Run() {
 					var cc raftpb.ConfChange
 					_ = cc.Unmarshal(entry.Data)
 					m.raft.ApplyConfChange(cc)
+					if cc.Context != nil {
+						m.appliedConfChangeChan <- cc
+					}
 				}
 			}
 			m.raft.Advance()
@@ -326,6 +352,7 @@ func (m *Moon) reportSelfInfo() {
 			Timestamp: timestamp.Now(),
 			Term:      0,
 		},
+		Id:       strconv.FormatUint(m.SelfInfo.RaftId, 10),
 		Operate:  ProposeInfoRequest_UPDATE,
 		BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: m.SelfInfo}},
 	}

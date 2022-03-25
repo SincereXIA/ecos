@@ -16,15 +16,6 @@ service Moon {
   rpc GetInfo(GetInfoRequest) returns (GetInfoReply) {};
 }
 
-message AddNodeReply {
-  Result result = 1;
-  NodeInfo leaderInfo = 2;
-}
-
-message GetClusterInfoRequest {
-  uint64 term = 1;
-}
-
 message ProposeInfoRequest {
   Head head = 1;
   enum Operate {

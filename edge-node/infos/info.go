@@ -35,5 +35,5 @@ func (info Information) GetInfoType() InfoType {
 }
 
 func (info Information) BaseInfo() *BaseInfo {
-	return info.BaseInfo()
+	return &info.info
 }

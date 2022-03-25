@@ -36,11 +36,13 @@ type Watcher struct {
 	moon         *moon.Moon
 	register     *infos.StorageRegister
 	timer        *time.Timer
-	config       Config
+	config       *Config
 	ctx          context.Context
 	mutex        sync.Mutex
 
 	currentClusterInfo *infos.ClusterInfo
+
+	cancelFunc context.CancelFunc
 
 	UnimplementedWatcherServer
 }
@@ -57,6 +59,7 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 			Term:      w.getCurrentTerm(),
 		},
 		Operate:  moon.ProposeInfoRequest_ADD,
+		Id:       strconv.FormatUint(info.RaftId, 10),
 		BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: info}},
 	}
 	_, err := w.moon.ProposeInfo(w.ctx, request)
@@ -64,7 +67,8 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 		// TODO
 		return nil, err
 	}
-	err = w.moon.ProposeConfChangeAddNode(w.ctx, info.RaftId)
+	time.Sleep(time.Second)
+	err = w.moon.ProposeConfChangeAddNode(w.ctx, info)
 	if err != nil {
 		// TODO
 		return nil, err
@@ -153,9 +157,10 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 }
 
 func (w *Watcher) RequestJoinCluster(leaderInfo *infos.NodeInfo) error {
-	if leaderInfo == nil {
+	if leaderInfo == nil || leaderInfo.RaftId == w.selfNodeInfo.RaftId {
 		// 此节点为集群中第一个节点
 		w.moon.Init(leaderInfo, nil)
+		return nil
 	}
 
 	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
@@ -173,11 +178,15 @@ func (w *Watcher) RequestJoinCluster(leaderInfo *infos.NodeInfo) error {
 	return nil
 }
 
-func (w *Watcher) AskSky(sunAddr string) (leaderInfo *infos.NodeInfo, err error) {
-	if sunAddr == "" {
+func (w *Watcher) StartMoon() {
+	go w.moon.Run()
+}
+
+func (w *Watcher) AskSky() (leaderInfo *infos.NodeInfo, err error) {
+	if w.config.SunAddr == "" {
 		return nil, errno.ConnectSunFail
 	}
-	conn, err := grpc.Dial(sunAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(w.config.SunAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
@@ -197,11 +206,16 @@ func (w *Watcher) AskSky(sunAddr string) (leaderInfo *infos.NodeInfo, err error)
 	return result.ClusterInfo.LeaderInfo, nil
 }
 
-func NewWatcher(config Config, m *moon.Moon, register *infos.StorageRegister) *Watcher {
+func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer,
+	m *moon.Moon, register *infos.StorageRegister) *Watcher {
+	watcherCtx, cancelFunc := context.WithCancel(ctx)
 	watcher := &Watcher{
-		moon:     m,
-		register: register,
-		config:   config,
+		moon:         m,
+		register:     register,
+		config:       config,
+		selfNodeInfo: &config.SelfNodeInfo,
+		ctx:          watcherCtx,
+		cancelFunc:   cancelFunc,
 	}
 	nodeInfoStorage := watcher.register.GetStorage(infos.InfoType_NODE_INFO)
 	clusterInfoStorage := watcher.register.GetStorage(infos.InfoType_CLUSTER_INFO)
@@ -232,5 +246,6 @@ func NewWatcher(config Config, m *moon.Moon, register *infos.StorageRegister) *W
 	clusterInfoStorage.SetOnUpdate(func(info infos.Information) {
 		watcher.currentClusterInfo = info.BaseInfo().GetClusterInfo()
 	})
+	RegisterWatcherServer(server, watcher)
 	return watcher
 }
