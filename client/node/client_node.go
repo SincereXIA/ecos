@@ -11,7 +11,7 @@ type ClientNodeInfoStorage struct {
 	history        map[uint64]*infos.ClusterInfo
 }
 
-// NewClientNodeInfoStorage generates server-independent NodeInfoStorage
+// NewClientNodeInfoStorage generates server-independent clusterInfoStorage
 func NewClientNodeInfoStorage() (*ClientNodeInfoStorage, error) {
 	return &ClientNodeInfoStorage{
 		history: map[uint64]*infos.ClusterInfo{},

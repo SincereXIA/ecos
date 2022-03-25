@@ -32,7 +32,7 @@ func getClusterInfo(c *gin.Context) {
 	if Moon == nil {
 		c.String(http.StatusBadGateway, "Edge Node Not Ready")
 	}
-	info := Moon.InfoStorage.ListAllNodeInfo()
+	info := Moon.clusterInfoStorage.ListAllNodeInfo()
 	c.JSONP(http.StatusOK, info)
 }
 

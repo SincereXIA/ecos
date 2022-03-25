@@ -178,7 +178,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 
 // NewAlayaByMoon will wait moon ready then create a new alaya
 func NewAlayaByMoon(moon *moon.Moon, storage MetaStorage, server *messenger.RpcServer) *Alaya {
-	return NewAlaya(moon.SelfInfo, moon.InfoStorage, storage, server)
+	return NewAlaya(moon.SelfInfo, moon.clusterInfoStorage, storage, server)
 }
 
 func NewAlaya(selfInfo *infos.NodeInfo, infoStorage infos.NodeInfoStorage, metaStorage MetaStorage,

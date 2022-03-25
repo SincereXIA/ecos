@@ -1,0 +1,27 @@
+syntax = "proto3";
+package messenger;
+
+import "common.proto";
+import "infos.proto";
+
+option go_package = "ecos/edge-node/watcher";
+
+service Watcher {
+  rpc AddNewNodeToCluster (NodeInfo) returns (AddNodeReply) {}
+  rpc GetClusterInfo(GetClusterInfoRequest) returns (GetClusterInfoReply) {}
+}
+
+message AddNodeReply {
+  Result result = 1;
+  NodeInfo leader_info = 2;
+  repeated NodeInfo peers_node_info = 3;
+}
+
+message GetClusterInfoRequest {
+  uint64 term = 1;
+}
+
+message GetClusterInfoReply {
+  Result result = 1;
+  ClusterInfo cluster_info = 2;
+}

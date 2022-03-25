@@ -18,7 +18,7 @@ import (
 )
 
 func TestNewAlaya(t *testing.T) {
-	nodeInfoDir := "./NodeInfoStorage"
+	nodeInfoDir := "./clusterInfoStorage"
 	_ = common.InitAndClearPath(nodeInfoDir)
 	//infoStorage := infos.NewStableNodeInfoStorage(nodeInfoDir)
 	infoStorage := infos.NewMemoryNodeInfoStorage()
@@ -71,7 +71,7 @@ func TestNewAlaya(t *testing.T) {
 		}
 
 		_ = os.RemoveAll("./testMetaStorage")
-		_ = os.RemoveAll("./NodeInfoStorage")
+		_ = os.RemoveAll("./clusterInfoStorage")
 	})
 
 	t.Log("Alayas init done, start run")
