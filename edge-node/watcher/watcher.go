@@ -40,7 +40,7 @@ type Watcher struct {
 	ctx          context.Context
 	mutex        sync.Mutex
 
-	currentClusterInfo *infos.ClusterInfo
+	currentClusterInfo infos.ClusterInfo
 
 	cancelFunc context.CancelFunc
 
@@ -96,31 +96,39 @@ func (w *Watcher) GetClusterInfo(_ context.Context, request *GetClusterInfoReque
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
-		ClusterInfo: info,
+		ClusterInfo: &info,
 	}, nil
 }
 
-func (w *Watcher) GetClusterInfoByTerm(term uint64) (*infos.ClusterInfo, error) {
+func (w *Watcher) GetClusterInfoByTerm(term uint64) (infos.ClusterInfo, error) {
 	if term == 0 {
 		return w.GetCurrentClusterInfo(), nil
 	}
 	clusterInfoStorage := w.register.GetStorage(infos.InfoType_CLUSTER_INFO)
 	info, err := clusterInfoStorage.Get(strconv.FormatUint(term, 10))
 	if err != nil {
-		return nil, err
+		return infos.ClusterInfo{}, err
 	}
-	return info.BaseInfo().GetClusterInfo(), nil
+	return *info.BaseInfo().GetClusterInfo(), nil
 }
 
-func (w *Watcher) GetCurrentClusterInfo() *infos.ClusterInfo {
+func (w *Watcher) GetCurrentClusterInfo() infos.ClusterInfo {
 	return w.currentClusterInfo
 }
 
+func (w *Watcher) GetInfo(infoType infos.InfoType, id string) (infos.Information, error) {
+	storage := w.register.GetStorage(infoType)
+	return storage.Get(id)
+}
+
+func (w *Watcher) SetOnInfoUpdate(infoType infos.InfoType, name string, f infos.StorageUpdateFunc) error {
+	storage := w.register.GetStorage(infoType)
+	storage.SetOnUpdate(name, f)
+	return nil
+}
+
 func (w *Watcher) getCurrentTerm() uint64 {
-	if w.currentClusterInfo != nil {
-		return w.currentClusterInfo.Term
-	}
-	return 0
+	return w.currentClusterInfo.Term
 }
 
 func (w *Watcher) getCurrentPeerInfo() []*infos.NodeInfo {
@@ -230,7 +238,7 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 	}
 	nodeInfoStorage := watcher.register.GetStorage(infos.InfoType_NODE_INFO)
 	clusterInfoStorage := watcher.register.GetStorage(infos.InfoType_CLUSTER_INFO)
-	nodeInfoStorage.SetOnUpdate(func(info infos.Information) {
+	nodeInfoStorage.SetOnUpdate("watcher", func(info infos.Information) {
 		if !watcher.moon.IsLeader() {
 			return
 		}
@@ -262,11 +270,11 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 			logger.Infof("[NEW TERM] leader propose new cluster info success")
 		})
 	})
-	clusterInfoStorage.SetOnUpdate(func(info infos.Information) {
+	clusterInfoStorage.SetOnUpdate("watcher", func(info infos.Information) {
 		logger.Infof("[NEW TERM] node %v get new term: %v, node num: %v",
 			watcher.selfNodeInfo.RaftId, info.BaseInfo().GetClusterInfo().Term,
 			len(info.BaseInfo().GetClusterInfo().NodesInfo))
-		watcher.currentClusterInfo = info.BaseInfo().GetClusterInfo()
+		watcher.currentClusterInfo = *info.BaseInfo().GetClusterInfo()
 	})
 	RegisterWatcherServer(server, watcher)
 	return watcher

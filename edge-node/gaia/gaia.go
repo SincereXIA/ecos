@@ -82,7 +82,7 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 			return err
 		}
 		t, err := NewPrimaryCopyTransporter(g.ctx, msg.Block, p, g.selfInfo.RaftId,
-			clusterInfo, g.config.BasePath)
+			&clusterInfo, g.config.BasePath)
 		if err != nil {
 			return err
 		}

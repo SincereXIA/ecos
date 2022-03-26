@@ -5,6 +5,8 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
+	"ecos/messenger"
 	"ecos/utils/logger"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/gogo/protobuf/proto"
@@ -12,17 +14,17 @@ import (
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"strconv"
 	"sync"
 	"time"
 )
 
 type Raft struct {
-	pgID        uint64
-	ctx         context.Context //context
-	cancel      context.CancelFunc
-	InfoStorage infos.NodeInfoStorage
+	pgID   uint64
+	ctx    context.Context //context
+	cancel context.CancelFunc
+
+	watcher     *watcher.Watcher
 	raftStorage *raft.MemoryStorage //raft需要的内存结构
 	raftCfg     *raft.Config        //raft需要的配置
 	raft        raft.Node
@@ -42,7 +44,7 @@ type Raft struct {
 }
 
 func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
-	infoStorage infos.NodeInfoStorage, metaStorage MetaStorage,
+	watcher *watcher.Watcher, metaStorage MetaStorage,
 	raftChan chan raftpb.Message, stopChan chan uint64) *Raft {
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -53,7 +55,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 		pgID:        nowPipe.PgId,
 		ctx:         ctx,
 		cancel:      cancel,
-		InfoStorage: infoStorage,
+		watcher:     watcher,
 		raftStorage: raftStorage,
 		raftCfg: &raft.Config{
 			ID:              raftID,
@@ -80,11 +82,12 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 				ID: id,
 			})
 		}
-	}
-	for _, id := range nowPipe.RaftId {
-		peers = append(peers, raft.Peer{
-			ID: id,
-		})
+	} else {
+		for _, id := range nowPipe.RaftId {
+			peers = append(peers, raft.Peer{
+				ID: id,
+			})
+		}
 	}
 
 	r.raft = raft.StartNode(r.raftCfg, peers)
@@ -228,21 +231,28 @@ func (r *Raft) Stop() {
 	logger.Infof("=========STOP: node: %v, PG: %v done ===========", r.raft.Status().ID, r.pgID)
 }
 
+func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
+	info, err := r.watcher.GetInfo(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
+	if err != nil {
+		return nil, err
+	}
+	return info.BaseInfo().GetNodeInfo(), nil
+}
+
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 	for _, message := range messages {
-		nodeId := infos.NodeID(message.To)
-		nodeInfo, err := r.InfoStorage.GetNodeInfo(nodeId)
+		nodeId := message.To
+		nodeInfo, err := r.getNodeInfo(nodeId)
 		if err != nil {
 			logger.Errorf("Get nodeInfo: %v fail: %v", nodeId, err)
 			return
 		}
-		port := strconv.FormatUint(nodeInfo.RpcPort, 10)
-		// TODO: save grpc connection
-		conn, err := grpc.Dial(nodeInfo.IpAddr+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 		if err != nil {
 			logger.Warningf("faild to connect: %v", err)
 			continue
 		}
+		// TODO: 缓存 rpc 连接后这里不用关闭
 		defer func(conn *grpc.ClientConn) {
 			err = conn.Close()
 			if err != nil {

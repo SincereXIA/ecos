@@ -11,7 +11,8 @@ type Storage interface {
 	GetAll() ([]Information, error)
 
 	// SetOnUpdate set a function, it will be called when any info update
-	SetOnUpdate(f StorageUpdateFunc)
+	SetOnUpdate(name string, f StorageUpdateFunc)
+	CancelOnUpdate(name string)
 }
 
 type StorageFactory interface {
@@ -63,20 +64,12 @@ func (register *StorageRegister) Get(infoType InfoType, id string) (Information,
 }
 
 type StorageRegisterBuilder struct {
-	actionMap      map[InfoType]StorageUpdateFunc
 	register       *StorageRegister
 	storageFactory StorageFactory
 }
 
-func (builder *StorageRegisterBuilder) SetStorageUpdateAction(infoType InfoType, updateFunc StorageUpdateFunc) {
-	builder.actionMap[infoType] = updateFunc
-}
-
 func (builder *StorageRegisterBuilder) getStorage(infoType InfoType) Storage {
 	storage := builder.storageFactory.GetStorage(infoType)
-	if action, ok := builder.actionMap[infoType]; ok {
-		storage.SetOnUpdate(action)
-	}
 	return storage
 }
 
@@ -92,7 +85,6 @@ func (builder *StorageRegisterBuilder) GetStorageRegister() *StorageRegister {
 
 func NewStorageRegisterBuilder(factory StorageFactory) *StorageRegisterBuilder {
 	return &StorageRegisterBuilder{
-		actionMap: map[InfoType]StorageUpdateFunc{},
 		register: &StorageRegister{
 			storageMap: map[InfoType]Storage{},
 		},

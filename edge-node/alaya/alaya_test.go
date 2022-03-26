@@ -2,65 +2,52 @@ package alaya
 
 import (
 	"context"
-	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"os"
+	"path"
 	"strconv"
 	"testing"
 	"time"
 )
 
 func TestNewAlaya(t *testing.T) {
-	nodeInfoDir := "./clusterInfoStorage"
-	_ = common.InitAndClearPath(nodeInfoDir)
+	basePath := "./ecos-data/"
+	_ = common.InitAndClearPath(basePath)
+	ctx := context.Background()
 	//infoStorage := infos.NewStableNodeInfoStorage(nodeInfoDir)
-	infoStorage := infos.NewMemoryNodeInfoStorage()
-	defer infoStorage.Close()
 
 	nodeNum := 9
-	var rpcServers []messenger.RpcServer
-	clusterInfo := infos.ClusterInfo{
-		Term:            1,
-		LeaderInfo:      nil,
-		NodesInfo:       []*infos.NodeInfo{},
-		UpdateTimestamp: timestamp.Now(),
-	}
-	for i := 0; i < nodeNum; i++ {
-		port, server := messenger.NewRandomPortRpcServer()
-		rpcServers = append(rpcServers, *server)
-		info := infos.NodeInfo{
-			RaftId:   uint64(i) + 1,
-			Uuid:     uuid.New().String(),
-			IpAddr:   "127.0.0.1",
-			RpcPort:  port,
-			Capacity: 1,
-		}
-		_ = infoStorage.UpdateNodeInfo(&info, timestamp.Now())
-		clusterInfo.NodesInfo = append(clusterInfo.NodesInfo, &info)
-	}
 
-	infoStorage.Commit(1)
-	infoStorage.Apply()
-	pipelines := pipeline.GenPipelines(&clusterInfo, 10, 3)
+	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
 
 	var alayas []*Alaya
-	_ = os.Mkdir("./testMetaStorage/", os.ModePerm)
-	for i := 0; i < nodeNum; i++ { // for each node
-		info := clusterInfo.NodesInfo[i]
-		dataBaseDir := "./testMetaStorage/" + strconv.FormatUint(info.RaftId, 10)
-		metaStorage := NewStableMetaStorage(dataBaseDir)
-		a := NewAlaya(info, infoStorage, metaStorage, &rpcServers[i])
+	for i := 0; i < nodeNum; i++ {
+		metaStorage := NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
+		a := NewAlaya(watchers[i], metaStorage, rpcServers[i])
 		alayas = append(alayas, a)
-		server := rpcServers[i]
-		go server.Run()
+		go rpcServers[i].Run()
 	}
+
+	watcher.RunAllTestWatcher(watchers)
+	for i := 0; i < nodeNum; i++ {
+		a := alayas[i]
+		go a.Run()
+	}
+
+	watcher.WaitAllTestWatcherOK(watchers)
+
+	//for i := 0; i < nodeNum; i++ {
+	//	alayas[i].ApplyNewClusterInfo(watchers[i].GetCurrentClusterInfo())
+	//}
+
+	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 
 	t.Cleanup(func() {
 		for i := 0; i < nodeNum; i++ { // for each node
@@ -70,15 +57,10 @@ func TestNewAlaya(t *testing.T) {
 			server.Stop()
 		}
 
-		_ = os.RemoveAll("./testMetaStorage")
-		_ = os.RemoveAll("./clusterInfoStorage")
+		_ = os.RemoveAll(basePath)
 	})
 
 	t.Log("Alayas init done, start run")
-	for i := 0; i < nodeNum; i++ {
-		a := alayas[i]
-		go a.Run()
-	}
 	waiteAllAlayaOK(alayas)
 	assertAlayasOK(t, alayas, pipelines)
 
@@ -110,108 +92,47 @@ func TestNewAlaya(t *testing.T) {
 	meta2, err := a2.MetaStorage.GetMeta("/volume/bucket/testObj")
 
 	assert.Equal(t, meta.UpdateTime, meta2.UpdateTime, "obj meta update time")
+
+	var newWatchers []*watcher.Watcher
+	var newRpcs []*messenger.RpcServer
+	for i := 0; i < 3; i++ {
+		newWatcher, newRpc := watcher.GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(nodeNum+i+1)), sunAddr)
+		newWatchers = append(newWatchers, newWatcher)
+		newRpcs = append(newRpcs, newRpc)
+	}
+	newAlayas := GenAlayaCluster(path.Join(basePath, "new"), newWatchers, newRpcs)
+	for _, rpc := range newRpcs {
+		go rpc.Run()
+	}
+	for _, a := range newAlayas {
+		go a.Run()
+	}
+	watcher.RunAllTestWatcher(newWatchers)
+	watcher.WaitAllTestWatcherOK(append(watchers, newWatchers...))
+	alayas = append(alayas, newAlayas...)
+	watchers = append(watchers, newWatchers...)
+	//for _, a := range newAlayas {
+	//	a.ApplyNewClusterInfo(oldClusterInfo)
+	//}
+	//for i := 0; i < len(alayas); i++ {
+	//	alayas[i].ApplyNewClusterInfo(watchers[i].GetCurrentClusterInfo())
+	//}
+
+	pipelines = pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
+	waiteAllAlayaOK(alayas)
+	assertAlayasOK(t, alayas, pipelines)
+
 }
 
-func TestAlaya_UpdatePipeline(t *testing.T) {
-	var infoStorages []infos.NodeInfoStorage
-	var nodeInfos []infos.NodeInfo
-	var rpcServers []*messenger.RpcServer
-	var term uint64
-
-	for i := 0; i < 9; i++ {
-		port, rpcServer := messenger.NewRandomPortRpcServer()
-		rpcServers = append(rpcServers, rpcServer)
-		infoStorages = append(infoStorages, infos.NewMemoryNodeInfoStorage())
-		nodeInfos = append(nodeInfos, infos.NodeInfo{
-			RaftId:   uint64(i + 1),
-			Uuid:     uuid.New().String(),
-			IpAddr:   "127.0.0.1",
-			RpcPort:  port,
-			Capacity: 10,
-		})
-	}
-
-	// UP 6 Alaya
+func GenAlayaCluster(basePath string, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []*Alaya {
 	var alayas []*Alaya
-	term = 2
-	for i := 0; i < 6; i++ {
-		for j := 0; j < 6; j++ {
-			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j], timestamp.Now())
-		}
-		infoStorages[i].Commit(term)
-		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i]))
-		go func(server *messenger.RpcServer) {
-			err := server.Run()
-			if err != nil {
-				t.Errorf("Run rpc server at port: %v fail", nodeInfos[i].RpcPort)
-			}
-		}(rpcServers[i])
-		go alayas[i].Run()
+	nodeNum := len(watchers)
+	for i := 0; i < nodeNum; i++ {
+		metaStorage := NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
+		a := NewAlaya(watchers[i], metaStorage, rpcServers[i])
+		alayas = append(alayas, a)
 	}
-
-	time.Sleep(time.Second * 1)
-	for i := 0; i < 6; i++ {
-		t.Logf("Apply new clusterInfo for: %v", i+1)
-		go infoStorages[i].Apply()
-	}
-
-	waiteAllAlayaOK(alayas)
-
-	for i := 0; i < 6; i++ { // for each node
-		a := alayas[i]
-		a.PrintPipelineInfo()
-	}
-
-	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetClusterInfo(0), 10, 3))
-
-	for i := 6; i < 9; i++ {
-		for j := 0; j < 6; j++ {
-			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j], timestamp.Now())
-		}
-		infoStorages[i].Commit(term)
-		infoStorages[i].Apply()
-	}
-	// UP 3 Alaya
-	for i := 6; i < 9; i++ {
-		alayas = append(alayas, NewAlaya(&nodeInfos[i], infoStorages[i], NewMemoryMetaStorage(), rpcServers[i]))
-		go func(server *messenger.RpcServer) {
-			err := server.Run()
-			if err != nil {
-				t.Errorf("Run rpc server at port: %v fail", nodeInfos[i].RpcPort)
-			}
-		}(rpcServers[i])
-		go alayas[i].Run()
-	}
-	time.Sleep(time.Second * 1)
-	term = 3
-	for i := 0; i < 9; i++ {
-		for j := 0; j < 9; j++ {
-			_ = infoStorages[i].UpdateNodeInfo(&nodeInfos[j], timestamp.Now())
-		}
-		infoStorages[i].Commit(term)
-	}
-	for i := 0; i < 9; i++ {
-		t.Logf("Apply new clusterInfo for: %v", i+1)
-		go infoStorages[i].Apply()
-	}
-	waiteAllAlayaOK(alayas)
-	assertAlayasOK(t, alayas, pipeline.GenPipelines(infoStorages[0].GetClusterInfo(0), 10, 3))
-	for i := 0; i < 9; i++ { // for each node
-		a := alayas[i]
-		a.PrintPipelineInfo()
-	}
-
-	pipelines := pipeline.GenPipelines(infoStorages[0].GetClusterInfo(0), 10, 3)
-	for _, p := range pipelines {
-		t.Logf("PG: %v, id: %v, %v, %v", p.PgId, p.RaftId[0], p.RaftId[1], p.RaftId[2])
-	}
-
-	for i := 0; i < 9; i++ { // for each node
-		server := rpcServers[i]
-		server.Stop()
-		alaya := alayas[i]
-		alaya.Stop()
-	}
+	return alayas
 }
 
 func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipeline) {
@@ -245,9 +166,9 @@ func waiteAllAlayaOK(alayas []*Alaya) {
 		default:
 		}
 		ok := true
-		for id, alaya := range alayas {
+		for _, alaya := range alayas {
 			if !alaya.IsAllPipelinesOK() {
-				logger.Warningf("Alaya %v not ok", id+1)
+				//logger.Warningf("Alaya %v not ok", id+1)
 				ok = false
 				break
 			}

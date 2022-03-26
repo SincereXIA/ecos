@@ -6,8 +6,8 @@ import (
 )
 
 type MemoryInfoStorage struct {
-	kvStorage sync.Map
-	onUpdate  StorageUpdateFunc
+	kvStorage   sync.Map
+	onUpdateMap sync.Map
 }
 
 func (s *MemoryInfoStorage) GetAll() ([]Information, error) {
@@ -21,9 +21,13 @@ func (s *MemoryInfoStorage) GetAll() ([]Information, error) {
 
 func (s *MemoryInfoStorage) Update(id string, info Information) error {
 	s.kvStorage.Store(id, info)
-	if s.onUpdate != nil {
-		s.onUpdate(info)
-	}
+
+	s.onUpdateMap.Range(func(key, value interface{}) bool {
+		f := value.(StorageUpdateFunc)
+		f(info)
+		return true
+	})
+
 	return nil
 }
 
@@ -41,8 +45,12 @@ func (s *MemoryInfoStorage) Get(id string) (Information, error) {
 	return v.(Information), nil
 }
 
-func (s *MemoryInfoStorage) SetOnUpdate(f StorageUpdateFunc) {
-	s.onUpdate = f
+func (s *MemoryInfoStorage) SetOnUpdate(name string, f StorageUpdateFunc) {
+	s.onUpdateMap.Store(name, f)
+}
+
+func (s *MemoryInfoStorage) CancelOnUpdate(name string) {
+	s.onUpdateMap.Delete(name)
 }
 
 func NewMemoryInfoStorage() Storage {
@@ -54,7 +62,7 @@ func NewMemoryInfoStorage() Storage {
 type MemoryInfoStorageFactory struct {
 }
 
-func (factory *MemoryInfoStorageFactory) GetStorage(infoType InfoType) Storage {
+func (factory *MemoryInfoStorageFactory) GetStorage(_ InfoType) Storage {
 	return NewMemoryInfoStorage()
 }
 

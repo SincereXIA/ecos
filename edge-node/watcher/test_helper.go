@@ -28,7 +28,7 @@ func GenTestWatcher(ctx context.Context, basePath string, sunAddr string) (*Watc
 	return NewWatcher(ctx, &watcherConfig, nodeRpc, m, register), nodeRpc
 }
 
-func GenTestWatcherCluster(ctx context.Context, basePath string, num int) ([]*Watcher, []*messenger.RpcServer) {
+func GenTestWatcherCluster(ctx context.Context, basePath string, num int) ([]*Watcher, []*messenger.RpcServer, string) {
 	sunPort, sunRpc := messenger.NewRandomPortRpcServer()
 	sun.NewSun(sunRpc)
 	go func() {
@@ -47,7 +47,7 @@ func GenTestWatcherCluster(ctx context.Context, basePath string, num int) ([]*Wa
 		watchers = append(watchers, watcher)
 		rpcServers = append(rpcServers, rpc)
 	}
-	return watchers, rpcServers
+	return watchers, rpcServers, sunAddr
 }
 
 func RunAllTestWatcher(watchers []*Watcher) {
@@ -71,7 +71,7 @@ func WaitAllTestWatcherOK(watchers []*Watcher) {
 		ok := true
 		for _, w := range watchers {
 			info := w.GetCurrentClusterInfo()
-			if info == nil || len(info.NodesInfo) != clusterNodeNum {
+			if len(info.NodesInfo) != clusterNodeNum {
 				ok = false
 				break
 			}
