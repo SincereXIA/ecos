@@ -31,12 +31,12 @@ func TestNewWatcher(t *testing.T) {
 	var watchers []*Watcher
 	for i := 0; i < nodeNum; i++ {
 		moonConfig := moon.DefaultConfig
+		moonConfig.RaftStoragePath = path.Join(basePath, "moon", strconv.Itoa(i+1))
 		port, nodeRpc := messenger.NewRandomPortRpcServer()
 		nodeInfo := infos.NewSelfInfo(0, "127.0.0.1", port)
 		builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
-		raftStorage := moon.NewStorage(path.Join(basePath, "/raft", strconv.Itoa(i+1)))
 		register := builder.GetStorageRegister()
-		m := moon.NewMoon(nodeInfo, moonConfig, nodeRpc, builder.GetStorageRegister(), raftStorage)
+		m := moon.NewMoon(nodeInfo, &moonConfig, nodeRpc, builder.GetStorageRegister())
 
 		watcherConfig := DefaultConfig
 		watcherConfig.SunAddr = "127.0.0.1:" + strconv.FormatUint(sunPort, 10)

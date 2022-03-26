@@ -111,9 +111,9 @@ func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoRepl
 	}, nil
 }
 
-func (m *Moon) ProposeConfChangeAddNode(_ context.Context, nodeInfo *infos.NodeInfo) error {
+func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
 	data, _ := nodeInfo.Marshal()
-	err := m.raft.ProposeConfChange(m.ctx, raftpb.ConfChange{
+	err := m.raft.ProposeConfChange(ctx, raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  nodeInfo.RaftId,
 		Context: data,
@@ -132,7 +132,7 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 }
 
 func NewMoon(selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
-	register *infos.StorageRegister, stableStorage Storage) *Moon {
+	register *infos.StorageRegister) *Moon {
 	ctx, cancel := context.WithCancel(context.Background())
 	storage := raft.NewMemoryStorage()
 	m := &Moon{
@@ -141,7 +141,7 @@ func NewMoon(selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcS
 		ctx:                   ctx,
 		cancel:                cancel,
 		raftStorage:           storage,
-		stableStorage:         stableStorage,
+		stableStorage:         NewStorage(config.RaftStoragePath),
 		cfg:                   nil, // set raft cfg after register
 		ticker:                time.NewTicker(time.Millisecond * 200).C,
 		mutex:                 sync.RWMutex{},
@@ -174,12 +174,11 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		logger.Tracef("%d send to %v, type %v", m.id, message, message.Type)
 
 		// get node info
-		nodeId := infos.NodeID(message.To)
 		var nodeInfo *infos.NodeInfo
 		var ok bool
 		if nodeInfo, ok = m.infoMap[message.To]; !ok { // infoMap always have latest
 			storage := m.infoStorageRegister.GetStorage(infos.InfoType_NODE_INFO)
-			info, err := storage.Get(strconv.FormatUint(uint64(nodeId), 10))
+			info, err := storage.Get(strconv.FormatUint(message.To, 10))
 			if err != nil {
 				logger.Warningf("Get Node Info fail: %v", err)
 				return
@@ -193,7 +192,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 			return
 		}
 		c := NewMoonClient(conn)
-		_, err = c.SendRaftMessage(context.Background(), &message)
+		_, err = c.SendRaftMessage(m.ctx, &message)
 		if err != nil {
 			logger.Errorf("could not send raft message: %v", err)
 		}
@@ -238,8 +237,9 @@ func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.status = StatusRegistering
-
-	m.infoMap[leaderInfo.RaftId] = leaderInfo
+	if leaderInfo != nil {
+		m.infoMap[leaderInfo.RaftId] = leaderInfo
+	}
 	for _, nodeInfo := range peersInfo {
 		m.infoMap[nodeInfo.RaftId] = nodeInfo
 	}
@@ -275,6 +275,9 @@ func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 }
 
 func (m *Moon) Run() {
+	if m.raft == nil {
+		m.Init(nil, m.config.ClusterInfo.NodesInfo)
+	}
 	go m.reportSelfInfo()
 
 	for {
@@ -354,5 +357,5 @@ func (m *Moon) GetLeaderID() uint64 {
 	if m.raft == nil {
 		return 0
 	}
-	return m.raft.Status().ID
+	return m.raft.Status().Lead
 }

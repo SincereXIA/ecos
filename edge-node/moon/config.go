@@ -2,21 +2,18 @@ package moon
 
 import (
 	"ecos/edge-node/infos"
-	"time"
 )
 
 type Config struct {
-	SunAddr                string
-	ClusterInfo            infos.ClusterInfo
-	NodeInfoCommitInterval time.Duration
+	ClusterInfo     infos.ClusterInfo
+	RaftStoragePath string
 }
 
-var DefaultConfig *Config
+var DefaultConfig Config
 
 func init() {
-	DefaultConfig = &Config{
-		SunAddr:                "",
-		ClusterInfo:            infos.ClusterInfo{},
-		NodeInfoCommitInterval: time.Second,
+	DefaultConfig = Config{
+		ClusterInfo:     infos.ClusterInfo{},
+		RaftStoragePath: "./ecos-data/moon/raft/",
 	}
 }
