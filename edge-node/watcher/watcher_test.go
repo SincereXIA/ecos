@@ -14,7 +14,7 @@ import (
 
 func TestNewWatcher(t *testing.T) {
 	basePath := "./ecos-data"
-	nodeNum := 5
+	nodeNum := 9
 	ctx := context.Background()
 	// Run Sun
 	sunPort, sunRpc := messenger.NewRandomPortRpcServer()
@@ -58,5 +58,23 @@ func TestNewWatcher(t *testing.T) {
 		}
 		watchers[i].StartMoon()
 	}
-	time.Sleep(10 * time.Second)
+	waiteClusterInfoOK(watchers)
+}
+
+func waiteClusterInfoOK(watchers []*Watcher) {
+	clusterNodeNum := len(watchers)
+	for {
+		ok := true
+		for _, w := range watchers {
+			info := w.GetCurrentClusterInfo()
+			if info == nil || len(info.NodesInfo) != clusterNodeNum {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return
+		}
+		time.Sleep(time.Millisecond * 300)
+	}
 }

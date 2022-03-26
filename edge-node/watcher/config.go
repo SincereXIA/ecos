@@ -19,6 +19,6 @@ func init() {
 		SunAddr:                "",
 		ClusterInfo:            infos.ClusterInfo{},
 		SelfNodeInfo:           *infos.NewSelfInfo(0, "127.0.0.1", 0),
-		NodeInfoCommitInterval: time.Second,
+		NodeInfoCommitInterval: time.Second * 2,
 	}
 }

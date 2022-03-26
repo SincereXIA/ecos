@@ -67,7 +67,6 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 		// TODO
 		return nil, err
 	}
-	time.Sleep(time.Second)
 	err = w.moon.ProposeConfChangeAddNode(w.ctx, info)
 	if err != nil {
 		// TODO
@@ -225,25 +224,36 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 		}
 		if watcher.timer != nil && watcher.timer.Stop() {
 			watcher.timer.Reset(watcher.config.NodeInfoCommitInterval)
+			return
 		}
 		watcher.timer = time.AfterFunc(watcher.config.NodeInfoCommitInterval, func() {
+			clusterInfo := watcher.genNewClusterInfo()
 			request := &moon.ProposeInfoRequest{
 				Head: &common.Head{
 					Timestamp: timestamp.Now(),
 					Term:      watcher.getCurrentTerm(),
 				},
 				Operate: moon.ProposeInfoRequest_ADD,
+				Id:      strconv.FormatUint(clusterInfo.Term, 10),
 				BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_ClusterInfo{
-					ClusterInfo: watcher.genNewClusterInfo(),
+					ClusterInfo: clusterInfo,
 				}},
 			}
+			logger.Infof("[NEW TERM] leader: %v propose new cluster info, term: %v, node num: %v",
+				watcher.selfNodeInfo.RaftId, request.BaseInfo.GetClusterInfo().Term,
+				len(request.BaseInfo.GetClusterInfo().NodesInfo))
 			_, err := watcher.moon.ProposeInfo(watcher.ctx, request)
 			if err != nil {
 				// TODO
+				return
 			}
+			logger.Infof("[NEW TERM] leader propose new cluster info success")
 		})
 	})
 	clusterInfoStorage.SetOnUpdate(func(info infos.Information) {
+		logger.Infof("[NEW TERM] node %v get new term: %v, node num: %v",
+			watcher.selfNodeInfo.RaftId, info.BaseInfo().GetClusterInfo().Term,
+			len(info.BaseInfo().GetClusterInfo().NodesInfo))
 		watcher.currentClusterInfo = info.BaseInfo().GetClusterInfo()
 	})
 	RegisterWatcherServer(server, watcher)

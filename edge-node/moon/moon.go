@@ -76,7 +76,6 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 	for {
 		applied := <-m.appliedRequestChan
 		if cmp.Equal(applied.BaseInfo, request.BaseInfo, protocmp.Transform()) {
-			logger.Infof("get applied: %v", applied.Id)
 			break
 		} else {
 			m.appliedRequestChan <- applied
@@ -228,7 +227,6 @@ func (m *Moon) process(entry raftpb.Entry) {
 			m.infoStorageRegister.Delete(info.GetInfoType(), msg.Id)
 		}
 		// let request know it is already applied
-		logger.Infof("applied: %v", msg.Id)
 		m.appliedRequestChan <- &msg
 		if err != nil {
 			logger.Errorf("Moon process moon message err: %v", err.Error())
@@ -261,30 +259,17 @@ func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 
 	m.infoMap[m.SelfInfo.RaftId] = m.SelfInfo
 
-	//for _, nodeInfo := range m.infoMap {
-	//	if nodeInfo.RaftId != m.id {
-	//		// 非常奇怪，除了第一个节点之外，其他节点不能有集群的完整信息，否则后续 propose 无法被提交
-	//		peers = append(peers, raft.Peer{
-	//			ID:      nodeInfo.RaftId,
-	//			Context: nil,
-	//		})
-	//	}
-	//}
 	logger.Tracef("leaderInfo: %v", leaderInfo)
+	if leaderInfo != nil { // 集群中现在已经有成员，peers 只需要填写 leader
+		peers = []raft.Peer{
+			{ID: leaderInfo.RaftId},
+		}
+	} else {
+		for _, nodeInfo := range m.infoMap {
+			peers = append(peers, raft.Peer{ID: nodeInfo.RaftId})
+		}
+	}
 
-	//if leaderInfo == nil || leaderInfo.RaftId == m.id {
-	// 非常奇怪，还必须得保证在只有一个节点的时候，peers 得加入自身，否则选不出 leader
-	peers = append(peers, raft.Peer{
-		ID:      m.id,
-		Context: nil,
-	})
-
-	peers = append(peers, raft.Peer{
-		ID:      leaderInfo.RaftId,
-		Context: nil,
-	})
-	//}
-	// 新增节点时，不用传入 peer list 启动节点
 	m.raft = raft.StartNode(m.cfg, peers)
 	return
 }
