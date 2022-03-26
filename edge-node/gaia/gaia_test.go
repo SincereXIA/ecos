@@ -2,12 +2,11 @@ package gaia
 
 import (
 	"context"
-	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
-	"ecos/utils/timestamp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
@@ -16,34 +15,24 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestNewGaia(t *testing.T) {
+	basePath := "./ecos-data/"
 	var basePaths []string
-	storage := infos.NewMemoryNodeInfoStorage()
+	nodeNum := 5
+	ctx := context.Background()
+
+	watchers, rpcServers := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
+
 	for i := 0; i < 5; i++ {
 		basePaths = append(basePaths, "./ecos-data/gaia-"+strconv.Itoa(i))
 	}
-	var rpcServers []*messenger.RpcServer
+
 	for i := 0; i < 5; i++ {
-		port, rpcServer := messenger.NewRandomPortRpcServer()
-		rpcServers = append(rpcServers, rpcServer)
-		info := infos.NodeInfo{
-			RaftId:   uint64(i + 1),
-			Uuid:     uuid.New().String(),
-			IpAddr:   "127.0.0.1",
-			RpcPort:  port,
-			Capacity: 10,
-		}
-		_ = storage.UpdateNodeInfo(&info, timestamp.Now())
-	}
-	storage.Commit(1)
-	storage.Apply()
-	for i := 0; i < 5; i++ {
-		info, _ := storage.GetNodeInfo(infos.NodeID(i + 1))
+		info := watchers[i].GetSelfInfo()
 		config := Config{BasePath: basePaths[i]}
-		NewGaia(rpcServers[i], info, storage, &config)
+		NewGaia(rpcServers[i], info, watchers[i], &config)
 		go func(rpcServer *messenger.RpcServer) {
 			err := rpcServer.Run()
 			if err != nil {
@@ -52,6 +41,8 @@ func TestNewGaia(t *testing.T) {
 			}
 		}(rpcServers[i])
 	}
+
+	watcher.RunAllTestWatcher(watchers)
 
 	t.Cleanup(func() {
 		for _, server := range rpcServers {
@@ -63,24 +54,25 @@ func TestNewGaia(t *testing.T) {
 		}
 	})
 
-	time.Sleep(time.Millisecond * 100)
+	watcher.WaitAllTestWatcherOK(watchers)
 
-	pipelines := pipeline.GenPipelines(storage.GetClusterInfo(0), 10, 3)
+	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 	wait := sync.WaitGroup{}
 	for i := 0; i < 10; i++ {
 		p := pipelines[i]
 		wait.Add(1)
 		go func(p *pipeline.Pipeline) {
-			uploadBlockTest(t, p, storage, basePaths)
+			uploadBlockTest(t, p, watchers, basePaths)
 			wait.Done()
 		}(p)
 	}
 	wait.Wait()
 }
 
-func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, storage infos.NodeInfoStorage, basePaths []string) {
+func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, watchers []*watcher.Watcher, basePaths []string) {
 	id := p.RaftId[0]
-	info, _ := storage.GetNodeInfo(infos.NodeID(id))
+	info := watchers[id-1].GetSelfInfo()
+	term := watchers[id-1].GetCurrentClusterInfo().Term
 	conn, _ := messenger.GetRpcConnByNodeInfo(info)
 
 	client := NewGaiaClient(conn)
@@ -106,7 +98,7 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, storage infos.NodeInfoS
 		Code:     ControlMessage_BEGIN,
 		Block:    blockInfo,
 		Pipeline: p,
-		Term:     1,
+		Term:     term,
 	}}})
 	if err != nil {
 		t.Errorf("Send stream err: %v", err)
@@ -125,7 +117,7 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, storage infos.NodeInfoS
 		Code:     ControlMessage_EOF,
 		Block:    blockInfo,
 		Pipeline: p,
-		Term:     1,
+		Term:     term,
 	}}})
 	if err != nil {
 		t.Errorf("Send stream err: %v", err)

@@ -82,26 +82,34 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 }
 
 func (w *Watcher) GetClusterInfo(_ context.Context, request *GetClusterInfoRequest) (*GetClusterInfoReply, error) {
-	if request.Term == 0 {
+	info, err := w.GetClusterInfoByTerm(request.Term)
+	if err != nil {
 		return &GetClusterInfoReply{
 			Result: &common.Result{
-				Status: common.Result_OK,
+				Status:  common.Result_FAIL,
+				Message: err.Error(),
 			},
-			ClusterInfo: w.GetCurrentClusterInfo(),
-		}, nil
-	}
-	clusterInfoStorage := w.register.GetStorage(infos.InfoType_CLUSTER_INFO)
-	info, err := clusterInfoStorage.Get(strconv.FormatUint(request.Term, 10))
-	if err != nil {
-		// TODO
-		return nil, err
+			ClusterInfo: nil,
+		}, err
 	}
 	return &GetClusterInfoReply{
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
-		ClusterInfo: info.BaseInfo().GetClusterInfo(),
+		ClusterInfo: info,
 	}, nil
+}
+
+func (w *Watcher) GetClusterInfoByTerm(term uint64) (*infos.ClusterInfo, error) {
+	if term == 0 {
+		return w.GetCurrentClusterInfo(), nil
+	}
+	clusterInfoStorage := w.register.GetStorage(infos.InfoType_CLUSTER_INFO)
+	info, err := clusterInfoStorage.Get(strconv.FormatUint(term, 10))
+	if err != nil {
+		return nil, err
+	}
+	return info.BaseInfo().GetClusterInfo(), nil
 }
 
 func (w *Watcher) GetCurrentClusterInfo() *infos.ClusterInfo {
@@ -203,6 +211,10 @@ func (w *Watcher) AskSky() (leaderInfo *infos.NodeInfo, err error) {
 	w.selfNodeInfo.RaftId = result.RaftId
 	w.moon.SelfInfo = w.selfNodeInfo
 	return result.ClusterInfo.LeaderInfo, nil
+}
+
+func (w *Watcher) GetSelfInfo() *infos.NodeInfo {
+	return w.selfNodeInfo
 }
 
 func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer,
