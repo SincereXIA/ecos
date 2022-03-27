@@ -67,7 +67,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 
 	data, err := request.Marshal()
 	if err != nil {
-		// TODO
+		logger.Errorf("receive unmarshalled propose info request: %v", request.Id)
 		return nil, err
 	}
 	err = m.raft.Propose(ctx, data)
@@ -216,20 +216,19 @@ func (m *Moon) process(entry raftpb.Entry) {
 			logger.Errorf("unmarshal entry data fail: %v", err)
 		}
 		info, err := infos.BaseInfoToInformation(*msg.BaseInfo)
-		// TODO err
 		switch msg.Operate {
 		case ProposeInfoRequest_ADD:
-			m.infoStorageRegister.Update(msg.Id, info)
+			err = m.infoStorageRegister.Update(msg.Id, info)
 		case ProposeInfoRequest_UPDATE:
-			m.infoStorageRegister.Update(msg.Id, info)
+			err = m.infoStorageRegister.Update(msg.Id, info)
 		case ProposeInfoRequest_DELETE:
-			m.infoStorageRegister.Delete(info.GetInfoType(), msg.Id)
+			err = m.infoStorageRegister.Delete(info.GetInfoType(), msg.Id)
 		}
-		// let request know it is already applied
-		m.appliedRequestChan <- &msg
 		if err != nil {
 			logger.Errorf("Moon process moon message err: %v", err.Error())
 		}
+		// let request know it is already applied
+		m.appliedRequestChan <- &msg
 	}
 }
 
@@ -271,7 +270,6 @@ func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	}
 
 	m.raft = raft.StartNode(m.cfg, peers)
-	return
 }
 
 func (m *Moon) Run() {

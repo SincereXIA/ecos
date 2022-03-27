@@ -7,7 +7,11 @@ import "infos.proto";
 option go_package = "ecos/edge-node/watcher";
 
 service Watcher {
+  // AddNewNodeToCluster will propose a new NodeInfo in moon,
+  // if success, it will propose a ConfChang, to add the raftNode into moon group
   rpc AddNewNodeToCluster (NodeInfo) returns (AddNodeReply) {}
+  // GetClusterInfo return requested cluster info to rpc client,
+  // if GetClusterInfoRequest.Term == 0, it will return current cluster info.
   rpc GetClusterInfo(GetClusterInfoRequest) returns (GetClusterInfoReply) {}
 }
 

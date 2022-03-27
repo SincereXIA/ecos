@@ -1,7 +1,7 @@
 package infos
 
 import (
-	"errors"
+	"ecos/utils/errno"
 	"sync"
 )
 
@@ -39,8 +39,7 @@ func (s *MemoryInfoStorage) Delete(id string) error {
 func (s *MemoryInfoStorage) Get(id string) (Information, error) {
 	v, ok := s.kvStorage.Load(id)
 	if !ok {
-		// TODO error
-		return Information{}, errors.New("key not exist")
+		return Information{}, errno.InfoNotFound
 	}
 	return v.(Information), nil
 }

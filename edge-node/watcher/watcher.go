@@ -83,6 +83,8 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	}, nil
 }
 
+// GetClusterInfo return requested cluster info to rpc client,
+// if GetClusterInfoRequest.Term == 0, it will return current cluster info.
 func (w *Watcher) GetClusterInfo(_ context.Context, request *GetClusterInfoRequest) (*GetClusterInfoReply, error) {
 	info, err := w.GetClusterInfoByTerm(request.Term)
 	if err != nil {
@@ -102,6 +104,8 @@ func (w *Watcher) GetClusterInfo(_ context.Context, request *GetClusterInfoReque
 	}, nil
 }
 
+// GetClusterInfoByTerm return cluster info directly, it is called by other components
+// on same node.
 func (w *Watcher) GetClusterInfoByTerm(term uint64) (infos.ClusterInfo, error) {
 	if term == 0 {
 		return w.GetCurrentClusterInfo(), nil
@@ -120,6 +124,7 @@ func (w *Watcher) GetCurrentClusterInfo() infos.ClusterInfo {
 	return w.currentClusterInfo
 }
 
+// GetInfo get info by InfoType & id (string)
 func (w *Watcher) GetInfo(infoType infos.InfoType, id string) (infos.Information, error) {
 	storage := w.register.GetStorage(infoType)
 	return storage.Get(id)
@@ -139,7 +144,8 @@ func (w *Watcher) getCurrentPeerInfo() []*infos.NodeInfo {
 	nodeInfoStorage := w.register.GetStorage(infos.InfoType_NODE_INFO)
 	nodeInfos, err := nodeInfoStorage.GetAll()
 	if err != nil {
-		// TODO
+		logger.Errorf("get nodeInfo from nodeInfoStorage fail: %v", err)
+		return nil
 	}
 	var peerNodes []*infos.NodeInfo
 	for _, info := range nodeInfos {
@@ -155,7 +161,8 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 	nodeInfoStorage := w.register.GetStorage(infos.InfoType_NODE_INFO)
 	nodeInfos, err := nodeInfoStorage.GetAll()
 	if err != nil {
-		// TODO
+		logger.Errorf("get nodeInfo from nodeInfoStorage fail: %v", err)
+		return nil
 	}
 	var clusterNodes []*infos.NodeInfo
 	for _, info := range nodeInfos {

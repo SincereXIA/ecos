@@ -1,6 +1,8 @@
 package infos
 
-import "errors"
+import (
+	"ecos/utils/errno"
+)
 
 type StorageUpdateFunc func(info Information)
 
@@ -39,8 +41,7 @@ func (register *StorageRegister) Update(id string, info Information) error {
 	if storage, ok := register.storageMap[info.infoType]; ok {
 		return storage.Update(id, info)
 	}
-	// TODO (zhang)
-	return errors.New("info type not support")
+	return errno.InfoTypeNotSupport
 }
 
 // Delete will delete the Information from corresponding Storage
@@ -49,8 +50,7 @@ func (register *StorageRegister) Delete(infoType InfoType, id string) error {
 	if storage, ok := register.storageMap[infoType]; ok {
 		return storage.Delete(id)
 	}
-	// TODO (zhang)
-	return errors.New("info type not support")
+	return errno.InfoTypeNotSupport
 }
 
 // Get will return the Information requested from corresponding Storage
@@ -59,8 +59,7 @@ func (register *StorageRegister) Get(infoType InfoType, id string) (Information,
 	if storage, ok := register.storageMap[infoType]; ok {
 		return storage.Get(id)
 	}
-	// TODO (zhang)
-	return Information{}, errors.New("info type not support")
+	return Information{}, errno.InfoTypeNotSupport
 }
 
 type StorageRegisterBuilder struct {
