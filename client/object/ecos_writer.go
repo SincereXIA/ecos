@@ -6,9 +6,9 @@ import (
 	"ecos/client/config"
 	clientNode "ecos/client/node"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/errno"
@@ -240,8 +240,10 @@ func NewEcosWriterFactory(config *config.ClientConfig) *EcosWriterFactory {
 	if err != nil {
 		return nil
 	}
-	moonClient := moon.NewMoonClient(conn)
-	clusterInfo, err := moonClient.GetClusterInfo(context.Background(), &moon.GetClusterInfoRequest{Term: 0})
+	watcherClient := watcher.NewWatcherClient(conn)
+	reply, err := watcherClient.GetClusterInfo(context.Background(),
+		&watcher.GetClusterInfoRequest{Term: 0})
+	clusterInfo := reply.GetClusterInfo()
 	if err != nil {
 		logger.Errorf("get group info fail: %v", err)
 		return nil
@@ -253,8 +255,8 @@ func NewEcosWriterFactory(config *config.ClientConfig) *EcosWriterFactory {
 	ret := &EcosWriterFactory{
 		clusterInfo: clusterInfo,
 		config:      config,
-		objPipes:    pipeline.GenPipelines(clusterInfo, objPgNum, groupNum),
-		blockPipes:  pipeline.GenPipelines(clusterInfo, blockPgNum, groupNum),
+		objPipes:    pipeline.GenPipelines(*clusterInfo, objPgNum, groupNum),
+		blockPipes:  pipeline.GenPipelines(*clusterInfo, blockPgNum, groupNum),
 	}
 	return ret
 }

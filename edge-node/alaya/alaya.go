@@ -177,9 +177,9 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 	}
 }
 
-func NewAlaya(watcher *watcher.Watcher,
+func NewAlaya(ctx context.Context, watcher *watcher.Watcher,
 	metaStorage MetaStorage, rpcServer *messenger.RpcServer) *Alaya {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	a := Alaya{
 		ctx:              ctx,
 		cancel:           cancel,

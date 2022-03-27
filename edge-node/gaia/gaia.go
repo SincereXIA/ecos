@@ -131,9 +131,9 @@ func (g *Gaia) processChunk(chunk *UploadBlockRequest_Chunk, transporter *Primar
 	return nil
 }
 
-func NewGaia(rpcServer *messenger.RpcServer, selfInfo *infos.NodeInfo, watcher *watcher.Watcher,
+func NewGaia(ctx context.Context, rpcServer *messenger.RpcServer, selfInfo *infos.NodeInfo, watcher *watcher.Watcher,
 	config *Config) *Gaia {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	g := Gaia{
 		ctx:      ctx,
 		cancel:   cancel,

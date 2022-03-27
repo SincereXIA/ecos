@@ -27,12 +27,15 @@ func TestNewAlaya(t *testing.T) {
 
 	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
 
-	var alayas []*Alaya
-	for i := 0; i < nodeNum; i++ {
-		metaStorage := NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
-		a := NewAlaya(watchers[i], metaStorage, rpcServers[i])
-		alayas = append(alayas, a)
-		go rpcServers[i].Run()
+	alayas := GenAlayaCluster(ctx, basePath, watchers, rpcServers)
+
+	for _, rpc := range rpcServers {
+		go func(r *messenger.RpcServer) {
+			err := r.Run()
+			if err != nil {
+				t.Errorf("rpc server run err: %v", err)
+			}
+		}(rpc)
 	}
 
 	watcher.RunAllTestWatcher(watchers)
@@ -42,10 +45,6 @@ func TestNewAlaya(t *testing.T) {
 	}
 
 	watcher.WaitAllTestWatcherOK(watchers)
-
-	//for i := 0; i < nodeNum; i++ {
-	//	alayas[i].ApplyNewClusterInfo(watchers[i].GetCurrentClusterInfo())
-	//}
 
 	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 
@@ -100,9 +99,14 @@ func TestNewAlaya(t *testing.T) {
 		newWatchers = append(newWatchers, newWatcher)
 		newRpcs = append(newRpcs, newRpc)
 	}
-	newAlayas := GenAlayaCluster(path.Join(basePath, "new"), newWatchers, newRpcs)
+	newAlayas := GenAlayaCluster(ctx, path.Join(basePath, "new"), newWatchers, newRpcs)
 	for _, rpc := range newRpcs {
-		go rpc.Run()
+		go func(r *messenger.RpcServer) {
+			err := r.Run()
+			if err != nil {
+				t.Errorf("rpc server run err: %v", err)
+			}
+		}(rpc)
 	}
 	for _, a := range newAlayas {
 		go a.Run()
@@ -111,25 +115,18 @@ func TestNewAlaya(t *testing.T) {
 	watcher.WaitAllTestWatcherOK(append(watchers, newWatchers...))
 	alayas = append(alayas, newAlayas...)
 	watchers = append(watchers, newWatchers...)
-	//for _, a := range newAlayas {
-	//	a.ApplyNewClusterInfo(oldClusterInfo)
-	//}
-	//for i := 0; i < len(alayas); i++ {
-	//	alayas[i].ApplyNewClusterInfo(watchers[i].GetCurrentClusterInfo())
-	//}
 
 	pipelines = pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 	waiteAllAlayaOK(alayas)
 	assertAlayasOK(t, alayas, pipelines)
-
 }
 
-func GenAlayaCluster(basePath string, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []*Alaya {
+func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []*Alaya {
 	var alayas []*Alaya
 	nodeNum := len(watchers)
 	for i := 0; i < nodeNum; i++ {
 		metaStorage := NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
-		a := NewAlaya(watchers[i], metaStorage, rpcServers[i])
+		a := NewAlaya(ctx, watchers[i], metaStorage, rpcServers[i])
 		alayas = append(alayas, a)
 	}
 	return alayas
