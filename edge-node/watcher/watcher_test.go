@@ -12,7 +12,7 @@ func TestNewWatcher(t *testing.T) {
 	ctx := context.Background()
 	// Run Sun
 
-	watchers, rpcServers := GenTestWatcherCluster(ctx, basePath, nodeNum)
+	watchers, rpcServers, _ := GenTestWatcherCluster(ctx, basePath, nodeNum)
 
 	for i := 0; i < nodeNum; i++ {
 		go func(rpc *messenger.RpcServer) {

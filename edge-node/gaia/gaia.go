@@ -2,7 +2,6 @@ package gaia
 
 import (
 	"context"
-	"ecos/edge-node/infos"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
@@ -17,10 +16,9 @@ import (
 type Gaia struct {
 	UnimplementedGaiaServer
 
-	ctx      context.Context
-	cancel   context.CancelFunc
-	selfInfo *infos.NodeInfo
-	watcher  *watcher.Watcher
+	ctx     context.Context
+	cancel  context.CancelFunc
+	watcher *watcher.Watcher
 
 	config *Config
 }
@@ -81,7 +79,7 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 		if err != nil {
 			return err
 		}
-		t, err := NewPrimaryCopyTransporter(g.ctx, msg.Block, p, g.selfInfo.RaftId,
+		t, err := NewPrimaryCopyTransporter(g.ctx, msg.Block, p, g.watcher.GetSelfInfo().RaftId,
 			&clusterInfo, g.config.BasePath)
 		if err != nil {
 			return err
@@ -131,15 +129,14 @@ func (g *Gaia) processChunk(chunk *UploadBlockRequest_Chunk, transporter *Primar
 	return nil
 }
 
-func NewGaia(ctx context.Context, rpcServer *messenger.RpcServer, selfInfo *infos.NodeInfo, watcher *watcher.Watcher,
+func NewGaia(ctx context.Context, rpcServer *messenger.RpcServer, watcher *watcher.Watcher,
 	config *Config) *Gaia {
 	ctx, cancel := context.WithCancel(ctx)
 	g := Gaia{
-		ctx:      ctx,
-		cancel:   cancel,
-		selfInfo: selfInfo,
-		watcher:  watcher,
-		config:   config,
+		ctx:     ctx,
+		cancel:  cancel,
+		watcher: watcher,
+		config:  config,
 	}
 	RegisterGaiaServer(rpcServer, &g)
 	return &g

@@ -30,9 +30,8 @@ func TestNewGaia(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		info := watchers[i].GetSelfInfo()
 		config := Config{BasePath: basePaths[i]}
-		NewGaia(ctx, rpcServers[i], info, watchers[i], &config)
+		NewGaia(ctx, rpcServers[i], watchers[i], &config)
 		go func(rpcServer *messenger.RpcServer) {
 			err := rpcServer.Run()
 			if err != nil {

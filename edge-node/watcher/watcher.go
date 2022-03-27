@@ -229,6 +229,20 @@ func (w *Watcher) GetSelfInfo() *infos.NodeInfo {
 	return w.selfNodeInfo
 }
 
+func (w *Watcher) Run() {
+	leaderInfo, err := w.AskSky()
+	if err != nil {
+		logger.Warningf("watcher ask sky err: %v", err)
+	} else {
+		err = w.RequestJoinCluster(leaderInfo)
+		if err != nil {
+			logger.Errorf("watcher request join to cluster err: %v", err)
+		}
+	}
+	w.StartMoon()
+	logger.Infof("moon init success, NodeID: %v", w.GetSelfInfo().RaftId)
+}
+
 func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer,
 	m *moon.Moon, register *infos.StorageRegister) *Watcher {
 	watcherCtx, cancelFunc := context.WithCancel(ctx)

@@ -52,16 +52,7 @@ func GenTestWatcherCluster(ctx context.Context, basePath string, num int) ([]*Wa
 
 func RunAllTestWatcher(watchers []*Watcher) {
 	for _, w := range watchers {
-		leaderInfo, err := w.AskSky()
-		if err != nil {
-			logger.Errorf("watcher ask sky err: %v", err)
-			return
-		}
-		err = w.RequestJoinCluster(leaderInfo)
-		if err != nil {
-			logger.Errorf("watcher request join to cluster err: %v", err)
-		}
-		w.StartMoon()
+		w.Run()
 	}
 }
 
