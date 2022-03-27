@@ -124,12 +124,6 @@ func (w *Watcher) GetCurrentClusterInfo() infos.ClusterInfo {
 	return w.currentClusterInfo
 }
 
-// GetInfo get info by InfoType & id (string)
-func (w *Watcher) GetInfo(infoType infos.InfoType, id string) (infos.Information, error) {
-	storage := w.register.GetStorage(infoType)
-	return storage.Get(id)
-}
-
 func (w *Watcher) SetOnInfoUpdate(infoType infos.InfoType, name string, f infos.StorageUpdateFunc) error {
 	storage := w.register.GetStorage(infoType)
 	storage.SetOnUpdate(name, f)
@@ -206,6 +200,10 @@ func (w *Watcher) RequestJoinCluster(leaderInfo *infos.NodeInfo) error {
 
 func (w *Watcher) StartMoon() {
 	go w.moon.Run()
+}
+
+func (w *Watcher) GetMoon() *moon.Moon {
+	return w.moon
 }
 
 func (w *Watcher) AskSky() (leaderInfo *infos.NodeInfo, err error) {

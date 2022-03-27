@@ -19,7 +19,11 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type WatcherClient interface {
+	// AddNewNodeToCluster will propose a new NodeInfo in moon,
+	// if success, it will propose a ConfChang, to add the raftNode into moon group
 	AddNewNodeToCluster(ctx context.Context, in *infos.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error)
+	// GetClusterInfo return requested cluster info to rpc client,
+	// if GetClusterInfoRequest.Term == 0, it will return current cluster info.
 	GetClusterInfo(ctx context.Context, in *GetClusterInfoRequest, opts ...grpc.CallOption) (*GetClusterInfoReply, error)
 }
 
@@ -53,7 +57,11 @@ func (c *watcherClient) GetClusterInfo(ctx context.Context, in *GetClusterInfoRe
 // All implementations must embed UnimplementedWatcherServer
 // for forward compatibility
 type WatcherServer interface {
+	// AddNewNodeToCluster will propose a new NodeInfo in moon,
+	// if success, it will propose a ConfChang, to add the raftNode into moon group
 	AddNewNodeToCluster(context.Context, *infos.NodeInfo) (*AddNodeReply, error)
+	// GetClusterInfo return requested cluster info to rpc client,
+	// if GetClusterInfoRequest.Term == 0, it will return current cluster info.
 	GetClusterInfo(context.Context, *GetClusterInfoRequest) (*GetClusterInfoReply, error)
 	mustEmbedUnimplementedWatcherServer()
 }
