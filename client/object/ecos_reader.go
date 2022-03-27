@@ -120,7 +120,10 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 				break
 			}
 			if err != nil {
-				res.CloseSend()
+				terr := res.CloseSend()
+				if terr != nil {
+					logger.Infof("close gaia server failed, err: %v", terr)
+				}
 				logger.Warningf("res.Recv err: %v", err)
 				return int(count), err
 			}
@@ -141,7 +144,10 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 				r.chunkOffset += pending
 			}
 			if r.alreadyReadBytes == r.meta.ObjSize {
-				res.CloseSend()
+				terr := res.CloseSend()
+				if terr != nil {
+					logger.Infof("close gaia server failed, err: %v", terr)
+				}
 				return int(count), io.EOF
 			}
 			if r.chunkOffset >= r.sizeOfChunk {

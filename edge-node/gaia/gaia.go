@@ -101,7 +101,7 @@ func (g *Gaia) GetBlockData(req *GetBlockRequest, server Gaia_GetBlockDataServer
 			curChunk++
 			continue
 		}
-		server.Send(&GetBlockResult{
+		err = server.Send(&GetBlockResult{
 			Payload: &GetBlockResult_Chunk{
 				Chunk: &Chunk{
 					Content:   chunk[:readBytes],
@@ -109,6 +109,10 @@ func (g *Gaia) GetBlockData(req *GetBlockRequest, server Gaia_GetBlockDataServer
 				},
 			},
 		})
+		if err != nil {
+			logger.Infof("send Block res err: %v", err)
+			return err
+		}
 	}
 	return nil
 }
