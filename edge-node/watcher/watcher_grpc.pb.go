@@ -25,6 +25,7 @@ type WatcherClient interface {
 	// GetClusterInfo return requested cluster info to rpc client,
 	// if GetClusterInfoRequest.Term == 0, it will return current cluster info.
 	GetClusterInfo(ctx context.Context, in *GetClusterInfoRequest, opts ...grpc.CallOption) (*GetClusterInfoReply, error)
+	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*infos.BaseInfo, error)
 }
 
 type watcherClient struct {
@@ -53,6 +54,15 @@ func (c *watcherClient) GetClusterInfo(ctx context.Context, in *GetClusterInfoRe
 	return out, nil
 }
 
+func (c *watcherClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*infos.BaseInfo, error) {
+	out := new(infos.BaseInfo)
+	err := c.cc.Invoke(ctx, "/messenger.Watcher/GetInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WatcherServer is the server API for Watcher service.
 // All implementations must embed UnimplementedWatcherServer
 // for forward compatibility
@@ -63,6 +73,7 @@ type WatcherServer interface {
 	// GetClusterInfo return requested cluster info to rpc client,
 	// if GetClusterInfoRequest.Term == 0, it will return current cluster info.
 	GetClusterInfo(context.Context, *GetClusterInfoRequest) (*GetClusterInfoReply, error)
+	GetInfo(context.Context, *GetInfoRequest) (*infos.BaseInfo, error)
 	mustEmbedUnimplementedWatcherServer()
 }
 
@@ -75,6 +86,9 @@ func (UnimplementedWatcherServer) AddNewNodeToCluster(context.Context, *infos.No
 }
 func (UnimplementedWatcherServer) GetClusterInfo(context.Context, *GetClusterInfoRequest) (*GetClusterInfoReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClusterInfo not implemented")
+}
+func (UnimplementedWatcherServer) GetInfo(context.Context, *GetInfoRequest) (*infos.BaseInfo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
 }
 func (UnimplementedWatcherServer) mustEmbedUnimplementedWatcherServer() {}
 
@@ -125,6 +139,24 @@ func _Watcher_GetClusterInfo_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Watcher_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WatcherServer).GetInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/messenger.Watcher/GetInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WatcherServer).GetInfo(ctx, req.(*GetInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Watcher_ServiceDesc is the grpc.ServiceDesc for Watcher service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -139,6 +171,10 @@ var Watcher_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetClusterInfo",
 			Handler:    _Watcher_GetClusterInfo_Handler,
+		},
+		{
+			MethodName: "GetInfo",
+			Handler:    _Watcher_GetInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
