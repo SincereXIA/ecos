@@ -25,6 +25,11 @@ spec:
         - name: ecos-edge-node
           imagePullPolicy: Always
           image: 'harbor.sums.top/ecos/ecos-edge-node:SNAPSHOT-latest'
+          command:
+            - /ecos/ecos-edge-node
+          args:
+            - node
+            - run
           resources:
             limits:
               cpu: '2'
