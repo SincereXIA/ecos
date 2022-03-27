@@ -38,9 +38,11 @@ type Watcher struct {
 	timer        *time.Timer
 	config       *Config
 	ctx          context.Context
-	mutex        sync.Mutex
+
+	addNodeMutex sync.Mutex
 
 	currentClusterInfo infos.ClusterInfo
+	clusterInfoMutex   sync.RWMutex
 
 	cancelFunc context.CancelFunc
 
@@ -50,8 +52,8 @@ type Watcher struct {
 // AddNewNodeToCluster will propose a new NodeInfo in moon,
 // if success, it will propose a ConfChang, to add the raftNode into moon group
 func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (*AddNodeReply, error) {
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
+	w.addNodeMutex.Lock()
+	defer w.addNodeMutex.Unlock()
 
 	request := &moon.ProposeInfoRequest{
 		Head: &common.Head{
@@ -113,6 +115,8 @@ func (w *Watcher) GetClusterInfoByTerm(term uint64) (infos.ClusterInfo, error) {
 }
 
 func (w *Watcher) GetCurrentClusterInfo() infos.ClusterInfo {
+	w.clusterInfoMutex.RLock()
+	defer w.clusterInfoMutex.RUnlock()
 	return w.currentClusterInfo
 }
 
@@ -128,7 +132,7 @@ func (w *Watcher) SetOnInfoUpdate(infoType infos.InfoType, name string, f infos.
 }
 
 func (w *Watcher) getCurrentTerm() uint64 {
-	return w.currentClusterInfo.Term
+	return w.GetCurrentClusterInfo().Term
 }
 
 func (w *Watcher) getCurrentPeerInfo() []*infos.NodeInfo {
@@ -271,6 +275,8 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 		})
 	})
 	clusterInfoStorage.SetOnUpdate("watcher", func(info infos.Information) {
+		watcher.clusterInfoMutex.Lock()
+		defer watcher.clusterInfoMutex.Unlock()
 		logger.Infof("[NEW TERM] node %v get new term: %v, node num: %v",
 			watcher.selfNodeInfo.RaftId, info.BaseInfo().GetClusterInfo().Term,
 			len(info.BaseInfo().GetClusterInfo().NodesInfo))

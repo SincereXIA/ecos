@@ -37,16 +37,13 @@ func TestNewAlaya(t *testing.T) {
 			}
 		}(rpc)
 	}
+	time.Sleep(time.Millisecond * 100)
 
 	watcher.RunAllTestWatcher(watchers)
 	for i := 0; i < nodeNum; i++ {
 		a := alayas[i]
 		go a.Run()
 	}
-
-	watcher.WaitAllTestWatcherOK(watchers)
-
-	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 
 	t.Cleanup(func() {
 		for i := 0; i < nodeNum; i++ { // for each node
@@ -61,6 +58,7 @@ func TestNewAlaya(t *testing.T) {
 
 	t.Log("Alayas init done, start run")
 	waiteAllAlayaOK(alayas)
+	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 	assertAlayasOK(t, alayas, pipelines)
 
 	for i := 0; i < nodeNum; i++ { // for each node
@@ -112,12 +110,12 @@ func TestNewAlaya(t *testing.T) {
 		go a.Run()
 	}
 	watcher.RunAllTestWatcher(newWatchers)
-	watcher.WaitAllTestWatcherOK(append(watchers, newWatchers...))
 	alayas = append(alayas, newAlayas...)
 	watchers = append(watchers, newWatchers...)
 
-	pipelines = pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
+	watcher.WaitAllTestWatcherOK(watchers)
 	waiteAllAlayaOK(alayas)
+	pipelines = pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 	assertAlayasOK(t, alayas, pipelines)
 }
 
