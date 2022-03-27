@@ -4,11 +4,10 @@
 package moon
 
 import (
-	node "ecos/edge-node/node"
+	infos "ecos/edge-node/infos"
 	common "ecos/messenger/common"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
-	_ "go.etcd.io/etcd/raft/v3/raftpb"
 	io "io"
 	math "math"
 	math_bits "math/bits"
@@ -25,26 +24,56 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-type AddNodeReply struct {
-	Result               *common.Result `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	LeaderInfo           *node.NodeInfo `protobuf:"bytes,2,opt,name=leaderInfo,proto3" json:"leaderInfo,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+type ProposeInfoRequest_Operate int32
+
+const (
+	ProposeInfoRequest_ADD    ProposeInfoRequest_Operate = 0
+	ProposeInfoRequest_UPDATE ProposeInfoRequest_Operate = 1
+	ProposeInfoRequest_DELETE ProposeInfoRequest_Operate = 2
+)
+
+var ProposeInfoRequest_Operate_name = map[int32]string{
+	0: "ADD",
+	1: "UPDATE",
+	2: "DELETE",
 }
 
-func (m *AddNodeReply) Reset()         { *m = AddNodeReply{} }
-func (m *AddNodeReply) String() string { return proto.CompactTextString(m) }
-func (*AddNodeReply) ProtoMessage()    {}
-func (*AddNodeReply) Descriptor() ([]byte, []int) {
+var ProposeInfoRequest_Operate_value = map[string]int32{
+	"ADD":    0,
+	"UPDATE": 1,
+	"DELETE": 2,
+}
+
+func (x ProposeInfoRequest_Operate) String() string {
+	return proto.EnumName(ProposeInfoRequest_Operate_name, int32(x))
+}
+
+func (ProposeInfoRequest_Operate) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_718e7a6145dba2fc, []int{0, 0}
+}
+
+type ProposeInfoRequest struct {
+	Head                 *common.Head               `protobuf:"bytes,1,opt,name=head,proto3" json:"head,omitempty"`
+	Operate              ProposeInfoRequest_Operate `protobuf:"varint,2,opt,name=operate,proto3,enum=messenger.ProposeInfoRequest_Operate" json:"operate,omitempty"`
+	Id                   string                     `protobuf:"bytes,3,opt,name=id,proto3" json:"id,omitempty"`
+	BaseInfo             *infos.BaseInfo            `protobuf:"bytes,4,opt,name=base_info,json=baseInfo,proto3" json:"base_info,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
+	XXX_unrecognized     []byte                     `json:"-"`
+	XXX_sizecache        int32                      `json:"-"`
+}
+
+func (m *ProposeInfoRequest) Reset()         { *m = ProposeInfoRequest{} }
+func (m *ProposeInfoRequest) String() string { return proto.CompactTextString(m) }
+func (*ProposeInfoRequest) ProtoMessage()    {}
+func (*ProposeInfoRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_718e7a6145dba2fc, []int{0}
 }
-func (m *AddNodeReply) XXX_Unmarshal(b []byte) error {
+func (m *ProposeInfoRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *AddNodeReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *ProposeInfoRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_AddNodeReply.Marshal(b, m, deterministic)
+		return xxx_messageInfo_ProposeInfoRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -54,51 +83,122 @@ func (m *AddNodeReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return b[:n], nil
 	}
 }
-func (m *AddNodeReply) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_AddNodeReply.Merge(m, src)
+func (m *ProposeInfoRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProposeInfoRequest.Merge(m, src)
 }
-func (m *AddNodeReply) XXX_Size() int {
+func (m *ProposeInfoRequest) XXX_Size() int {
 	return m.Size()
 }
-func (m *AddNodeReply) XXX_DiscardUnknown() {
-	xxx_messageInfo_AddNodeReply.DiscardUnknown(m)
+func (m *ProposeInfoRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ProposeInfoRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_AddNodeReply proto.InternalMessageInfo
+var xxx_messageInfo_ProposeInfoRequest proto.InternalMessageInfo
 
-func (m *AddNodeReply) GetResult() *common.Result {
+func (m *ProposeInfoRequest) GetHead() *common.Head {
+	if m != nil {
+		return m.Head
+	}
+	return nil
+}
+
+func (m *ProposeInfoRequest) GetOperate() ProposeInfoRequest_Operate {
+	if m != nil {
+		return m.Operate
+	}
+	return ProposeInfoRequest_ADD
+}
+
+func (m *ProposeInfoRequest) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *ProposeInfoRequest) GetBaseInfo() *infos.BaseInfo {
+	if m != nil {
+		return m.BaseInfo
+	}
+	return nil
+}
+
+type ProposeInfoReply struct {
+	Result               *common.Result  `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	LeaderInfo           *infos.NodeInfo `protobuf:"bytes,2,opt,name=leaderInfo,proto3" json:"leaderInfo,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
+}
+
+func (m *ProposeInfoReply) Reset()         { *m = ProposeInfoReply{} }
+func (m *ProposeInfoReply) String() string { return proto.CompactTextString(m) }
+func (*ProposeInfoReply) ProtoMessage()    {}
+func (*ProposeInfoReply) Descriptor() ([]byte, []int) {
+	return fileDescriptor_718e7a6145dba2fc, []int{1}
+}
+func (m *ProposeInfoReply) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ProposeInfoReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ProposeInfoReply.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ProposeInfoReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProposeInfoReply.Merge(m, src)
+}
+func (m *ProposeInfoReply) XXX_Size() int {
+	return m.Size()
+}
+func (m *ProposeInfoReply) XXX_DiscardUnknown() {
+	xxx_messageInfo_ProposeInfoReply.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ProposeInfoReply proto.InternalMessageInfo
+
+func (m *ProposeInfoReply) GetResult() *common.Result {
 	if m != nil {
 		return m.Result
 	}
 	return nil
 }
 
-func (m *AddNodeReply) GetLeaderInfo() *node.NodeInfo {
+func (m *ProposeInfoReply) GetLeaderInfo() *infos.NodeInfo {
 	if m != nil {
 		return m.LeaderInfo
 	}
 	return nil
 }
 
-type GetGroupInfoRequest struct {
-	Term                 uint64   `protobuf:"varint,1,opt,name=term,proto3" json:"term,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+type GetInfoRequest struct {
+	Head                 *common.Head   `protobuf:"bytes,1,opt,name=head,proto3" json:"head,omitempty"`
+	InfoType             infos.InfoType `protobuf:"varint,2,opt,name=info_type,json=infoType,proto3,enum=messenger.InfoType" json:"info_type,omitempty"`
+	InfoId               string         `protobuf:"bytes,3,opt,name=info_id,json=infoId,proto3" json:"info_id,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
+	XXX_unrecognized     []byte         `json:"-"`
+	XXX_sizecache        int32          `json:"-"`
 }
 
-func (m *GetGroupInfoRequest) Reset()         { *m = GetGroupInfoRequest{} }
-func (m *GetGroupInfoRequest) String() string { return proto.CompactTextString(m) }
-func (*GetGroupInfoRequest) ProtoMessage()    {}
-func (*GetGroupInfoRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_718e7a6145dba2fc, []int{1}
+func (m *GetInfoRequest) Reset()         { *m = GetInfoRequest{} }
+func (m *GetInfoRequest) String() string { return proto.CompactTextString(m) }
+func (*GetInfoRequest) ProtoMessage()    {}
+func (*GetInfoRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_718e7a6145dba2fc, []int{2}
 }
-func (m *GetGroupInfoRequest) XXX_Unmarshal(b []byte) error {
+func (m *GetInfoRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *GetGroupInfoRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *GetInfoRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_GetGroupInfoRequest.Marshal(b, m, deterministic)
+		return xxx_messageInfo_GetInfoRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -108,57 +208,138 @@ func (m *GetGroupInfoRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return b[:n], nil
 	}
 }
-func (m *GetGroupInfoRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetGroupInfoRequest.Merge(m, src)
+func (m *GetInfoRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetInfoRequest.Merge(m, src)
 }
-func (m *GetGroupInfoRequest) XXX_Size() int {
+func (m *GetInfoRequest) XXX_Size() int {
 	return m.Size()
 }
-func (m *GetGroupInfoRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetGroupInfoRequest.DiscardUnknown(m)
+func (m *GetInfoRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetInfoRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_GetGroupInfoRequest proto.InternalMessageInfo
+var xxx_messageInfo_GetInfoRequest proto.InternalMessageInfo
 
-func (m *GetGroupInfoRequest) GetTerm() uint64 {
+func (m *GetInfoRequest) GetHead() *common.Head {
 	if m != nil {
-		return m.Term
+		return m.Head
 	}
-	return 0
+	return nil
+}
+
+func (m *GetInfoRequest) GetInfoType() infos.InfoType {
+	if m != nil {
+		return m.InfoType
+	}
+	return infos.InfoType_NODE_INFO
+}
+
+func (m *GetInfoRequest) GetInfoId() string {
+	if m != nil {
+		return m.InfoId
+	}
+	return ""
+}
+
+type GetInfoReply struct {
+	Result               *common.Result  `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	BaseInfo             *infos.BaseInfo `protobuf:"bytes,2,opt,name=base_info,json=baseInfo,proto3" json:"base_info,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
+}
+
+func (m *GetInfoReply) Reset()         { *m = GetInfoReply{} }
+func (m *GetInfoReply) String() string { return proto.CompactTextString(m) }
+func (*GetInfoReply) ProtoMessage()    {}
+func (*GetInfoReply) Descriptor() ([]byte, []int) {
+	return fileDescriptor_718e7a6145dba2fc, []int{3}
+}
+func (m *GetInfoReply) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetInfoReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetInfoReply.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetInfoReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetInfoReply.Merge(m, src)
+}
+func (m *GetInfoReply) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetInfoReply) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetInfoReply.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetInfoReply proto.InternalMessageInfo
+
+func (m *GetInfoReply) GetResult() *common.Result {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+func (m *GetInfoReply) GetBaseInfo() *infos.BaseInfo {
+	if m != nil {
+		return m.BaseInfo
+	}
+	return nil
 }
 
 func init() {
-	proto.RegisterType((*AddNodeReply)(nil), "messenger.AddNodeReply")
-	proto.RegisterType((*GetGroupInfoRequest)(nil), "messenger.GetGroupInfoRequest")
+	proto.RegisterEnum("messenger.ProposeInfoRequest_Operate", ProposeInfoRequest_Operate_name, ProposeInfoRequest_Operate_value)
+	proto.RegisterType((*ProposeInfoRequest)(nil), "messenger.ProposeInfoRequest")
+	proto.RegisterType((*ProposeInfoReply)(nil), "messenger.ProposeInfoReply")
+	proto.RegisterType((*GetInfoRequest)(nil), "messenger.GetInfoRequest")
+	proto.RegisterType((*GetInfoReply)(nil), "messenger.GetInfoReply")
 }
 
 func init() { proto.RegisterFile("moon.proto", fileDescriptor_718e7a6145dba2fc) }
 
 var fileDescriptor_718e7a6145dba2fc = []byte{
-	// 309 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x91, 0xc1, 0x4a, 0x03, 0x31,
-	0x10, 0x86, 0x77, 0xa5, 0x14, 0x1c, 0x8b, 0xb5, 0xa9, 0x60, 0xc9, 0x61, 0x91, 0x05, 0xc1, 0x1e,
-	0xdc, 0x42, 0x8b, 0x77, 0xf5, 0x60, 0xf1, 0x50, 0x0f, 0xd1, 0x93, 0x17, 0xd9, 0x36, 0xb3, 0x8b,
-	0xd0, 0xcd, 0xac, 0x49, 0x7a, 0xf0, 0x4d, 0x7c, 0x23, 0x3d, 0xfa, 0x08, 0x52, 0x5f, 0x44, 0x92,
-	0x6e, 0x25, 0x48, 0x4f, 0xbb, 0xfc, 0xdf, 0x9f, 0xcc, 0xfc, 0xf9, 0x01, 0x2a, 0x22, 0x95, 0xd5,
-	0x9a, 0x2c, 0xb1, 0xfd, 0x0a, 0x8d, 0x41, 0x55, 0xa2, 0xe6, 0x3d, 0x9d, 0x17, 0xb6, 0x9e, 0x8f,
-	0xdc, 0x67, 0x43, 0x79, 0x57, 0x91, 0xc4, 0xe7, 0x17, 0x55, 0x50, 0x23, 0x74, 0x16, 0x54, 0x55,
-	0xdb, 0xc3, 0xfc, 0xa8, 0xd4, 0xb4, 0xaa, 0x03, 0x9e, 0x2a, 0xe8, 0x5c, 0x4b, 0x79, 0x4f, 0x12,
-	0x05, 0xd6, 0xcb, 0x37, 0x36, 0x84, 0xb6, 0x46, 0xb3, 0x5a, 0xda, 0x41, 0x7c, 0x1a, 0x9f, 0x1f,
-	0x8c, 0x7b, 0xd9, 0xdf, 0xbc, 0x4c, 0x78, 0x20, 0x1a, 0x03, 0x9b, 0x00, 0x2c, 0x31, 0x97, 0xa8,
-	0xef, 0x54, 0x41, 0x83, 0x3d, 0x6f, 0xef, 0x07, 0x76, 0x77, 0xa9, 0x43, 0x22, 0xb0, 0xa5, 0x43,
-	0xe8, 0x4f, 0xd1, 0x4e, 0xdd, 0x1a, 0x9e, 0xe1, 0xeb, 0x0a, 0x8d, 0x65, 0x0c, 0x5a, 0x16, 0x75,
-	0xe5, 0x87, 0xb6, 0x84, 0xff, 0x1f, 0x7f, 0xc4, 0xd0, 0x9a, 0x11, 0x29, 0x76, 0x09, 0xdd, 0x07,
-	0x54, 0x52, 0xe4, 0x85, 0x9d, 0xa1, 0x31, 0x79, 0x89, 0xac, 0x9b, 0x6d, 0xb2, 0x67, 0x8d, 0xc0,
-	0xff, 0x0b, 0x69, 0xc4, 0xae, 0xe0, 0xb0, 0x89, 0xf6, 0x48, 0x7e, 0x20, 0xdb, 0xb5, 0x1d, 0x3f,
-	0x09, 0xc4, 0xf0, 0x29, 0xd2, 0x88, 0xdd, 0x42, 0x27, 0x5c, 0x96, 0x25, 0x81, 0x75, 0x47, 0x0a,
-	0x7e, 0x1c, 0xf2, 0x2d, 0x4c, 0xa3, 0x9b, 0xb3, 0xcf, 0x75, 0x12, 0x7f, 0xad, 0x93, 0xf8, 0x7b,
-	0x9d, 0xc4, 0xef, 0x3f, 0x49, 0xf4, 0xd4, 0xc7, 0x05, 0x99, 0x11, 0xca, 0x12, 0x2f, 0x5c, 0x63,
-	0x23, 0x57, 0xf0, 0xbc, 0xed, 0x2b, 0x99, 0xfc, 0x06, 0x00, 0x00, 0xff, 0xff, 0xd3, 0xc1, 0x8f,
-	0xcf, 0xef, 0x01, 0x00, 0x00,
+	// 460 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x53, 0x4f, 0x6f, 0x12, 0x41,
+	0x14, 0x67, 0xb6, 0x04, 0xca, 0xa3, 0x01, 0xfa, 0x7a, 0x28, 0xae, 0x91, 0x90, 0x35, 0x4d, 0xd0,
+	0xc4, 0xa5, 0xa1, 0xf1, 0x6c, 0xda, 0x40, 0xb4, 0xd1, 0x6a, 0xb3, 0xe2, 0xc5, 0x4b, 0x33, 0x74,
+	0x1e, 0x48, 0x84, 0x9d, 0x75, 0x66, 0x7a, 0xe0, 0xe6, 0xc7, 0xf0, 0x23, 0x99, 0x78, 0xf1, 0x23,
+	0x18, 0xbc, 0xf8, 0x31, 0xcc, 0xec, 0x0e, 0x64, 0xd7, 0x7f, 0xb1, 0xa7, 0x79, 0x33, 0xbf, 0xdf,
+	0xfb, 0xbd, 0xbf, 0x03, 0xb0, 0x94, 0x32, 0x0e, 0x13, 0x25, 0x8d, 0xc4, 0xda, 0x92, 0xb4, 0xa6,
+	0x78, 0x46, 0xca, 0xdf, 0x57, 0x7c, 0x6a, 0x92, 0x49, 0xdf, 0x1e, 0x19, 0xea, 0xef, 0x5d, 0xcb,
+	0xe5, 0x72, 0xc3, 0xf5, 0xeb, 0xf3, 0x78, 0x2a, 0x75, 0x76, 0x09, 0x7e, 0x30, 0xc0, 0x4b, 0x25,
+	0x13, 0xa9, 0xe9, 0x3c, 0x9e, 0xca, 0x88, 0x3e, 0xdc, 0x90, 0x36, 0x78, 0x1f, 0xca, 0xef, 0x88,
+	0x8b, 0x36, 0xeb, 0xb2, 0x5e, 0x7d, 0xd0, 0x0c, 0xb7, 0xf2, 0xe1, 0x33, 0xe2, 0x22, 0x4a, 0x41,
+	0x7c, 0x02, 0x55, 0x99, 0x90, 0xe2, 0x86, 0xda, 0x5e, 0x97, 0xf5, 0x1a, 0x83, 0xa3, 0x1c, 0xef,
+	0x77, 0xd1, 0xf0, 0x55, 0x46, 0x8e, 0x36, 0x5e, 0xd8, 0x00, 0x6f, 0x2e, 0xda, 0x3b, 0x5d, 0xd6,
+	0xab, 0x45, 0xde, 0x5c, 0xe0, 0x31, 0xd4, 0x26, 0x5c, 0xd3, 0x95, 0x4d, 0xb0, 0x5d, 0x4e, 0x43,
+	0x1f, 0xe4, 0x24, 0xcf, 0xb8, 0xd3, 0xdb, 0x9d, 0x38, 0x2b, 0x78, 0x08, 0x55, 0xa7, 0x8a, 0x55,
+	0xd8, 0x39, 0x1d, 0x0e, 0x5b, 0x25, 0x04, 0xa8, 0xbc, 0xb9, 0x1c, 0x9e, 0x8e, 0x47, 0x2d, 0x66,
+	0xed, 0xe1, 0xe8, 0xc5, 0x68, 0x3c, 0x6a, 0x79, 0x81, 0x82, 0x56, 0x21, 0xa9, 0x64, 0xb1, 0xc2,
+	0x07, 0x50, 0x51, 0xa4, 0x6f, 0x16, 0xc6, 0x55, 0xba, 0x9f, 0x0b, 0x17, 0xa5, 0x40, 0xe4, 0x08,
+	0x78, 0x02, 0xb0, 0x20, 0x2e, 0x48, 0x59, 0xef, 0xb4, 0xe0, 0x62, 0x76, 0x2f, 0xa5, 0xc8, 0x84,
+	0x73, 0xb4, 0xe0, 0x23, 0x83, 0xc6, 0x53, 0x32, 0xb7, 0x6e, 0xed, 0x31, 0xd4, 0x6c, 0x13, 0xae,
+	0xcc, 0x2a, 0xd9, 0x34, 0x37, 0x1f, 0xcb, 0xea, 0x8d, 0x57, 0x09, 0x45, 0xbb, 0x73, 0x67, 0xe1,
+	0x21, 0x54, 0x53, 0x8f, 0x6d, 0x43, 0x2b, 0xf6, 0x7a, 0x2e, 0x82, 0xf7, 0xb0, 0xb7, 0xcd, 0xe0,
+	0x96, 0x25, 0x17, 0xe6, 0xe1, 0xfd, 0xc7, 0x3c, 0x06, 0x5f, 0x18, 0x94, 0x2f, 0xa4, 0x8c, 0xf1,
+	0x31, 0x34, 0x5f, 0x53, 0x2c, 0x22, 0x3e, 0x35, 0x17, 0xa4, 0x35, 0x9f, 0x11, 0x36, 0xc3, 0x6c,
+	0x33, 0x43, 0xf7, 0xe0, 0xff, 0xfa, 0x10, 0x94, 0xf0, 0x39, 0xd4, 0x73, 0x33, 0xc2, 0x7b, 0xff,
+	0x5c, 0x28, 0xff, 0xee, 0xdf, 0xe0, 0x64, 0xb1, 0x0a, 0x4a, 0x76, 0x3f, 0x5d, 0xe5, 0x78, 0x27,
+	0xc7, 0x2c, 0xce, 0xc3, 0x3f, 0xfc, 0x13, 0x94, 0x0a, 0x9c, 0x1d, 0x7d, 0x5e, 0x77, 0xd8, 0xd7,
+	0x75, 0x87, 0x7d, 0x5b, 0x77, 0xd8, 0xa7, 0xef, 0x9d, 0xd2, 0xdb, 0x03, 0xba, 0x96, 0xba, 0x4f,
+	0x62, 0x46, 0x8f, 0x62, 0x29, 0xa8, 0x6f, 0xbf, 0xe0, 0xa4, 0x92, 0x7e, 0xa5, 0x93, 0x9f, 0x01,
+	0x00, 0x00, 0xff, 0xff, 0x80, 0xf5, 0x61, 0x7f, 0x91, 0x03, 0x00, 0x00,
 }
 
-func (m *AddNodeReply) Marshal() (dAtA []byte, err error) {
+func (m *ProposeInfoRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -168,12 +349,75 @@ func (m *AddNodeReply) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *AddNodeReply) MarshalTo(dAtA []byte) (int, error) {
+func (m *ProposeInfoRequest) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *AddNodeReply) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *ProposeInfoRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.BaseInfo != nil {
+		{
+			size, err := m.BaseInfo.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMoon(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.Id) > 0 {
+		i -= len(m.Id)
+		copy(dAtA[i:], m.Id)
+		i = encodeVarintMoon(dAtA, i, uint64(len(m.Id)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.Operate != 0 {
+		i = encodeVarintMoon(dAtA, i, uint64(m.Operate))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.Head != nil {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMoon(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ProposeInfoReply) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ProposeInfoReply) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ProposeInfoReply) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -209,7 +453,7 @@ func (m *AddNodeReply) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *GetGroupInfoRequest) Marshal() (dAtA []byte, err error) {
+func (m *GetInfoRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -219,12 +463,12 @@ func (m *GetGroupInfoRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *GetGroupInfoRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *GetInfoRequest) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *GetGroupInfoRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *GetInfoRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -233,10 +477,80 @@ func (m *GetGroupInfoRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Term != 0 {
-		i = encodeVarintMoon(dAtA, i, uint64(m.Term))
+	if len(m.InfoId) > 0 {
+		i -= len(m.InfoId)
+		copy(dAtA[i:], m.InfoId)
+		i = encodeVarintMoon(dAtA, i, uint64(len(m.InfoId)))
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0x1a
+	}
+	if m.InfoType != 0 {
+		i = encodeVarintMoon(dAtA, i, uint64(m.InfoType))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.Head != nil {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMoon(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetInfoReply) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetInfoReply) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetInfoReply) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.BaseInfo != nil {
+		{
+			size, err := m.BaseInfo.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMoon(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Result != nil {
+		{
+			size, err := m.Result.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMoon(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -252,7 +566,34 @@ func encodeVarintMoon(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return base
 }
-func (m *AddNodeReply) Size() (n int) {
+func (m *ProposeInfoRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Head != nil {
+		l = m.Head.Size()
+		n += 1 + l + sovMoon(uint64(l))
+	}
+	if m.Operate != 0 {
+		n += 1 + sovMoon(uint64(m.Operate))
+	}
+	l = len(m.Id)
+	if l > 0 {
+		n += 1 + l + sovMoon(uint64(l))
+	}
+	if m.BaseInfo != nil {
+		l = m.BaseInfo.Size()
+		n += 1 + l + sovMoon(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ProposeInfoReply) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -272,14 +613,42 @@ func (m *AddNodeReply) Size() (n int) {
 	return n
 }
 
-func (m *GetGroupInfoRequest) Size() (n int) {
+func (m *GetInfoRequest) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if m.Term != 0 {
-		n += 1 + sovMoon(uint64(m.Term))
+	if m.Head != nil {
+		l = m.Head.Size()
+		n += 1 + l + sovMoon(uint64(l))
+	}
+	if m.InfoType != 0 {
+		n += 1 + sovMoon(uint64(m.InfoType))
+	}
+	l = len(m.InfoId)
+	if l > 0 {
+		n += 1 + l + sovMoon(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetInfoReply) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Result != nil {
+		l = m.Result.Size()
+		n += 1 + l + sovMoon(uint64(l))
+	}
+	if m.BaseInfo != nil {
+		l = m.BaseInfo.Size()
+		n += 1 + l + sovMoon(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -293,7 +662,7 @@ func sovMoon(x uint64) (n int) {
 func sozMoon(x uint64) (n int) {
 	return sovMoon(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
-func (m *AddNodeReply) Unmarshal(dAtA []byte) error {
+func (m *ProposeInfoRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -316,10 +685,184 @@ func (m *AddNodeReply) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: AddNodeReply: wiretype end group for non-group")
+			return fmt.Errorf("proto: ProposeInfoRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: AddNodeReply: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ProposeInfoRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Head", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMoon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMoon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMoon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Head == nil {
+				m.Head = &common.Head{}
+			}
+			if err := m.Head.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Operate", wireType)
+			}
+			m.Operate = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMoon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Operate |= ProposeInfoRequest_Operate(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMoon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMoon
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMoon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Id = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BaseInfo", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMoon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMoon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMoon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BaseInfo == nil {
+				m.BaseInfo = &infos.BaseInfo{}
+			}
+			if err := m.BaseInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMoon(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMoon
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ProposeInfoReply) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMoon
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ProposeInfoReply: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ProposeInfoReply: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -388,7 +931,7 @@ func (m *AddNodeReply) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.LeaderInfo == nil {
-				m.LeaderInfo = &node.NodeInfo{}
+				m.LeaderInfo = &infos.NodeInfo{}
 			}
 			if err := m.LeaderInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -416,7 +959,7 @@ func (m *AddNodeReply) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *GetGroupInfoRequest) Unmarshal(dAtA []byte) error {
+func (m *GetInfoRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -439,17 +982,17 @@ func (m *GetGroupInfoRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: GetGroupInfoRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetInfoRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetGroupInfoRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetInfoRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Term", wireType)
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Head", wireType)
 			}
-			m.Term = 0
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMoon
@@ -459,11 +1002,202 @@ func (m *GetGroupInfoRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Term |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			if msglen < 0 {
+				return ErrInvalidLengthMoon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMoon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Head == nil {
+				m.Head = &common.Head{}
+			}
+			if err := m.Head.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InfoType", wireType)
+			}
+			m.InfoType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMoon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.InfoType |= infos.InfoType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InfoId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMoon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMoon
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMoon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.InfoId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMoon(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMoon
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetInfoReply) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMoon
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetInfoReply: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetInfoReply: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Result", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMoon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMoon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMoon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Result == nil {
+				m.Result = &common.Result{}
+			}
+			if err := m.Result.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BaseInfo", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMoon
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMoon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMoon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BaseInfo == nil {
+				m.BaseInfo = &infos.BaseInfo{}
+			}
+			if err := m.BaseInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipMoon(dAtA[iNdEx:])

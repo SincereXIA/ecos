@@ -4,7 +4,6 @@ package moon
 
 import (
 	context "context"
-	node "ecos/edge-node/node"
 	raftpb "go.etcd.io/etcd/raft/v3/raftpb"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -21,8 +20,11 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MoonClient interface {
 	SendRaftMessage(ctx context.Context, in *raftpb.Message, opts ...grpc.CallOption) (*raftpb.Message, error)
-	AddNodeToGroup(ctx context.Context, in *node.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error)
-	GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, opts ...grpc.CallOption) (*node.GroupInfo, error)
+	// ProposeInfo 用于向集群中提交一个 Info 共识，该 Info 将会在集群所有节点上同步
+	// 目前可以提交的 Info: NodeInfo, BucketInfo
+	ProposeInfo(ctx context.Context, in *ProposeInfoRequest, opts ...grpc.CallOption) (*ProposeInfoReply, error)
+	// GetInfo 从对应 InfoStorage 中取得 Info
+	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoReply, error)
 }
 
 type moonClient struct {
@@ -42,18 +44,18 @@ func (c *moonClient) SendRaftMessage(ctx context.Context, in *raftpb.Message, op
 	return out, nil
 }
 
-func (c *moonClient) AddNodeToGroup(ctx context.Context, in *node.NodeInfo, opts ...grpc.CallOption) (*AddNodeReply, error) {
-	out := new(AddNodeReply)
-	err := c.cc.Invoke(ctx, "/messenger.Moon/AddNodeToGroup", in, out, opts...)
+func (c *moonClient) ProposeInfo(ctx context.Context, in *ProposeInfoRequest, opts ...grpc.CallOption) (*ProposeInfoReply, error) {
+	out := new(ProposeInfoReply)
+	err := c.cc.Invoke(ctx, "/messenger.Moon/ProposeInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *moonClient) GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, opts ...grpc.CallOption) (*node.GroupInfo, error) {
-	out := new(node.GroupInfo)
-	err := c.cc.Invoke(ctx, "/messenger.Moon/GetGroupInfo", in, out, opts...)
+func (c *moonClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoReply, error) {
+	out := new(GetInfoReply)
+	err := c.cc.Invoke(ctx, "/messenger.Moon/GetInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +67,11 @@ func (c *moonClient) GetGroupInfo(ctx context.Context, in *GetGroupInfoRequest, 
 // for forward compatibility
 type MoonServer interface {
 	SendRaftMessage(context.Context, *raftpb.Message) (*raftpb.Message, error)
-	AddNodeToGroup(context.Context, *node.NodeInfo) (*AddNodeReply, error)
-	GetGroupInfo(context.Context, *GetGroupInfoRequest) (*node.GroupInfo, error)
+	// ProposeInfo 用于向集群中提交一个 Info 共识，该 Info 将会在集群所有节点上同步
+	// 目前可以提交的 Info: NodeInfo, BucketInfo
+	ProposeInfo(context.Context, *ProposeInfoRequest) (*ProposeInfoReply, error)
+	// GetInfo 从对应 InfoStorage 中取得 Info
+	GetInfo(context.Context, *GetInfoRequest) (*GetInfoReply, error)
 	mustEmbedUnimplementedMoonServer()
 }
 
@@ -77,11 +82,11 @@ type UnimplementedMoonServer struct {
 func (UnimplementedMoonServer) SendRaftMessage(context.Context, *raftpb.Message) (*raftpb.Message, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendRaftMessage not implemented")
 }
-func (UnimplementedMoonServer) AddNodeToGroup(context.Context, *node.NodeInfo) (*AddNodeReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AddNodeToGroup not implemented")
+func (UnimplementedMoonServer) ProposeInfo(context.Context, *ProposeInfoRequest) (*ProposeInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProposeInfo not implemented")
 }
-func (UnimplementedMoonServer) GetGroupInfo(context.Context, *GetGroupInfoRequest) (*node.GroupInfo, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetGroupInfo not implemented")
+func (UnimplementedMoonServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
 }
 func (UnimplementedMoonServer) mustEmbedUnimplementedMoonServer() {}
 
@@ -114,38 +119,38 @@ func _Moon_SendRaftMessage_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Moon_AddNodeToGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(node.NodeInfo)
+func _Moon_ProposeInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProposeInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MoonServer).AddNodeToGroup(ctx, in)
+		return srv.(MoonServer).ProposeInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/messenger.Moon/AddNodeToGroup",
+		FullMethod: "/messenger.Moon/ProposeInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MoonServer).AddNodeToGroup(ctx, req.(*node.NodeInfo))
+		return srv.(MoonServer).ProposeInfo(ctx, req.(*ProposeInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Moon_GetGroupInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetGroupInfoRequest)
+func _Moon_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MoonServer).GetGroupInfo(ctx, in)
+		return srv.(MoonServer).GetInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/messenger.Moon/GetGroupInfo",
+		FullMethod: "/messenger.Moon/GetInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MoonServer).GetGroupInfo(ctx, req.(*GetGroupInfoRequest))
+		return srv.(MoonServer).GetInfo(ctx, req.(*GetInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -162,12 +167,12 @@ var Moon_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Moon_SendRaftMessage_Handler,
 		},
 		{
-			MethodName: "AddNodeToGroup",
-			Handler:    _Moon_AddNodeToGroup_Handler,
+			MethodName: "ProposeInfo",
+			Handler:    _Moon_ProposeInfo_Handler,
 		},
 		{
-			MethodName: "GetGroupInfo",
-			Handler:    _Moon_GetGroupInfo_Handler,
+			MethodName: "GetInfo",
+			Handler:    _Moon_GetInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

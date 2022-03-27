@@ -1,20 +1,20 @@
 package pipeline
 
 import (
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/utils/logger"
 	"github.com/sincerexia/gocrush"
 )
 
-func GenPipelines(groupInfo *node.GroupInfo, pgNum uint64, groupSize uint64) []*Pipeline {
+func GenPipelines(clusterInfo infos.ClusterInfo, pgNum uint64, groupSize uint64) []*Pipeline {
 	var rs []*Pipeline
-	rootNode := node.NewRootNode()
+	rootNode := infos.NewRootNode()
 	rootNode.Root = rootNode
-	for _, info := range groupInfo.NodesInfo {
+	for _, info := range clusterInfo.NodesInfo {
 		rootNode.Children = append(rootNode.Children,
-			&node.EcosNode{
+			&infos.EcosNode{
 				NodeInfo: info,
-				Type:     node.LeafNodeType,
+				Type:     infos.LeafNodeType,
 				Failed:   false,
 				Root:     rootNode,
 			},
@@ -22,10 +22,10 @@ func GenPipelines(groupInfo *node.GroupInfo, pgNum uint64, groupSize uint64) []*
 	}
 	rootNode.Selector = gocrush.NewStrawSelector(rootNode)
 	for i := uint64(1); i <= pgNum; i++ {
-		nodes := gocrush.Select(rootNode, int64(i), int(groupSize), node.LeafNodeType, nil)
+		nodes := gocrush.Select(rootNode, int64(i), int(groupSize), infos.LeafNodeType, nil)
 		var ids []uint64
 		for _, n := range nodes {
-			raftId := n.(*node.EcosNode).GetRaftId()
+			raftId := n.(*infos.EcosNode).GetRaftId()
 			if raftId == 0 {
 				logger.Errorf("Unable to get RaftId! %#v", n)
 			}

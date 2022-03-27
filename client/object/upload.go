@@ -4,7 +4,7 @@ import (
 	"context"
 	"ecos/client/config"
 	"ecos/edge-node/gaia"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/logger"
@@ -19,9 +19,9 @@ type UploadClient struct {
 }
 
 // NewGaiaClient creates a client stream with 1s Timeout
-func NewGaiaClient(serverInfo *node.NodeInfo) (*UploadClient, error) {
+func NewGaiaClient(serverInfo *infos.NodeInfo) (*UploadClient, error) {
 	var newClient UploadClient
-	conn, err := messenger.GetRpcConnByInfo(serverInfo)
+	conn, err := messenger.GetRpcConnByNodeInfo(serverInfo)
 	if err != nil {
 		return nil, err
 	}

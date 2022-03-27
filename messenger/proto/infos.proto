@@ -1,0 +1,64 @@
+syntax = "proto3";
+package messenger;
+import "timestamp.proto";
+option go_package = "ecos/edge-node/infos";
+
+
+enum InfoType {
+  NODE_INFO = 0;
+  BUCKET_INFO = 1;
+  CLUSTER_INFO = 2;
+}
+
+message BaseInfo {
+  oneof info{
+    NodeInfo node_info = 1;
+    ClusterInfo cluster_info = 2;
+    BucketInfo bucket_info = 3;
+  }
+}
+
+// Bucket 标识和权限
+message BucketInfo {
+  string volume_id = 1;
+  string bucket_id = 2;
+  string user_id = 3;
+  string group_id = 4;
+  int32 mode = 5;
+  BucketConfig config = 6;
+}
+
+// Bucket 读写策略
+message BucketConfig {
+  int32 key_slot_num = 1;
+  uint64 block_size = 2;
+  bool block_hash_enable = 3;
+  bool object_hash_enable = 4;
+  bool history_version_enable = 5;
+}
+
+message ClusterInfo{
+  uint64 term = 1;
+  NodeInfo leader_info = 2;
+  repeated NodeInfo nodes_info = 3;
+  Timestamp update_timestamp = 4;
+}
+
+message InfoStorageState {
+  uint64 Term = 1;
+  uint64 LeaderID = 2;
+  map<uint64, NodeInfo> InfoMap = 3;
+  Timestamp UpdateTimeStamp = 4;
+}
+
+message History{
+  map<uint64, ClusterInfo> historyMap = 1;
+}
+
+message NodeInfo {
+  uint64 raft_id= 1;
+  string uuid= 2;
+  string ip_addr = 3;
+  uint64 rpc_port = 4;
+  uint64 capacity = 5;
+}

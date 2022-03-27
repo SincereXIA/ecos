@@ -2,6 +2,7 @@ package alaya
 
 import (
 	"ecos/edge-node/object"
+	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	gorocksdb "github.com/SUMStudio/grocksdb"
@@ -96,6 +97,10 @@ func (s *StableMetaStorage) Close() {
 }
 
 func NewStableMetaStorage(dataBaseDir string) *StableMetaStorage {
+	err := common.InitAndClearPath(dataBaseDir)
+	if err != nil {
+		logger.Errorf("init database path failed, err:%v", err)
+	}
 	db, err := gorocksdb.OpenDb(opts, dataBaseDir)
 	if err != nil {
 		logger.Errorf("open database failed, err:%v", err)

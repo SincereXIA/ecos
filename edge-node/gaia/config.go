@@ -4,8 +4,8 @@ type Config struct {
 	BasePath string
 }
 
-var DefaultConfig *Config
+var DefaultConfig Config
 
 func init() {
-	DefaultConfig = &Config{BasePath: "./ecos-data/gaia/"}
+	DefaultConfig = Config{BasePath: "./ecos-data/gaia/"}
 }

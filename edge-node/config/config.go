@@ -3,11 +3,10 @@ package config
 import (
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/moon"
-	"ecos/edge-node/node"
+	"ecos/edge-node/watcher"
 	"ecos/utils/common"
 	"ecos/utils/config"
 	"errors"
-	"github.com/google/uuid"
 	"net"
 	"os"
 	"path"
@@ -18,34 +17,28 @@ const httpPort = 3268
 
 type Config struct {
 	config.Config
-	SelfInfo    *node.NodeInfo
-	RpcPort     uint64
 	HttpPort    uint64
 	StoragePath string
 
-	MoonConfig *moon.Config
-	GaiaConfig *gaia.Config
+	WatcherConfig watcher.Config
+	MoonConfig    moon.Config
+	GaiaConfig    gaia.Config
 }
 
-var DefaultConfig *Config
+var DefaultConfig Config
 
 func init() {
 	_, ipAddr := getSelfIpAddr()
-	DefaultConfig = &Config{
-		Config: config.Config{},
-		SelfInfo: &node.NodeInfo{
-			RaftId:   1,
-			Uuid:     uuid.New().String(),
-			IpAddr:   ipAddr,
-			RpcPort:  rpcPort,
-			Capacity: 10,
-		},
-		RpcPort:     rpcPort,
-		HttpPort:    httpPort,
-		MoonConfig:  moon.DefaultConfig,
-		StoragePath: "./ecos-data",
-		GaiaConfig:  gaia.DefaultConfig,
+	DefaultConfig = Config{
+		Config:        config.Config{},
+		HttpPort:      httpPort,
+		WatcherConfig: watcher.DefaultConfig,
+		MoonConfig:    moon.DefaultConfig,
+		StoragePath:   "./ecos-data",
+		GaiaConfig:    gaia.DefaultConfig,
 	}
+	DefaultConfig.WatcherConfig.SelfNodeInfo.RpcPort = rpcPort
+	DefaultConfig.WatcherConfig.SelfNodeInfo.IpAddr = ipAddr
 	//DefaultConfig.Capacity = common.GetAvailStorage(DefaultConfig.StoragePath)
 }
 
@@ -55,8 +48,9 @@ func InitConfig(conf *Config) error {
 	_ = config.GetDefaultConf(&defaultConfig)
 
 	// check ip address
-	if !isAvailableIpAdder(conf.SelfInfo.IpAddr) {
-		conf.SelfInfo.IpAddr = defaultConfig.SelfInfo.IpAddr
+	if !isAvailableIpAdder(conf.WatcherConfig.SelfNodeInfo.IpAddr) {
+		conf.WatcherConfig.SelfNodeInfo.IpAddr =
+			defaultConfig.WatcherConfig.SelfNodeInfo.IpAddr
 	}
 
 	// check storagePath
@@ -67,8 +61,8 @@ func InitConfig(conf *Config) error {
 	if err != nil {
 		return err
 	}
-	conf.SelfInfo.Capacity = common.GetAvailStorage(conf.StoragePath)
-	if conf.SelfInfo.Capacity == 0 {
+	conf.WatcherConfig.SelfNodeInfo.Capacity = common.GetAvailStorage(conf.StoragePath)
+	if conf.WatcherConfig.SelfNodeInfo.Capacity == 0 {
 		return errors.New("cannot write to storage path")
 	}
 
@@ -79,7 +73,8 @@ func InitConfig(conf *Config) error {
 	var persistConf Config
 	if err == nil && !s.IsDir() && s.Size() > 0 {
 		config.Read(confPath, &persistConf)
-		conf.SelfInfo.Uuid = persistConf.SelfInfo.Uuid
+		conf.WatcherConfig.SelfNodeInfo.Uuid =
+			persistConf.WatcherConfig.SelfNodeInfo.Uuid
 	}
 	// save persist config file in storage path
 	err = config.WriteToPath(conf, confPath)

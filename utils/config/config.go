@@ -29,6 +29,7 @@ func Read(confPath string, conf interface{}) {
 	err = json.Unmarshal(buf, conf)
 	if err != nil {
 		logger.Warningf("decode config file: %v failed: %v", confPath, err)
+		return
 	}
 
 	copyValueFromDefault(conf, confDefaultMap[getConfType(conf)])

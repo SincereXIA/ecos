@@ -25,7 +25,7 @@
 
 ## 2022/2/13
 
-- `NodeInfoStorage` 接口支持设置 term，同 term `GroupInfo` 保证一致
+- `NodeInfoStorage` 接口支持设置 term，同 term `ClusterInfo` 保证一致
 - edge-node 新增两个模块 `Gaia` (盖亚) `Alaya` （阿赖耶），完成相关 proto 定义
 - 增加对象元数据存储接口 `ObjectMetaStorage`
 - 调研 `goCrush` 使用方法，编写了测试代码 `alaya_test.go`

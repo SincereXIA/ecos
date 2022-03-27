@@ -2,44 +2,41 @@ package moon
 
 import (
 	"context"
-	"ecos/cloud/sun"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"ecos/messenger/common"
-	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
-	"encoding/json"
+	"errors"
+	"github.com/google/go-cmp/cmp"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/testing/protocmp"
+	"strconv"
 	"sync"
 	"time"
 )
 
 type Moon struct {
+	// Moon Rpc
+	UnimplementedMoonServer
+
 	id            uint64 //raft节点的id
-	SelfInfo      *node.NodeInfo
+	SelfInfo      *infos.NodeInfo
 	ctx           context.Context //context
 	cancel        context.CancelFunc
-	InfoStorage   node.InfoStorage
 	raftStorage   *raft.MemoryStorage //raft需要的内存结构
 	stableStorage Storage
 	cfg           *raft.Config //raft需要的配置
 	raft          raft.Node
 	ticker        <-chan time.Time //定时器，提供周期时钟源和超时触发能力
-	infoMap       map[uint64]*node.NodeInfo
+	infoMap       map[uint64]*infos.NodeInfo
 	leaderID      uint64 // 注册时的 leader 信息
 
-	// InfoStorageTimer trigger infoStorage to commit
-	InfoStorageTimer *time.Timer
-
-	// Moon Rpc
-	UnimplementedMoonServer
-
-	sunAddr  string
-	raftChan chan raftpb.Message
+	infoStorageRegister   *infos.StorageRegister
+	raftChan              chan raftpb.Message
+	appliedRequestChan    chan *ProposeInfoRequest
+	appliedConfChangeChan chan raftpb.ConfChange
 
 	mutex  sync.RWMutex
 	config *Config
@@ -48,19 +45,12 @@ type Moon struct {
 
 type ActionType int
 
-type Message struct {
+type Message2 struct {
 	Action    ActionType
-	NodeInfo  node.NodeInfo
+	NodeInfo  infos.NodeInfo
 	Term      uint64
 	TimeStamp *timestamp.Timestamp
 }
-
-const (
-	UpdateNodeInfo ActionType = iota
-	DeleteNodeInfo
-	StorageCommit
-	StorageApply
-)
 
 type Status int
 
@@ -70,66 +60,70 @@ const (
 	StatusOK
 )
 
-func (m *Moon) AddNodeToGroup(_ context.Context, info *node.NodeInfo) (*AddNodeReply, error) {
-	m.mutex.Lock() // only one node can add to group at same time
-	defer m.mutex.Unlock()
-	reply := AddNodeReply{
+func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*ProposeInfoReply, error) {
+	if request.Id == "" {
+		return nil, errors.New("info key is empty")
+	}
+
+	data, err := request.Marshal()
+	if err != nil {
+		logger.Errorf("receive unmarshalled propose info request: %v", request.Id)
+		return nil, err
+	}
+	err = m.raft.Propose(ctx, data)
+
+	// wait propose apply
+	for {
+		applied := <-m.appliedRequestChan
+		if cmp.Equal(applied.BaseInfo, request.BaseInfo, protocmp.Transform()) {
+			break
+		} else {
+			m.appliedRequestChan <- applied
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	return &ProposeInfoReply{
+		Result: &common.Result{
+			Status: 0,
+		},
+		LeaderInfo: nil,
+	}, err
+}
+
+func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoReply, error) {
+	info, err := m.infoStorageRegister.Get(request.InfoType, request.InfoId)
+	if err != nil {
+		logger.Warningf("get info from storage register fail: %v", err)
+		return &GetInfoReply{
+			Result: &common.Result{
+				Status:  common.Result_FAIL,
+				Message: err.Error(),
+			},
+			BaseInfo: nil,
+		}, err
+	}
+	return &GetInfoReply{
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
-		LeaderInfo: nil,
-	}
-	msg := Message{
-		Action:    UpdateNodeInfo,
-		NodeInfo:  *info,
-		Term:      m.InfoStorage.GetTermNow(),
-		TimeStamp: timestamp.Now(),
-	}
-	js, _ := json.Marshal(&msg)
-	if m.raft == nil {
-		reply.Result.Status = common.Result_FAIL
-		reply.Result.Message = errno.MoonRaftNotReady.Error()
-		return &reply, errno.MoonRaftNotReady
-	}
-	err := m.raft.Propose(m.ctx, js)
-	if err != nil {
-		reply.Result.Status = common.Result_FAIL
-		reply.Result.Message = "propose node info fail"
-		return &reply, err
-	}
-	logger.Infof("send propose node info success, start wait")
-	// TODO (zhang): check it by channel
-	isReady := false
-	for i := 0; i < 10; i++ {
-		nodeInfo, err := m.InfoStorage.GetNodeInfo(node.ID(info.RaftId))
-		if err != nil || info.Uuid != nodeInfo.Uuid {
-			time.Sleep(1 * time.Second)
-		} else {
-			isReady = true
-			break
-		}
-	}
-	if !isReady {
-		reply.Result.Status = common.Result_FAIL
-		reply.Result.Message = "propose conf change time out"
-		logger.Warningf("propose conf change time out")
-		return &reply, err
-	}
-	logger.Infof("Add new node info %v success", info.RaftId)
+		BaseInfo: info.BaseInfo(),
+	}, nil
+}
 
-	err = m.raft.ProposeConfChange(m.ctx, raftpb.ConfChange{
+func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
+	data, _ := nodeInfo.Marshal()
+	err := m.raft.ProposeConfChange(ctx, raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
-		NodeID:  info.RaftId,
-		Context: nil,
+		NodeID:  nodeInfo.RaftId,
+		Context: data,
 	})
-
 	if err != nil {
-		reply.Result.Status = common.Result_FAIL
-		reply.Result.Message = "propose conf change fail"
-		return &reply, err
+		return err
 	}
-
-	return &reply, nil
+	// TODO: add time out
+	<-m.appliedConfChangeChan
+	return nil
 }
 
 func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raftpb.Message, error) {
@@ -137,114 +131,29 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 	return &raftpb.Message{}, nil
 }
 
-func (m *Moon) GetGroupInfo(_ context.Context, getGroupReq *GetGroupInfoRequest) (*node.GroupInfo, error) {
-	return m.InfoStorage.GetGroupInfo(getGroupReq.Term), nil
-}
-
-func (m *Moon) RequestJoinGroup(leaderInfo *node.NodeInfo) error {
-	tryTime := 3
-	var fail error
-	var conn *grpc.ClientConn
-	conn, err := messenger.GetRpcConn(leaderInfo.IpAddr, leaderInfo.RpcPort)
-	if err != nil {
-		logger.Warningf("Request Join group err: %v", err.Error())
-		fail = err
-		return fail
-	}
-	defer func(conn *grpc.ClientConn) {
-		_ = conn.Close()
-	}(conn)
-	for i := 0; i < tryTime; i++ {
-		if i > 0 {
-			time.Sleep(time.Second)
-		}
-		var err error
-		client := NewMoonClient(conn)
-		result, err := client.AddNodeToGroup(context.Background(), m.SelfInfo)
-		if err != nil {
-			logger.Warningf("Request Join group err: %v", err.Error())
-			fail = err
-			continue
-		}
-		if result.Result.Status != common.Result_OK {
-			// 检查是否该节点不是 leader, 需要重定向到新 leader
-			// Check the new leader
-			if result.LeaderInfo != nil {
-				time.Sleep(2 * time.Second)
-				err = m.RequestJoinGroup(result.LeaderInfo)
-				if err != nil {
-					return err
-				}
-			}
-			return err
-		}
-		break
-	}
-	if fail != nil {
-		return fail
-	}
-	return nil
-}
-
-func (m *Moon) Register(sunAddr string) (leaderInfo *node.NodeInfo, err error) {
-	if sunAddr == "" {
-		return nil, errno.ConnectSunFail
-	}
-	conn, err := grpc.Dial(sunAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, err
-	}
-
-	defer func(conn *grpc.ClientConn) {
-		_ = conn.Close()
-	}(conn)
-
-	c := sun.NewSunClient(conn)
-	result, err := c.MoonRegister(context.Background(), m.SelfInfo)
-	if err != nil {
-		return nil, err
-	}
-	m.SelfInfo.RaftId = result.RaftId
-
-	if result.HasLeader {
-		m.infoMap[result.GroupInfo.LeaderInfo.RaftId] = result.GroupInfo.LeaderInfo
-		err = m.RequestJoinGroup(result.GroupInfo.LeaderInfo)
-		if err != nil {
-			return result.GroupInfo.LeaderInfo, err
-		}
-	}
-
-	for _, nodeInfo := range result.GroupInfo.NodesInfo {
-		m.infoMap[nodeInfo.RaftId] = nodeInfo
-	}
-
-	return result.GroupInfo.LeaderInfo, nil
-}
-
-func NewMoon(selfInfo *node.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
-	infoStorage node.InfoStorage, stableStorage Storage) *Moon {
+func NewMoon(selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
+	register *infos.StorageRegister) *Moon {
 	ctx, cancel := context.WithCancel(context.Background())
 	storage := raft.NewMemoryStorage()
-	raftChan := make(chan raftpb.Message)
-	sunAddr := config.SunAddr
 	m := &Moon{
-		id:            0, // set raft id after register
-		SelfInfo:      selfInfo,
-		ctx:           ctx,
-		cancel:        cancel,
-		InfoStorage:   infoStorage,
-		raftStorage:   storage,
-		stableStorage: stableStorage,
-		cfg:           nil, // set raft cfg after register
-		ticker:        time.NewTicker(time.Millisecond * 300).C,
-		raftChan:      raftChan,
-		sunAddr:       sunAddr,
-		mutex:         sync.RWMutex{},
-		infoMap:       make(map[uint64]*node.NodeInfo),
-		config:        config,
-		status:        StatusInit,
+		id:                    0, // set raft id after register
+		SelfInfo:              selfInfo,
+		ctx:                   ctx,
+		cancel:                cancel,
+		raftStorage:           storage,
+		stableStorage:         NewStorage(config.RaftStoragePath),
+		cfg:                   nil, // set raft cfg after register
+		ticker:                time.NewTicker(time.Millisecond * 200).C,
+		mutex:                 sync.RWMutex{},
+		infoMap:               make(map[uint64]*infos.NodeInfo),
+		config:                config,
+		status:                StatusInit,
+		infoStorageRegister:   register,
+		raftChan:              make(chan raftpb.Message),
+		appliedRequestChan:    make(chan *ProposeInfoRequest, 100),
+		appliedConfChangeChan: make(chan raftpb.ConfChange, 100),
 	}
-	leaderInfo := config.GroupInfo.LeaderInfo
+	leaderInfo := config.ClusterInfo.LeaderInfo
 	if leaderInfo != nil {
 		m.leaderID = leaderInfo.RaftId
 	}
@@ -254,36 +163,36 @@ func NewMoon(selfInfo *node.NodeInfo, config *Config, rpcServer *messenger.RpcSe
 	if leaderInfo != nil {
 		m.infoMap[leaderInfo.RaftId] = leaderInfo
 	}
-	for _, info := range config.GroupInfo.NodesInfo {
+	for _, info := range config.ClusterInfo.NodesInfo {
 		m.infoMap[info.RaftId] = info
 	}
 	return m
 }
 
 func (m *Moon) sendByRpc(messages []raftpb.Message) {
-	var err error
 	for _, message := range messages {
 		logger.Tracef("%d send to %v, type %v", m.id, message, message.Type)
 
 		// get node info
-		nodeId := node.ID(message.To)
-		var nodeInfo *node.NodeInfo
+		var nodeInfo *infos.NodeInfo
 		var ok bool
 		if nodeInfo, ok = m.infoMap[message.To]; !ok { // infoMap always have latest
-			nodeInfo, err = m.InfoStorage.GetNodeInfo(nodeId) // else get from infoStorage
+			storage := m.infoStorageRegister.GetStorage(infos.InfoType_NODE_INFO)
+			info, err := storage.Get(strconv.FormatUint(message.To, 10))
 			if err != nil {
 				logger.Warningf("Get Node Info fail: %v", err)
 				return
 			}
+			nodeInfo = info.BaseInfo().GetNodeInfo()
 		}
 
-		conn, err := messenger.GetRpcConnByInfo(nodeInfo)
+		conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 		if err != nil {
 			logger.Errorf("failed to connect: %v", err)
 			return
 		}
 		c := NewMoonClient(conn)
-		_, err = c.SendRaftMessage(context.Background(), &message)
+		_, err = c.SendRaftMessage(m.ctx, &message)
 		if err != nil {
 			logger.Errorf("could not send raft message: %v", err)
 		}
@@ -299,98 +208,39 @@ func (m *Moon) IsLeader() bool {
 	return m.raft.Status().Lead == m.id
 }
 
-// waitAndCommitStorage start a timer to wait a NodeInfoCommitInterval,
-// after that start to propose a StorageCommit log. (if this node is leader)
-func (m *Moon) waitAndCommitStorage() {
-	if !m.IsLeader() {
-		return // only leader can propose storage apply
-	}
-	if m.InfoStorageTimer == nil || !m.InfoStorageTimer.Stop() {
-		m.InfoStorageTimer = time.AfterFunc(m.config.NodeInfoCommitInterval, func() {
-			message := Message{
-				Action:    StorageCommit,
-				NodeInfo:  node.NodeInfo{},
-				Term:      uint64(time.Now().UnixNano()),
-				TimeStamp: timestamp.Now(),
-			}
-			data, _ := json.Marshal(&message)
-			err := m.raft.Propose(m.ctx, data)
-			if err != nil {
-				logger.Errorf("Moon: %v propose storage commit term: %v err: %v", m.id, message.Term, err)
-			}
-			logger.Infof("Moon: %v propose storage commit term: %v", m.id, message.Term)
-		})
-	} else {
-		m.InfoStorageTimer.Reset(m.config.NodeInfoCommitInterval)
-	}
-}
-
-// waitAndCommitStorage wait all follower finish InfoStorage commit,
-// and start to propose a StorageApply log. (if this node is leader)
-func (m *Moon) waitAndApplyStorage(commitMessage *Message) {
-	if !m.IsLeader() {
-		return // only leader can propose storage commit
-	}
-	// TODO: wait all follower ready
-	message := Message{
-		Action:    StorageApply,
-		NodeInfo:  node.NodeInfo{},
-		Term:      commitMessage.Term,
-		TimeStamp: timestamp.Now(),
-	}
-	data, _ := json.Marshal(&message)
-	err := m.raft.Propose(m.ctx, data)
-	if err != nil {
-		logger.Errorf("Moon: %v propose storage apply term: %v err: %v", m.id, message.Term, err)
-	}
-	logger.Infof("Moon: %v propose storage apply term: %v", m.id, message.Term)
-}
-
 func (m *Moon) process(entry raftpb.Entry) {
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var msg Message
-		err := json.Unmarshal(entry.Data, &msg)
-		switch msg.Action {
-		case UpdateNodeInfo:
-			nodeInfo := msg.NodeInfo
-			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
-			_ = m.InfoStorage.UpdateNodeInfo(&nodeInfo, msg.TimeStamp)
-			m.waitAndCommitStorage()
-		case DeleteNodeInfo:
-			nodeInfo := msg.NodeInfo
-			logger.Infof("Node %v: get Moon info %v", m.id, &nodeInfo)
-			_ = m.InfoStorage.DeleteNodeInfo(node.ID(nodeInfo.RaftId), msg.TimeStamp)
-			m.waitAndCommitStorage()
-		case StorageCommit:
-			m.InfoStorage.Commit(msg.Term)
-			m.waitAndApplyStorage(&msg)
-		case StorageApply:
-			m.InfoStorage.Apply()
+		var msg ProposeInfoRequest
+		err := msg.Unmarshal(entry.Data)
+		if err != nil {
+			logger.Errorf("unmarshal entry data fail: %v", err)
+		}
+		info, err := infos.BaseInfoToInformation(*msg.BaseInfo)
+		switch msg.Operate {
+		case ProposeInfoRequest_ADD:
+			err = m.infoStorageRegister.Update(msg.Id, info)
+		case ProposeInfoRequest_UPDATE:
+			err = m.infoStorageRegister.Update(msg.Id, info)
+		case ProposeInfoRequest_DELETE:
+			err = m.infoStorageRegister.Delete(info.GetInfoType(), msg.Id)
 		}
 		if err != nil {
 			logger.Errorf("Moon process moon message err: %v", err.Error())
 		}
+		// let request know it is already applied
+		m.appliedRequestChan <- &msg
 	}
 }
 
-func (m *Moon) Init() error {
+func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.status = StatusRegistering
-	var err error
-	var leaderInfo *node.NodeInfo
-	if m.leaderID != 0 {
-		leaderInfo, _ = m.infoMap[m.leaderID]
-		err = m.RequestJoinGroup(leaderInfo)
-		if err != nil {
-			logger.Errorf("Node %v: request join to group err, leader: %v", m.id, m.leaderID)
-		}
+	if leaderInfo != nil {
+		m.infoMap[leaderInfo.RaftId] = leaderInfo
 	}
-	if m.sunAddr != "" {
-		leaderInfo, err = m.Register(m.sunAddr)
-		if err != nil {
-			logger.Warningf("Register to Sun err: %v", err)
-		}
+	for _, nodeInfo := range peersInfo {
+		m.infoMap[nodeInfo.RaftId] = nodeInfo
 	}
 
 	m.id = m.SelfInfo.RaftId
@@ -408,34 +258,23 @@ func (m *Moon) Init() error {
 
 	m.infoMap[m.SelfInfo.RaftId] = m.SelfInfo
 
-	for _, nodeInfo := range m.infoMap {
-		if nodeInfo.RaftId != m.id {
-			// 非常奇怪，除了第一个节点之外，其他节点不能有集群的完整信息，否则后续 propose 无法被提交
-			peers = append(peers, raft.Peer{
-				ID:      nodeInfo.RaftId,
-				Context: nil,
-			})
-		}
-	}
 	logger.Tracef("leaderInfo: %v", leaderInfo)
-
-	if leaderInfo == nil || leaderInfo.RaftId == m.id {
-		// 非常奇怪，还必须得保证在只有一个节点的时候，peers 得加入自身，否则选不出 leader
-		peers = append(peers, raft.Peer{
-			ID:      m.id,
-			Context: nil,
-		})
+	if leaderInfo != nil { // 集群中现在已经有成员，peers 只需要填写 leader
+		peers = []raft.Peer{
+			{ID: leaderInfo.RaftId},
+		}
+	} else {
+		for _, nodeInfo := range m.infoMap {
+			peers = append(peers, raft.Peer{ID: nodeInfo.RaftId})
+		}
 	}
 
 	m.raft = raft.StartNode(m.cfg, peers)
-	return nil
 }
 
 func (m *Moon) Run() {
-	err := m.Init()
-	if err != nil {
-		logger.Fatalf("init moon err: %v", err)
-		return
+	if m.raft == nil {
+		m.Init(nil, m.config.ClusterInfo.NodesInfo)
 	}
 	go m.reportSelfInfo()
 
@@ -471,6 +310,9 @@ func (m *Moon) Run() {
 					var cc raftpb.ConfChange
 					_ = cc.Unmarshal(entry.Data)
 					m.raft.ApplyConfChange(cc)
+					if cc.Context != nil {
+						m.appliedConfChangeChan <- cc
+					}
 				}
 			}
 			m.raft.Advance()
@@ -483,7 +325,6 @@ func (m *Moon) Run() {
 func (m *Moon) Stop() {
 	m.cancel()
 	m.stableStorage.Close()
-	m.InfoStorage.Close()
 }
 
 func (m *Moon) reportSelfInfo() {
@@ -492,14 +333,16 @@ func (m *Moon) reportSelfInfo() {
 	}
 
 	logger.Infof("%v join group success, start report self info", m.id)
-	message := Message{
-		Action:    UpdateNodeInfo,
-		NodeInfo:  *m.SelfInfo,
-		Term:      m.InfoStorage.GetTermNow(),
-		TimeStamp: timestamp.Now(),
+	message := &ProposeInfoRequest{
+		Head: &common.Head{
+			Timestamp: timestamp.Now(),
+			Term:      0,
+		},
+		Id:       strconv.FormatUint(m.SelfInfo.RaftId, 10),
+		Operate:  ProposeInfoRequest_UPDATE,
+		BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: m.SelfInfo}},
 	}
-	js, _ := json.Marshal(message)
-	err := m.raft.Propose(m.ctx, js)
+	_, err := m.ProposeInfo(m.ctx, message)
 	if err != nil {
 		logger.Errorf("report self info err: %v", err.Error())
 	}
@@ -512,5 +355,5 @@ func (m *Moon) GetLeaderID() uint64 {
 	if m.raft == nil {
 		return 0
 	}
-	return m.raft.Status().ID
+	return m.raft.Status().Lead
 }

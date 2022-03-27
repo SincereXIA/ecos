@@ -2,7 +2,7 @@ package gaia
 
 import (
 	"context"
-	"ecos/edge-node/node"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/errno"
@@ -16,10 +16,9 @@ import (
 type Gaia struct {
 	UnimplementedGaiaServer
 
-	ctx         context.Context
-	cancel      context.CancelFunc
-	selfInfo    *node.NodeInfo
-	infoStorage node.InfoStorage
+	ctx     context.Context
+	cancel  context.CancelFunc
+	watcher *watcher.Watcher
 
 	config *Config
 }
@@ -76,8 +75,12 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 	switch code {
 	case ControlMessage_BEGIN:
 		// 建立与同组 Node 的连接，准备转发
-		t, err := NewPrimaryCopyTransporter(g.ctx, msg.Block, p, g.selfInfo.RaftId,
-			g.infoStorage.GetGroupInfo(msg.Term), g.config.BasePath)
+		clusterInfo, err := g.watcher.GetClusterInfoByTerm(msg.Term)
+		if err != nil {
+			return err
+		}
+		t, err := NewPrimaryCopyTransporter(g.ctx, msg.Block, p, g.watcher.GetSelfInfo().RaftId,
+			&clusterInfo, g.config.BasePath)
 		if err != nil {
 			return err
 		}
@@ -126,16 +129,14 @@ func (g *Gaia) processChunk(chunk *UploadBlockRequest_Chunk, transporter *Primar
 	return nil
 }
 
-func NewGaia(rpcServer *messenger.RpcServer, selfInfo *node.NodeInfo, infoStorage node.InfoStorage,
+func NewGaia(ctx context.Context, rpcServer *messenger.RpcServer, watcher *watcher.Watcher,
 	config *Config) *Gaia {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	g := Gaia{
-		ctx:         ctx,
-		cancel:      cancel,
-		selfInfo:    selfInfo,
-		infoStorage: infoStorage,
-
-		config: config,
+		ctx:     ctx,
+		cancel:  cancel,
+		watcher: watcher,
+		config:  config,
 	}
 	RegisterGaiaServer(rpcServer, &g)
 	return &g

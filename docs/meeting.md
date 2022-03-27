@@ -13,7 +13,7 @@
   - edge-node 启动时初始化
   - 升级 rocksdb 版本
   - 元数据持久化
-  - 客户端从 edge node 拿到 groupInfo
+  - 客户端从 edge node 拿到 clusterInfo
   - 对象数据三节点同步
 - 存在的一些问题
   - 分支提交方法和原则，rebase 和 cherry-pick

@@ -1,0 +1,31 @@
+syntax = "proto3";
+package messenger;
+
+import "common.proto";
+import "infos.proto";
+
+option go_package = "ecos/edge-node/watcher";
+
+service Watcher {
+  // AddNewNodeToCluster will propose a new NodeInfo in moon,
+  // if success, it will propose a ConfChang, to add the raftNode into moon group
+  rpc AddNewNodeToCluster (NodeInfo) returns (AddNodeReply) {}
+  // GetClusterInfo return requested cluster info to rpc client,
+  // if GetClusterInfoRequest.Term == 0, it will return current cluster info.
+  rpc GetClusterInfo(GetClusterInfoRequest) returns (GetClusterInfoReply) {}
+}
+
+message AddNodeReply {
+  Result result = 1;
+  NodeInfo leader_info = 2;
+  repeated NodeInfo peers_node_info = 3;
+}
+
+message GetClusterInfoRequest {
+  uint64 term = 1;
+}
+
+message GetClusterInfoReply {
+  Result result = 1;
+  ClusterInfo cluster_info = 2;
+}

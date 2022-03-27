@@ -2,10 +2,10 @@ package alaya
 
 import (
 	"context"
-	"ecos/edge-node/moon"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/errno"
@@ -25,7 +25,8 @@ type Alaya struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	SelfInfo       *node.NodeInfo
+	selfInfo       *infos.NodeInfo
+	watcher        *watcher.Watcher
 	PGMessageChans sync.Map
 	// PGRaftNode save all raft node on this edge.
 	// pgID -> Raft node
@@ -34,7 +35,6 @@ type Alaya struct {
 	mutex            sync.Mutex
 	raftNodeStopChan chan uint64 // 内部 raft node 主动退出时，使用该 chan 通知 alaya
 
-	InfoStorage node.InfoStorage
 	MetaStorage MetaStorage
 
 	state State
@@ -112,22 +112,23 @@ func (a *Alaya) Stop() {
 	a.cancel()
 }
 
-func (a *Alaya) ApplyNewGroupInfo(groupInfo *node.GroupInfo) {
+func (a *Alaya) applyNewClusterInfo(info infos.Information) {
+	a.ApplyNewClusterInfo(info.BaseInfo().GetClusterInfo())
+}
+
+func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 	// TODO: (zhang) make pgNum configurable
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	a.state = UPDATING
 	oldPipelines := a.pipelines
-	terms := a.InfoStorage.GetTermList()
-	if len(terms) > 0 {
-		oldGroupInfo := a.InfoStorage.GetGroupInfo(terms[len(terms)-1])
-		oldPipelines = pipeline.GenPipelines(oldGroupInfo, 10, 3)
-	}
-	if len(groupInfo.NodesInfo) == 0 {
-		logger.Warningf("Empty groupInfo when alaya apply new groupInfo")
+	if clusterInfo == nil || len(clusterInfo.NodesInfo) == 0 {
+		logger.Warningf("Empty clusterInfo when alaya apply new clusterInfo")
 		return
 	}
-	p := pipeline.GenPipelines(groupInfo, 10, 3)
+	logger.Infof("Alaya: %v receive new cluster info, term: %v, node num: %v", a.selfInfo.RaftId,
+		clusterInfo.Term, len(clusterInfo.NodesInfo))
+	p := pipeline.GenPipelines(*clusterInfo, 10, 3)
 	a.ApplyNewPipelines(p, oldPipelines)
 	a.state = RUNNING
 }
@@ -142,7 +143,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
 
-		if raftNode.raft.Status().Lead != a.SelfInfo.RaftId {
+		if raftNode.raft.Status().Lead != a.selfInfo.RaftId {
 			return true
 		}
 		// if this node is leader, add new pipelines node first
@@ -153,7 +154,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 
 	// start run raft node new in pipelines
 	for _, p := range pipelines {
-		if -1 == arrays.Contains(p.RaftId, a.SelfInfo.RaftId) { // pass when node not in pipeline
+		if -1 == arrays.Contains(p.RaftId, a.selfInfo.RaftId) { // pass when node not in pipeline
 			continue
 		}
 		pgID := p.PgId
@@ -176,29 +177,26 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 	}
 }
 
-// NewAlayaByMoon will wait moon ready then create a new alaya
-func NewAlayaByMoon(moon *moon.Moon, storage MetaStorage, server *messenger.RpcServer) *Alaya {
-	return NewAlaya(moon.SelfInfo, moon.InfoStorage, storage, server)
-}
-
-func NewAlaya(selfInfo *node.NodeInfo, infoStorage node.InfoStorage, metaStorage MetaStorage,
-	rpcServer *messenger.RpcServer) *Alaya {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewAlaya(ctx context.Context, watcher *watcher.Watcher,
+	metaStorage MetaStorage, rpcServer *messenger.RpcServer) *Alaya {
+	ctx, cancel := context.WithCancel(ctx)
 	a := Alaya{
 		ctx:              ctx,
 		cancel:           cancel,
 		PGMessageChans:   sync.Map{},
 		PGRaftNode:       sync.Map{},
-		SelfInfo:         selfInfo,
-		InfoStorage:      infoStorage,
+		selfInfo:         watcher.GetSelfInfo(),
 		MetaStorage:      metaStorage,
 		state:            INIT,
+		watcher:          watcher,
 		raftNodeStopChan: make(chan uint64),
 	}
 	RegisterAlayaServer(rpcServer, &a)
-	a.ApplyNewGroupInfo(infoStorage.GetGroupInfo(0))
-	infoStorage.SetOnGroupApply(a.ApplyNewGroupInfo)
+	clusterInfo := watcher.GetCurrentClusterInfo()
+	a.ApplyNewClusterInfo(&clusterInfo)
 	a.state = READY
+	_ = a.watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO, "moon", a.applyNewClusterInfo)
+
 	return &a
 }
 
@@ -226,7 +224,8 @@ func (a *Alaya) PrintPipelineInfo() {
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
-		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v", a.SelfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
+		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v", a.selfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
+
 		return true
 	})
 }
@@ -238,7 +237,7 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 	defer a.mutex.Unlock()
 	ok := true
 	length := 0
-	if a.InfoStorage.GetTermNow() == 0 || a.state != RUNNING {
+	if len(a.pipelines) == 0 || a.state != RUNNING {
 		return false
 	}
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
@@ -269,8 +268,8 @@ func (a *Alaya) MakeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pip
 		a.PGMessageChans.Store(pgID, c)
 	}
 	a.PGRaftNode.Store(pgID,
-		NewAlayaRaft(a.SelfInfo.RaftId, p, oldP, a.InfoStorage, a.MetaStorage,
+		NewAlayaRaft(a.selfInfo.RaftId, p, oldP, a.watcher, a.MetaStorage,
 			c.(chan raftpb.Message), a.raftNodeStopChan))
-	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.SelfInfo.RaftId, pgID)
+	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.selfInfo.RaftId, pgID)
 	return a.getRaftNode(pgID)
 }

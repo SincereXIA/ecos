@@ -2,7 +2,7 @@ package sun
 
 import (
 	"context"
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/logger"
@@ -14,19 +14,19 @@ import (
 type Sun struct {
 	rpc *messenger.RpcServer
 	Server
-	leaderInfo *node.NodeInfo
-	groupInfo  *node.GroupInfo
-	lastRaftID uint64
-	mu         sync.Mutex
-	cachedInfo map[string]*node.NodeInfo //cache node info by uuid
+	leaderInfo  *infos.NodeInfo
+	clusterInfo *infos.ClusterInfo
+	lastRaftID  uint64
+	mu          sync.Mutex
+	cachedInfo  map[string]*infos.NodeInfo //cache node info by uuid
 }
 
 type Server struct {
 	UnimplementedSunServer
 }
 
-// MoonRegister give a Raft ID to a new edge node
-func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*RegisterResult, error) {
+// MoonRegister give a Raft NodeID to a new edge node
+func (s *Sun) MoonRegister(_ context.Context, nodeInfo *infos.NodeInfo) (*RegisterResult, error) {
 	hasLeader := true
 
 	// Check Leader info
@@ -35,7 +35,7 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*Registe
 	if s.leaderInfo == nil { // This is new leader
 		hasLeader = false
 		s.leaderInfo = nodeInfo
-		s.groupInfo.LeaderInfo = s.leaderInfo
+		s.clusterInfo.LeaderInfo = s.leaderInfo
 	}
 
 	if info, ok := s.cachedInfo[nodeInfo.Uuid]; ok {
@@ -43,13 +43,13 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*Registe
 			Result: &common.Result{
 				Status: common.Result_OK,
 			},
-			RaftId:    info.RaftId,
-			HasLeader: hasLeader,
-			GroupInfo: s.groupInfo,
+			RaftId:      info.RaftId,
+			HasLeader:   hasLeader,
+			ClusterInfo: s.clusterInfo,
 		}, nil
 	}
 
-	// Gen a new Raft ID
+	// Gen a new Raft NodeID
 	raftID := atomic.AddUint64(&s.lastRaftID, 1)
 	nodeInfo.RaftId = raftID
 
@@ -57,23 +57,23 @@ func (s *Sun) MoonRegister(_ context.Context, nodeInfo *node.NodeInfo) (*Registe
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
-		RaftId:    raftID,
-		HasLeader: hasLeader,
-		GroupInfo: s.groupInfo,
+		RaftId:      raftID,
+		HasLeader:   hasLeader,
+		ClusterInfo: s.clusterInfo,
 	}
 
 	s.cachedInfo[nodeInfo.Uuid] = nodeInfo
-	logger.Infof("Register moon success, raftID: %v, leader: %v", raftID, result.GroupInfo.LeaderInfo.RaftId)
+	logger.Infof("Register moon success, raftID: %v, leader: %v", raftID, result.ClusterInfo.LeaderInfo.RaftId)
 	return &result, nil
 }
 
-func (s *Sun) GetLeaderInfo(_ context.Context, nodeInfo *node.NodeInfo) (*node.NodeInfo, error) {
-	return s.groupInfo.LeaderInfo, nil
+func (s *Sun) GetLeaderInfo(_ context.Context, nodeInfo *infos.NodeInfo) (*infos.NodeInfo, error) {
+	return s.clusterInfo.LeaderInfo, nil
 }
 
-func (s *Sun) ReportGroupInfo(_ context.Context, groupInfo *node.GroupInfo) (*common.Result, error) {
+func (s *Sun) ReportClusterInfo(_ context.Context, clusterInfo *infos.ClusterInfo) (*common.Result, error) {
 	s.mu.Lock()
-	s.groupInfo = groupInfo
+	s.clusterInfo = clusterInfo
 	s.mu.Unlock()
 	result := common.Result{
 		Status: common.Result_OK,
@@ -85,13 +85,13 @@ func NewSun(rpc *messenger.RpcServer) *Sun {
 	sun := Sun{
 		rpc:        rpc,
 		leaderInfo: nil,
-		groupInfo: &node.GroupInfo{
+		clusterInfo: &infos.ClusterInfo{
 			LeaderInfo: nil,
 			NodesInfo:  nil,
 		},
 		lastRaftID: 0,
 		mu:         sync.Mutex{},
-		cachedInfo: map[string]*node.NodeInfo{},
+		cachedInfo: map[string]*infos.NodeInfo{},
 	}
 	RegisterSunServer(rpc, &sun)
 	return &sun

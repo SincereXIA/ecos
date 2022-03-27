@@ -1,20 +1,20 @@
 package node
 
 import (
-	"ecos/edge-node/node"
+	"ecos/edge-node/infos"
 )
 
-// ClientNodeInfoStorage provides way to query NodeInfo and GroupInfo for a specific Term
+// ClientNodeInfoStorage provides way to query NodeInfo and ClusterInfo for a specific Term
 type ClientNodeInfoStorage struct {
-	curGroupInfo *node.GroupInfo
-	curNodesInfo map[uint64]*node.NodeInfo
-	history      map[uint64]*node.GroupInfo
+	curClusterInfo *infos.ClusterInfo
+	curNodesInfo   map[uint64]*infos.NodeInfo
+	history        map[uint64]*infos.ClusterInfo
 }
 
-// NewClientNodeInfoStorage generates server-independent NodeInfoStorage
+// NewClientNodeInfoStorage generates server-independent clusterInfoStorage
 func NewClientNodeInfoStorage() (*ClientNodeInfoStorage, error) {
 	return &ClientNodeInfoStorage{
-		history: map[uint64]*node.GroupInfo{},
+		history: map[uint64]*infos.ClusterInfo{},
 	}, nil
 }
 
@@ -27,48 +27,48 @@ func init() {
 	}
 }
 
-// SaveGroupInfo save GroupInfo into history
-func (s *ClientNodeInfoStorage) SaveGroupInfo(groupInfo *node.GroupInfo) {
-	s.history[groupInfo.Term] = groupInfo
+// SaveClusterInfo save ClusterInfo into history
+func (s *ClientNodeInfoStorage) SaveClusterInfo(clusterInfo *infos.ClusterInfo) {
+	s.history[clusterInfo.Term] = clusterInfo
 }
 
-// SaveGroupInfoWithTerm same as SaveGroupInfo, shall check para term and groupInfo.Term
-func (s *ClientNodeInfoStorage) SaveGroupInfoWithTerm(term uint64, groupInfo *node.GroupInfo) {
+// SaveClusterInfoWithTerm same as SaveClusterInfo, shall check para term and clusterInfo.Term
+func (s *ClientNodeInfoStorage) SaveClusterInfoWithTerm(term uint64, clusterInfo *infos.ClusterInfo) {
 	if term == 0 {
-		s.curGroupInfo = groupInfo
-		s.curNodesInfo = make(map[uint64]*node.NodeInfo)
-		for _, info := range s.curGroupInfo.NodesInfo {
+		s.curClusterInfo = clusterInfo
+		s.curNodesInfo = make(map[uint64]*infos.NodeInfo)
+		for _, info := range s.curClusterInfo.NodesInfo {
 			s.curNodesInfo[info.RaftId] = info
 		}
 	}
-	if term == groupInfo.Term {
-		s.history[term] = groupInfo
+	if term == clusterInfo.Term {
+		s.history[term] = clusterInfo
 	}
 }
 
-// GetGroupInfo shall return GroupInfo with given term.
+// GetClusterInfo shall return ClusterInfo with given term.
 //
-// If term is 0, this shall return current GroupInfo
+// If term is 0, this shall return current ClusterInfo
 //
 // CAN return NIL
-func (s *ClientNodeInfoStorage) GetGroupInfo(term uint64) *node.GroupInfo {
+func (s *ClientNodeInfoStorage) GetClusterInfo(term uint64) *infos.ClusterInfo {
 	if term == 0 {
-		return s.curGroupInfo
+		return s.curClusterInfo
 	}
 	return s.history[term]
 }
 
 // GetNodeInfo shall return NodeInfo with given term and nodeId.
 //
-// If term is 0, this shall search in the current GroupInfo
+// If term is 0, this shall search in the current ClusterInfo
 //
 // CAN return NIL
-func (s *ClientNodeInfoStorage) GetNodeInfo(term uint64, nodeId uint64) *node.NodeInfo {
+func (s *ClientNodeInfoStorage) GetNodeInfo(term uint64, nodeId uint64) *infos.NodeInfo {
 	if term == 0 {
 		return s.curNodesInfo[nodeId]
 	}
-	groupInfo := s.GetGroupInfo(term)
-	for _, info := range groupInfo.NodesInfo {
+	clusterInfo := s.GetClusterInfo(term)
+	for _, info := range clusterInfo.NodesInfo {
 		if info.RaftId == nodeId {
 			return info
 		}
