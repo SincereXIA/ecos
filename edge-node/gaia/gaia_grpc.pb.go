@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GaiaClient interface {
 	UploadBlockData(ctx context.Context, opts ...grpc.CallOption) (Gaia_UploadBlockDataClient, error)
+	GetBlockData(ctx context.Context, in *GetBlockRequest, opts ...grpc.CallOption) (Gaia_GetBlockDataClient, error)
 }
 
 type gaiaClient struct {
@@ -64,11 +65,44 @@ func (x *gaiaUploadBlockDataClient) CloseAndRecv() (*common.Result, error) {
 	return m, nil
 }
 
+func (c *gaiaClient) GetBlockData(ctx context.Context, in *GetBlockRequest, opts ...grpc.CallOption) (Gaia_GetBlockDataClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Gaia_ServiceDesc.Streams[1], "/messenger.Gaia/GetBlockData", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &gaiaGetBlockDataClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Gaia_GetBlockDataClient interface {
+	Recv() (*GetBlockResult, error)
+	grpc.ClientStream
+}
+
+type gaiaGetBlockDataClient struct {
+	grpc.ClientStream
+}
+
+func (x *gaiaGetBlockDataClient) Recv() (*GetBlockResult, error) {
+	m := new(GetBlockResult)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // GaiaServer is the server API for Gaia service.
 // All implementations must embed UnimplementedGaiaServer
 // for forward compatibility
 type GaiaServer interface {
 	UploadBlockData(Gaia_UploadBlockDataServer) error
+	GetBlockData(*GetBlockRequest, Gaia_GetBlockDataServer) error
 	mustEmbedUnimplementedGaiaServer()
 }
 
@@ -78,6 +112,9 @@ type UnimplementedGaiaServer struct {
 
 func (UnimplementedGaiaServer) UploadBlockData(Gaia_UploadBlockDataServer) error {
 	return status.Errorf(codes.Unimplemented, "method UploadBlockData not implemented")
+}
+func (UnimplementedGaiaServer) GetBlockData(*GetBlockRequest, Gaia_GetBlockDataServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetBlockData not implemented")
 }
 func (UnimplementedGaiaServer) mustEmbedUnimplementedGaiaServer() {}
 
@@ -118,6 +155,27 @@ func (x *gaiaUploadBlockDataServer) Recv() (*UploadBlockRequest, error) {
 	return m, nil
 }
 
+func _Gaia_GetBlockData_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetBlockRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(GaiaServer).GetBlockData(m, &gaiaGetBlockDataServer{stream})
+}
+
+type Gaia_GetBlockDataServer interface {
+	Send(*GetBlockResult) error
+	grpc.ServerStream
+}
+
+type gaiaGetBlockDataServer struct {
+	grpc.ServerStream
+}
+
+func (x *gaiaGetBlockDataServer) Send(m *GetBlockResult) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Gaia_ServiceDesc is the grpc.ServiceDesc for Gaia service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -130,6 +188,11 @@ var Gaia_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "UploadBlockData",
 			Handler:       _Gaia_UploadBlockData_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetBlockData",
+			Handler:       _Gaia_GetBlockData_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "gaia.proto",

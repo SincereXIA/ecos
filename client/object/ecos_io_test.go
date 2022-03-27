@@ -5,14 +5,18 @@ import (
 	"ecos/client/config"
 	edgeNodeTest "ecos/edge-node/test"
 	"ecos/utils/common"
+	"ecos/utils/logger"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"math/rand"
 	"os"
+	"reflect"
 	"runtime"
 	"testing"
+	"time"
 )
 
-func TestEcosWriter(t *testing.T) {
+func TestEcosWriterAndReader(t *testing.T) {
 	_, filename, _, _ := runtime.Caller(0)
 	ctx, cancel := context.WithCancel(context.Background())
 	basePath := "./ecos-data/"
@@ -50,17 +54,15 @@ func TestEcosWriter(t *testing.T) {
 	}
 	_ = common.InitAndClearPath(basePath)
 	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(ctx, basePath, 9)
-	t.Cleanup(func() {
-		cancel()
-		_ = os.RemoveAll(basePath)
-	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := config.DefaultConfig
 			conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
 			conf.NodePort = watchers[0].GetSelfInfo().RpcPort
-			factory := NewEcosWriterFactory(conf)
+			factory := NewEcosIOFactory(conf)
 			writer := factory.GetEcosWriter(tt.args.key)
+			reader := factory.GetEcosReader(tt.args.key)
 			data := genTestData(tt.args.objectSize)
 			writeSize, err := writer.Write(data)
 			assert.NoError(t, err)
@@ -71,8 +73,21 @@ func TestEcosWriter(t *testing.T) {
 				t.Errorf("PutObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			time.Sleep(2 * time.Second)
+			readData := make([]byte, tt.args.objectSize)
+			readSize, err := reader.Read(readData)
+			assert.Equal(t, io.EOF, err)
+			assert.Equal(t, tt.args.objectSize, readSize)
+			logger.Infof("object size == %v", tt.args.objectSize)
+			logger.Infof("read size == %v", readSize)
+			assert.Equal(t, true, reflect.DeepEqual(readData, data))
 		})
 	}
+
+	t.Cleanup(func() {
+		cancel()
+		_ = os.RemoveAll(basePath)
+	})
 }
 
 func genTestData(size int) []byte {
