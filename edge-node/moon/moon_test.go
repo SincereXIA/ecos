@@ -51,7 +51,7 @@ func TestRaft(t *testing.T) {
 	})
 	// 发送一个待同步的 info
 	t.Run("propose info", func(t *testing.T) {
-		moon := moons[leader]
+		moon := moons[leader-1]
 		request := &ProposeInfoRequest{
 			Head: &common2.Head{
 				Timestamp: timestamp.Now(),
