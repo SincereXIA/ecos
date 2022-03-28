@@ -21,6 +21,8 @@ type StorageFactory interface {
 	GetStorage(infoType InfoType) Storage
 }
 
+// StorageRegister can auto operate information to corresponding storage.
+// It can identify and call storage by infoType.
 type StorageRegister struct {
 	storageMap map[InfoType]Storage
 }
@@ -31,6 +33,7 @@ func (register *StorageRegister) Register(infoType InfoType, storage Storage) {
 	register.storageMap[infoType] = storage
 }
 
+// GetStorage return the registered storage of the infoType.
 func (register *StorageRegister) GetStorage(infoType InfoType) Storage {
 	return register.storageMap[infoType]
 }
@@ -62,6 +65,7 @@ func (register *StorageRegister) Get(infoType InfoType, id string) (Information,
 	return Information{}, errno.InfoTypeNotSupport
 }
 
+// StorageRegisterBuilder is used to build StorageRegister.
 type StorageRegisterBuilder struct {
 	register       *StorageRegister
 	storageFactory StorageFactory
@@ -77,11 +81,13 @@ func (builder *StorageRegisterBuilder) registerAllStorage() {
 	builder.register.Register(InfoType_CLUSTER_INFO, builder.getStorage(InfoType_CLUSTER_INFO))
 }
 
+// GetStorageRegister return a StorageRegister
 func (builder *StorageRegisterBuilder) GetStorageRegister() *StorageRegister {
 	builder.registerAllStorage()
 	return builder.register
 }
 
+// NewStorageRegisterBuilder return a StorageRegisterBuilder
 func NewStorageRegisterBuilder(factory StorageFactory) *StorageRegisterBuilder {
 	return &StorageRegisterBuilder{
 		register: &StorageRegister{
