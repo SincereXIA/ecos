@@ -166,6 +166,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 	for _, info := range config.ClusterInfo.NodesInfo {
 		m.infoMap[info.RaftId] = info
 	}
+	raft.SetLogger(logger.NewRaftLogger("MOON"))
 	return m
 }
 
@@ -270,7 +271,6 @@ func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	}
 
 	m.raft = raft.StartNode(m.cfg, peers)
-	raft.SetLogger(logger.Logger)
 }
 
 func (m *Moon) Run() {
