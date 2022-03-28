@@ -13,7 +13,6 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
-	"time"
 )
 
 func TestEcosWriterAndReader(t *testing.T) {
@@ -78,7 +77,6 @@ func TestEcosWriterAndReader(t *testing.T) {
 				t.Errorf("PutObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			time.Sleep(2 * time.Second)
 			readData := make([]byte, tt.args.objectSize)
 			readSize, err := reader.Read(readData)
 			common.InitAndClearPath("." + tt.args.key + "read")
