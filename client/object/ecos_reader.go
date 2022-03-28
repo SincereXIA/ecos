@@ -114,7 +114,6 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 
 		for {
 			remoteChunk, err := res.Recv()
-			//logger.Warningf("res.Recv err: %v", err)
 			if err == io.EOF {
 				logger.Infof("next block")
 				break

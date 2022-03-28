@@ -5,14 +5,14 @@ import (
 	"ecos/client/config"
 	edgeNodeTest "ecos/edge-node/test"
 	"ecos/utils/common"
-	"ecos/utils/logger"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"os"
 	"reflect"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestEcosWriterAndReader(t *testing.T) {
@@ -63,11 +63,6 @@ func TestEcosWriterAndReader(t *testing.T) {
 			writer := factory.GetEcosWriter(tt.args.key)
 			reader := factory.GetEcosReader(tt.args.key)
 			data := genTestData(tt.args.objectSize)
-			common.InitAndClearPath("." + tt.args.key)
-			err := ioutil.WriteFile("."+tt.args.key, data, 0666)
-			if err != nil {
-				logger.Errorf("Write file failed, err: %v", err)
-			}
 			writeSize, err := writer.Write(data)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.args.objectSize, writeSize)
@@ -79,15 +74,8 @@ func TestEcosWriterAndReader(t *testing.T) {
 			}
 			readData := make([]byte, tt.args.objectSize)
 			readSize, err := reader.Read(readData)
-			common.InitAndClearPath("." + tt.args.key + "read")
-			err = ioutil.WriteFile("."+tt.args.key+"read", readData, 0666)
-			if err != nil {
-				logger.Errorf("Write file failed, err: %v", err)
-			}
-			// assert.Equal(t, io.EOF, err)
+			assert.Equal(t, io.EOF, err)
 			assert.Equal(t, tt.args.objectSize, readSize)
-			logger.Infof("object size == %v", tt.args.objectSize)
-			logger.Infof("read size == %v", readSize)
 			assert.Equal(t, true, reflect.DeepEqual(readData, data))
 		})
 	}
