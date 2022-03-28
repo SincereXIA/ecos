@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	Time_Stamp_Format      = "2006-01-02 15:04:05"
+	Time_Stamp_Format      = "01-02 15:04:05"
 	maximumCallerDepth int = 25
 	minimumCallerDepth int = 4
 )

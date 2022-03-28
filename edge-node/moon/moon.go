@@ -270,6 +270,7 @@ func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	}
 
 	m.raft = raft.StartNode(m.cfg, peers)
+	raft.SetLogger(logger.Logger)
 }
 
 func (m *Moon) Run() {

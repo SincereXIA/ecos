@@ -6,7 +6,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
+	"strings"
 )
 
 var Logger *logrus.Logger
@@ -19,8 +21,38 @@ func init() {
 		levels: nil,
 	}
 	Logger.AddHook(&callerHook)
-	//logrus.SetReportCaller(true)
+	Logger.SetReportCaller(true)
 	//logrus.SetFormatter(&LogFormatter{})
+	Logger.SetFormatter(&logrus.TextFormatter{
+		ForceColors:            true,
+		FullTimestamp:          false,
+		TimestampFormat:        "",
+		DisableSorting:         false,
+		SortingFunc:            nil,
+		DisableLevelTruncation: false,
+		PadLevelText:           false,
+		QuoteEmptyFields:       true,
+		FieldMap:               nil,
+		CallerPrettyfier:       callerPrettyfier,
+	})
+}
+
+func callerPrettyfier(f *runtime.Frame) (string, string) {
+	fullFilename := filepath.Base(f.File)
+	fullFunction := f.Function
+	function := fullFunction[strings.LastIndex(fullFunction, ".")+1:]
+	if len(function) > 15 {
+		function = function[:12] + "..."
+	} else {
+		function = strings.Repeat(" ", 15-len(function)) + function
+	}
+	filename := fullFilename[strings.LastIndex(fullFilename, "/")+1:]
+	if len(filename) > 15 {
+		filename = filename[:12] + "..."
+	} else {
+		filename = strings.Repeat(" ", 15-len(filename)) + filename
+	}
+	return fmt.Sprintf("%s()", function), fmt.Sprintf("%s:%d", filename, f.Line)
 }
 
 func NewDefaultLogrus() *logrus.Logger {
