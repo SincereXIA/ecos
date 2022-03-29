@@ -40,3 +40,11 @@ func NewMetaClient(serverNode *infos.NodeInfo) (*MetaClient, error) {
 func (c *MetaClient) SubmitMeta(meta *object.ObjectMeta) (*common.Result, error) {
 	return c.client.RecordObjectMeta(c.context, meta)
 }
+
+// GetObjMeta provides a way to get ObjectMeta from AlayaServer
+func (c *MetaClient) GetObjMeta(objId string) (*object.ObjectMeta, error) {
+	metaReq := alaya.MetaRequest{
+		ObjId: objId,
+	}
+	return c.client.GetObjectMeta(c.context, &metaReq)
+}

@@ -3,6 +3,7 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/infos"
+	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
@@ -232,11 +233,15 @@ func (r *Raft) Stop() {
 }
 
 func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
-	info, err := r.watcher.GetInfo(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
+	req := &moon.GetInfoRequest{
+		InfoId:   strconv.FormatUint(nodeID, 10),
+		InfoType: infos.InfoType_NODE_INFO,
+	}
+	result, err := r.watcher.GetMoon().GetInfo(r.ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	return info.BaseInfo().GetNodeInfo(), nil
+	return result.BaseInfo.GetNodeInfo(), nil
 }
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {

@@ -8,6 +8,7 @@ option go_package = "ecos/edge-node/gaia";
 
 service Gaia {
   rpc UploadBlockData(stream UploadBlockRequest) returns (Result) {}
+  rpc GetBlockData(GetBlockRequest) returns (stream GetBlockResult) {}
 }
 
 message UploadBlockRequest {
@@ -16,6 +17,20 @@ message UploadBlockRequest {
     ControlMessage message = 2;
   }
 }
+
+message GetBlockRequest {
+  string blockId = 1;
+  uint64 curChunk = 2;
+  uint64 term = 3;
+}
+
+message GetBlockResult {
+  oneof payload {
+    Chunk chunk= 1;
+    ControlMessage message = 2;
+  }
+}
+
 
 message ControlMessage {
   enum Code {
@@ -30,5 +45,5 @@ message ControlMessage {
 
 message Chunk {
   bytes content = 1;
+  uint64 read_bytes = 2;
 }
-

@@ -57,7 +57,7 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	storageFactory := infos.NewMemoryInfoFactory()
 	storageRegisterBuilder := infos.NewStorageRegisterBuilder(storageFactory)
 	storageRegister := storageRegisterBuilder.GetStorageRegister()
-	m := moon.NewMoon(&conf.WatcherConfig.SelfNodeInfo, &conf.MoonConfig, rpc, storageRegister)
+	m := moon.NewMoon(ctx, &conf.WatcherConfig.SelfNodeInfo, &conf.MoonConfig, rpc, storageRegister)
 
 	// Gen Watcher
 	w := watcher.NewWatcher(ctx, &conf.WatcherConfig, rpc, m, storageRegister)

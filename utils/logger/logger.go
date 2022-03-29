@@ -25,7 +25,7 @@ func init() {
 
 func NewDefaultLogrus() *logrus.Logger {
 	logger := logrus.New()
-	logrus.SetLevel(logrus.DebugLevel)
+	logger.SetLevel(logrus.DebugLevel)
 	logger.SetOutput(os.Stdout)
 	//logger.SetOutput(os.Stderr)
 	//弃用官方的Caller,由于封装了logrus，打印的级别不是预期效果

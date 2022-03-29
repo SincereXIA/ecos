@@ -50,7 +50,7 @@ func GenGaiaCluster(ctx context.Context, basePath string, watchers []*watcher.Wa
 	nodeNum := len(watchers)
 	var gaias []*gaia.Gaia
 	for i := 0; i < nodeNum; i++ {
-		config := gaia.Config{BasePath: path.Join(basePath, "gaia", strconv.Itoa(i))}
+		config := gaia.Config{BasePath: path.Join(basePath, "gaia", strconv.Itoa(i)), ChunkSize: 1 << 20}
 		g := gaia.NewGaia(ctx, rpcServers[i], watchers[i], &config)
 		gaias = append(gaias, g)
 	}

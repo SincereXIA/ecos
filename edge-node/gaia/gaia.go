@@ -1,6 +1,7 @@
 package gaia
 
 import (
+	"bufio"
 	"context"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
@@ -8,6 +9,8 @@ import (
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"io"
+	"os"
+	"path"
 )
 
 // Gaia save object block data
@@ -64,6 +67,54 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 			return err
 		}
 	}
+}
+
+// GetBlockData return local block data to client
+func (g *Gaia) GetBlockData(req *GetBlockRequest, server Gaia_GetBlockDataServer) error {
+	// open block file
+	blockPath := path.Join(g.config.BasePath, req.BlockId)
+	block, err := os.Open(blockPath)
+	if err != nil {
+		logger.Errorf("open blockPath: %v failed, err: %v", blockPath, err)
+		return err
+	}
+	defer block.Close()
+
+	// send block data to client
+	r := bufio.NewReader(block)
+	startChunk := req.CurChunk
+	curChunk := 0
+	chunkSize := g.config.ChunkSize
+	chunk := make([]byte, chunkSize)
+	for {
+		readBytes, err := r.Read(chunk)
+		if err != nil && err != io.EOF {
+			logger.Errorf("read panic, err: $v", err)
+			return err
+		}
+		// read this block finished, return io.EOF
+		if err == io.EOF {
+			logger.Infof("gaia [%v] read this block finished", g.watcher.GetSelfInfo().RaftId)
+			break
+		}
+		if uint64(curChunk) < startChunk {
+			curChunk++
+			continue
+		}
+		err = server.Send(&GetBlockResult{
+			Payload: &GetBlockResult_Chunk{
+				Chunk: &Chunk{
+					Content:   chunk[:readBytes],
+					ReadBytes: uint64(readBytes),
+				},
+			},
+		})
+		if err != nil {
+			logger.Infof("send Block res err: %v", err)
+			return err
+		}
+	}
+	return nil
 }
 
 // processControlMessage will modify transporter when receive ControlMessage_BEGIN

@@ -1,22 +1,17 @@
 package object
 
 import (
-	"context"
-	"crypto/sha256"
 	"ecos/client/config"
 	clientNode "ecos/client/node"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
-	"ecos/edge-node/watcher"
-	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"encoding/hex"
 	"hash"
-	"io"
 )
 
 type localChunk struct {
@@ -176,7 +171,9 @@ func (w *EcosWriter) commitMeta() error {
 	}
 	w.meta.PgId = GenObjectPG(w.key)
 	// w.meta.Blocks is set here. The map and Block.Close ensures the Block Status
-	for _, block := range w.blocks {
+	logger.Debugf("commit blocks num: %v", len(w.blocks))
+	for i := 1; i <= len(w.blocks); i++ {
+		block := w.blocks[i]
 		w.meta.Blocks = append(w.meta.Blocks, &block.BlockInfo)
 	}
 	metaServerNode := w.checkObjNodeByPg()
@@ -222,71 +219,4 @@ func (w *EcosWriter) Close() error {
 func (w *EcosWriter) checkObjNodeByPg() *infos.NodeInfo {
 	logger.Infof("META PG: %v, NODE: %v", w.meta.PgId, w.objPipes[w.meta.PgId-1].RaftId)
 	return clientNode.InfoStorage.GetNodeInfo(0, w.objPipes[w.meta.PgId-1].RaftId[0])
-}
-
-// EcosWriterFactory Generates EcosWriter with ClientConfig
-type EcosWriterFactory struct {
-	config      *config.ClientConfig
-	clusterInfo *infos.ClusterInfo
-	objPipes    []*pipeline.Pipeline
-	blockPipes  []*pipeline.Pipeline
-}
-
-// NewEcosWriterFactory Constructor for EcosWriterFactory
-//
-// nodeAddr shall provide the address to get ClusterInfo from
-func NewEcosWriterFactory(config *config.ClientConfig) *EcosWriterFactory {
-	conn, err := messenger.GetRpcConn(config.NodeAddr, config.NodePort)
-	if err != nil {
-		return nil
-	}
-	watcherClient := watcher.NewWatcherClient(conn)
-	reply, err := watcherClient.GetClusterInfo(context.Background(),
-		&watcher.GetClusterInfoRequest{Term: 0})
-	clusterInfo := reply.GetClusterInfo()
-	if err != nil {
-		logger.Errorf("get group info fail: %v", err)
-		return nil
-	}
-	// TODO: Retry?
-	clientNode.InfoStorage.SaveClusterInfoWithTerm(0, clusterInfo)
-	const groupNum = 3
-	// TODO: Get pgNum, groupNum from moon
-	ret := &EcosWriterFactory{
-		clusterInfo: clusterInfo,
-		config:      config,
-		objPipes:    pipeline.GenPipelines(*clusterInfo, objPgNum, groupNum),
-		blockPipes:  pipeline.GenPipelines(*clusterInfo, blockPgNum, groupNum),
-	}
-	return ret
-}
-
-func (f *EcosWriterFactory) newLocalChunk() (io.Closer, error) {
-	return &localChunk{freeSize: f.config.Object.ChunkSize}, nil
-}
-
-// GetEcosWriter provide a EcosWriter for object associated with key
-func (f *EcosWriterFactory) GetEcosWriter(key string) EcosWriter {
-	maxChunk := uint(f.config.UploadBuffer / f.config.Object.ChunkSize)
-	chunkPool, _ := common.NewPool(f.newLocalChunk, maxChunk, int(maxChunk))
-	return EcosWriter{
-		clusterInfo: f.clusterInfo,
-		key:         key,
-		config:      f.config,
-		Status:      READING,
-		chunks:      chunkPool,
-		blocks:      map[int]*Block{},
-		blockPipes:  f.blockPipes,
-		meta: &object.ObjectMeta{
-			ObjId:      "",
-			ObjSize:    0,
-			UpdateTime: nil,
-			ObjHash:    "",
-			PgId:       0,
-			Blocks:     []*object.BlockInfo{},
-		},
-		objHash:        sha256.New(),
-		objPipes:       f.objPipes,
-		finishedBlocks: make(chan *Block),
-	}
 }

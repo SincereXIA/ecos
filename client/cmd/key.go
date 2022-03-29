@@ -39,7 +39,7 @@ func init() {
 }
 
 func KeyPut(key string, path string) {
-	factory := object.NewEcosWriterFactory(config.DefaultConfig)
+	factory := object.NewEcosIOFactory(config.DefaultConfig)
 	writer := factory.GetEcosWriter(key)
 	fi, err := os.Open(path)
 	if err != nil {
