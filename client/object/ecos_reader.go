@@ -110,16 +110,13 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 	}
 	waitGroup := sync.WaitGroup{}
 
-	isEOF := true // 是否每一个 block 都已经读取完毕
+	isEOF := true              // 是否每一个 block 都已经读取完毕
+	offset := r.curBlockOffset // 第一个 block 需要加入上次读的偏移
 	for i := 0; i < blockNum && r.curBlockIndex < len(r.meta.Blocks); i++ {
 		start := i * int(r.config.Object.BlockSize)
 		end := start + int(r.config.Object.BlockSize)
 		if end > len(p) {
 			end = len(p)
-		}
-		offset := 0
-		if i == 0 {
-			offset = r.curBlockOffset
 		}
 		blockInfo := r.meta.Blocks[r.curBlockIndex+i]
 		waitGroup.Add(1)
@@ -143,6 +140,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 			}
 			waitGroup.Done()
 		}(blockInfo, start, end, offset)
+		offset = 0 // 后续 block 都是从头开始读
 	}
 	waitGroup.Wait()
 	logger.Debugf("read %d bytes done", count)
