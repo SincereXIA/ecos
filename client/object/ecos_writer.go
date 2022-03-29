@@ -171,6 +171,7 @@ func (w *EcosWriter) commitMeta() error {
 	}
 	w.meta.PgId = GenObjectPG(w.key)
 	// w.meta.Blocks is set here. The map and Block.Close ensures the Block Status
+	logger.Debugf("commit blocks num: %v", len(w.blocks))
 	for i := 1; i <= len(w.blocks); i++ {
 		block := w.blocks[i]
 		w.meta.Blocks = append(w.meta.Blocks, &block.BlockInfo)
