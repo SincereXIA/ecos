@@ -29,9 +29,6 @@ type EcosReader struct {
 	objPipes     []*pipeline.Pipeline
 	config       *config.ClientConfig
 	cachedBlocks sync.Map
-
-	totalChunk  uint64
-	sizeOfChunk uint64
 }
 
 func (r *EcosReader) genPipelines() error {
@@ -178,8 +175,6 @@ func (r *EcosReader) getObjMeta() error {
 		return err
 	}
 	logger.Infof("get objMeta from raft [%v], succees, meta: %v", metaServerId, r.meta)
-	// update information of EcosReader after get newer Meta
-	r.updateEcosReader()
 	return nil
 }
 
@@ -191,11 +186,4 @@ func (r *EcosReader) getHistoryClusterInfo() error {
 	}
 	r.clusterInfo = info.BaseInfo().GetClusterInfo()
 	return nil
-}
-
-func (r *EcosReader) updateEcosReader() {
-	r.totalChunk = r.meta.ObjSize / r.sizeOfChunk
-	if r.meta.ObjSize > r.totalChunk*r.sizeOfChunk {
-		r.totalChunk++
-	}
 }

@@ -95,7 +95,6 @@ func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 		curBlockIndex: 0,
 		meta:          nil,
 		objPipes:      f.objPipes,
-		sizeOfChunk:   f.config.Object.ChunkSize,
 		config:        f.config,
 	}
 }
