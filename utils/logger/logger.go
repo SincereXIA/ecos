@@ -6,41 +6,92 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
+	"strings"
 )
 
 var Logger *logrus.Logger
 
 func init() {
 	Logger = NewDefaultLogrus()
-	//打印文件和行号
-	callerHook := GetCallerHook{
-		Field:  "caller",
-		levels: nil,
+}
+
+func NewRaftLogger() *logrus.Logger {
+	logger := NewDefaultLogrus()
+	logger.SetFormatter(&logrus.TextFormatter{
+		ForceColors:            true,
+		FullTimestamp:          false,
+		TimestampFormat:        "",
+		DisableSorting:         false,
+		SortingFunc:            nil,
+		DisableLevelTruncation: false,
+		PadLevelText:           false,
+
+		QuoteEmptyFields: true,
+		CallerPrettyfier: raftCallerPrettyfier,
+	})
+	return logger
+}
+
+func callerPrettyfier(_ *runtime.Frame) (string, string) {
+	f := getCaller()
+	fullFilename := filepath.Base(f.File)
+	fullFunction := f.Function
+	function := fullFunction[strings.LastIndex(fullFunction, ".")+1:]
+	filename := fullFilename[strings.LastIndex(fullFilename, "/")+1:]
+	return fmt.Sprintf("%10.10s │", function), fmt.Sprintf("%15.15s:%.3d", filename, f.Line)
+}
+
+func raftCallerPrettyfier(_ *runtime.Frame) (string, string) {
+	f := getCaller()
+	var function string
+	if f != nil {
+		fullFilename := filepath.Base(f.File)
+		filename := fullFilename[strings.LastIndex(fullFilename, "/")+1:]
+		function = fmt.Sprintf("%10.10s │", filename)
+	} else {
+		function = fmt.Sprintf("%10.10s │", "")
 	}
-	Logger.AddHook(&callerHook)
-	//logrus.SetReportCaller(true)
-	//logrus.SetFormatter(&LogFormatter{})
+	file := fmt.Sprintf("%15.15s:---", "RAFT")
+	return function, file
+}
+
+func newLoggerWithPG(pgID uint64) *logrus.Logger {
+	logger := NewDefaultLogrus()
+	logger.SetFormatter(&logrus.TextFormatter{
+		ForceColors:            true,
+		FullTimestamp:          false,
+		TimestampFormat:        "",
+		DisableSorting:         false,
+		SortingFunc:            nil,
+		DisableLevelTruncation: false,
+		PadLevelText:           false,
+
+		QuoteEmptyFields: true,
+		CallerPrettyfier: callerPrettyfier,
+	})
+	logger.WithField("pgID", pgID)
+	return logger
 }
 
 func NewDefaultLogrus() *logrus.Logger {
 	logger := logrus.New()
 	logger.SetLevel(logrus.DebugLevel)
 	logger.SetOutput(os.Stdout)
-	//logger.SetOutput(os.Stderr)
-	//弃用官方的Caller,由于封装了logrus，打印的级别不是预期效果
-	//logger.SetReportCaller(true)
+	logger.SetReportCaller(true)
 	// (3) 日志格式
 	logger.SetFormatter(&logrus.TextFormatter{
-		//// CallerPrettyfier can be set by the user to modify the content
-		//// of the function and file keys in the data when ReportCaller is
-		//// activated. If any of the returned value is the empty string the
-		//// corresponding key will be removed from fields.
-		//CallerPrettyfier func(*runtime.Frame) (function string, file string)
-		//
-		//ForceColors: true, //show colors
-		//DisableColors:true,//remove colors
-		TimestampFormat: "2006-01-02 15:04:05",
+		ForceColors:            true,
+		FullTimestamp:          false,
+		TimestampFormat:        "",
+		DisableSorting:         false,
+		SortingFunc:            nil,
+		DisableLevelTruncation: false,
+		PadLevelText:           false,
+
+		QuoteEmptyFields: true,
+		CallerPrettyfier: callerPrettyfier,
 	})
 	return logger
 }
@@ -69,25 +120,6 @@ func (m *LogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	b.WriteString(newLog)
 	return b.Bytes(), nil
-}
-
-type LogLevel int
-
-const (
-	TraceLevel LogLevel = iota
-	DebugLevel
-	InfoLevel
-)
-
-func SetLogLevel(level LogLevel) {
-	switch level {
-	case TraceLevel:
-		logrus.SetLevel(logrus.TraceLevel)
-	case DebugLevel:
-		logrus.SetLevel(logrus.DebugLevel)
-	case InfoLevel:
-		logrus.SetLevel(logrus.InfoLevel)
-	}
 }
 
 func Tracef(format string, args ...interface{}) {

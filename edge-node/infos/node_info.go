@@ -3,7 +3,20 @@ package infos
 import (
 	"github.com/google/uuid"
 	"github.com/sincerexia/gocrush"
+	"strconv"
 )
+
+func (m *NodeInfo) GetInfoType() InfoType {
+	return InfoType_NODE_INFO
+}
+
+func (m *NodeInfo) BaseInfo() *BaseInfo {
+	return &BaseInfo{Info: &BaseInfo_NodeInfo{NodeInfo: m}}
+}
+
+func (m *NodeInfo) GetID() string {
+	return strconv.FormatUint(m.RaftId, 10)
+}
 
 // NewSelfInfo Generate new nodeInfo
 // ** just for test **

@@ -19,8 +19,8 @@ func (s *MemoryInfoStorage) GetAll() ([]Information, error) {
 	return result, nil
 }
 
-func (s *MemoryInfoStorage) Update(id string, info Information) error {
-	s.kvStorage.Store(id, info)
+func (s *MemoryInfoStorage) Update(info Information) error {
+	s.kvStorage.Store(info.GetID(), info)
 
 	s.onUpdateMap.Range(func(key, value interface{}) bool {
 		f := value.(StorageUpdateFunc)
@@ -39,7 +39,7 @@ func (s *MemoryInfoStorage) Delete(id string) error {
 func (s *MemoryInfoStorage) Get(id string) (Information, error) {
 	v, ok := s.kvStorage.Load(id)
 	if !ok {
-		return Information{}, errno.InfoNotFound
+		return InvalidInfo{}, errno.InfoNotFound
 	}
 	return v.(Information), nil
 }

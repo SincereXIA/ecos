@@ -166,6 +166,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 	for _, info := range config.ClusterInfo.NodesInfo {
 		m.infoMap[info.RaftId] = info
 	}
+	raft.SetLogger(logger.NewRaftLogger())
 	return m
 }
 
@@ -215,12 +216,12 @@ func (m *Moon) process(entry raftpb.Entry) {
 		if err != nil {
 			logger.Errorf("unmarshal entry data fail: %v", err)
 		}
-		info, err := infos.BaseInfoToInformation(*msg.BaseInfo)
+		info := msg.BaseInfo
 		switch msg.Operate {
 		case ProposeInfoRequest_ADD:
-			err = m.infoStorageRegister.Update(msg.Id, info)
+			err = m.infoStorageRegister.Update(info)
 		case ProposeInfoRequest_UPDATE:
-			err = m.infoStorageRegister.Update(msg.Id, info)
+			err = m.infoStorageRegister.Update(info)
 		case ProposeInfoRequest_DELETE:
 			err = m.infoStorageRegister.Delete(info.GetInfoType(), msg.Id)
 		}

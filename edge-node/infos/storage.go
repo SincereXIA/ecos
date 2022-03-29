@@ -7,7 +7,7 @@ import (
 type StorageUpdateFunc func(info Information)
 
 type Storage interface {
-	Update(id string, info Information) error
+	Update(info Information) error
 	Delete(id string) error
 	Get(id string) (Information, error)
 	GetAll() ([]Information, error)
@@ -40,9 +40,9 @@ func (register *StorageRegister) GetStorage(infoType InfoType) Storage {
 
 // Update will store the Information into corresponding Storage,
 // the Storage must Register before.
-func (register *StorageRegister) Update(id string, info Information) error {
-	if storage, ok := register.storageMap[info.infoType]; ok {
-		return storage.Update(id, info)
+func (register *StorageRegister) Update(info Information) error {
+	if storage, ok := register.storageMap[info.GetInfoType()]; ok {
+		return storage.Update(info)
 	}
 	return errno.InfoTypeNotSupport
 }
@@ -62,7 +62,7 @@ func (register *StorageRegister) Get(infoType InfoType, id string) (Information,
 	if storage, ok := register.storageMap[infoType]; ok {
 		return storage.Get(id)
 	}
-	return Information{}, errno.InfoTypeNotSupport
+	return InvalidInfo{}, errno.InfoTypeNotSupport
 }
 
 // StorageRegisterBuilder is used to build StorageRegister.

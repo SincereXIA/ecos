@@ -21,8 +21,8 @@ func (agent *InfoAgent) GetStorage(infoType infos.InfoType) infos.Storage {
 
 // Update will store the Information into corresponding Storage,
 // the Storage must Register before.
-func (agent *InfoAgent) Update(id string, info infos.Information) error {
-	return agent.StorageRegister.Update(id, info)
+func (agent *InfoAgent) Update(info infos.Information) error {
+	return agent.StorageRegister.Update(info)
 }
 
 // Delete will delete the Information from corresponding Storage
@@ -42,7 +42,7 @@ func (agent *InfoAgent) Get(infoType infos.InfoType, id string) (infos.Informati
 	nodeInfo := agent.currentClusterInfo.NodesInfo[0]
 	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 	if err != nil {
-		return infos.Information{}, err
+		return infos.InvalidInfo{}, err
 	}
 	m := moon.NewMoonClient(conn)
 	req := &moon.GetInfoRequest{
@@ -51,11 +51,10 @@ func (agent *InfoAgent) Get(infoType infos.InfoType, id string) (infos.Informati
 	}
 	result, err := m.GetInfo(agent.ctx, req)
 	if err != nil {
-		return infos.Information{}, err
+		return infos.InvalidInfo{}, err
 	}
-	info, _ = infos.BaseInfoToInformation(*result.BaseInfo)
-	_ = agent.Update(id, info)
-	return info, err
+	_ = agent.Update(result.GetBaseInfo())
+	return result.GetBaseInfo(), err
 }
 
 func NewInfoAgent(ctx context.Context, currentClusterInfo *infos.ClusterInfo) *InfoAgent {

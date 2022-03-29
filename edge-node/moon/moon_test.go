@@ -38,8 +38,8 @@ func TestRaft(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for i := 0; i < nodeNum; i++ {
-			rpcServers[i].Stop()
 			moons[i].Stop()
+			rpcServers[i].Stop()
 		}
 		_ = os.RemoveAll(basePath)
 	})
@@ -83,7 +83,6 @@ func TestRaft(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, request.BaseInfo.GetClusterInfo().LeaderInfo.RaftId,
 			info.BaseInfo().GetClusterInfo().LeaderInfo.RaftId)
-
 	})
 }
 

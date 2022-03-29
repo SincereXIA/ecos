@@ -5,9 +5,10 @@ option go_package = "ecos/edge-node/infos";
 
 
 enum InfoType {
-  NODE_INFO = 0;
-  BUCKET_INFO = 1;
-  CLUSTER_INFO = 2;
+  INVALID = 0;
+  NODE_INFO = 1;
+  BUCKET_INFO = 2;
+  CLUSTER_INFO = 3;
 }
 
 message BaseInfo {
