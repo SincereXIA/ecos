@@ -194,7 +194,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		c := NewMoonClient(conn)
 		_, err = c.SendRaftMessage(m.ctx, &message)
 		if err != nil {
-			logger.Errorf("could not send raft message: %v", err)
+			logger.Warningf("could not send raft message: %v", err)
 		}
 
 		err = conn.Close()

@@ -51,10 +51,10 @@ func TestEcosWriterAndReader(t *testing.T) {
 			},
 			false,
 		},
-		{"writer 64M object",
+		{"writer 32M object",
 			args{
-				1024 * 1024 * 64, // 64M
-				"/path/64M_obj",
+				1024 * 1024 * 32, // 32M
+				"/path/32M_obj",
 			},
 			false,
 		},
