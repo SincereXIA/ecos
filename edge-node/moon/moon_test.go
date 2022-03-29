@@ -19,7 +19,8 @@ import (
 func TestRaft(t *testing.T) {
 	basePath := "./ecos-data/db/moon"
 	nodeNum := 9
-	moons, rpcServers, err := createMoons(nodeNum, basePath)
+	ctx := context.Background()
+	moons, rpcServers, err := createMoons(ctx, nodeNum, basePath)
 	assert.NoError(t, err)
 
 	// 启动所有 moon 节点
@@ -107,7 +108,7 @@ func waitMoonsOK(moons []*Moon) int {
 	return leader
 }
 
-func createMoons(num int, basePath string) ([]*Moon, []*messenger.RpcServer, error) {
+func createMoons(ctx context.Context, num int, basePath string) ([]*Moon, []*messenger.RpcServer, error) {
 	err := common.InitAndClearPath(basePath)
 	if err != nil {
 		return nil, nil, err
@@ -136,7 +137,7 @@ func createMoons(num int, basePath string) ([]*Moon, []*messenger.RpcServer, err
 		moonConfigs[i].ClusterInfo.NodesInfo = nodeInfos
 		builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
 		register := builder.GetStorageRegister()
-		moons = append(moons, NewMoon(nodeInfos[i], moonConfigs[i], rpcServers[i],
+		moons = append(moons, NewMoon(ctx, nodeInfos[i], moonConfigs[i], rpcServers[i],
 			register))
 	}
 	return moons, rpcServers, nil

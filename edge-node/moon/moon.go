@@ -131,9 +131,9 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 	return &raftpb.Message{}, nil
 }
 
-func NewMoon(selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
+func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
 	register *infos.StorageRegister) *Moon {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	storage := raft.NewMemoryStorage()
 	m := &Moon{
 		id:                    0, // set raft id after register
@@ -281,6 +281,7 @@ func (m *Moon) Run() {
 	for {
 		select {
 		case <-m.ctx.Done():
+			m.cleanup()
 			return
 		case <-m.ticker:
 			m.raft.Tick()
@@ -324,6 +325,11 @@ func (m *Moon) Run() {
 
 func (m *Moon) Stop() {
 	m.cancel()
+}
+
+func (m *Moon) cleanup() {
+	logger.Warningf("moon %d stopped, start clean up", m.SelfInfo.RaftId)
+	m.raft.Stop()
 	m.stableStorage.Close()
 }
 

@@ -19,7 +19,7 @@ func GenTestWatcher(ctx context.Context, basePath string, sunAddr string) (*Watc
 	nodeInfo := infos.NewSelfInfo(0, "127.0.0.1", port)
 	builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
 	register := builder.GetStorageRegister()
-	m := moon.NewMoon(nodeInfo, &moonConfig, nodeRpc, builder.GetStorageRegister())
+	m := moon.NewMoon(ctx, nodeInfo, &moonConfig, nodeRpc, builder.GetStorageRegister())
 
 	watcherConfig := DefaultConfig
 	watcherConfig.SunAddr = sunAddr
