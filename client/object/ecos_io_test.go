@@ -1,6 +1,7 @@
 package object
 
 import (
+	"bytes"
 	"context"
 	"ecos/client/config"
 	edgeNodeTest "ecos/edge-node/test"
@@ -9,7 +10,6 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"reflect"
 	"runtime"
 	"testing"
 	"time"
@@ -29,6 +29,14 @@ func TestEcosWriterAndReader(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
+		{
+			"write 0.1M object",
+			args{
+				objectSize: 1024 * 102, // 0.1M
+				key:        "test-object-0.1M",
+			},
+			false,
+		},
 		{"writer 8M object",
 			args{
 				1024 * 1024 * 8, // 8M
@@ -60,23 +68,9 @@ func TestEcosWriterAndReader(t *testing.T) {
 			conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
 			conf.NodePort = watchers[0].GetSelfInfo().RpcPort
 			factory := NewEcosIOFactory(conf)
-			writer := factory.GetEcosWriter(tt.args.key)
-			reader := factory.GetEcosReader(tt.args.key)
 			data := genTestData(tt.args.objectSize)
-			writeSize, err := writer.Write(data)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.args.objectSize, writeSize)
-			assert.NoError(t, writer.Close())
-			t.Logf("Upload Finish!")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("PutObject() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			readData := make([]byte, tt.args.objectSize)
-			readSize, err := reader.Read(readData)
-			assert.Equal(t, io.EOF, err)
-			assert.Equal(t, tt.args.objectSize, readSize)
-			assert.Equal(t, true, reflect.DeepEqual(readData, data))
+			testBigBufferWriteRead(t, tt.args.key+"big", data, factory)
+			testSmallBufferWriteRead(t, tt.args.key+"small", data, factory, 1024*1024)
 		})
 	}
 
@@ -86,27 +80,81 @@ func TestEcosWriterAndReader(t *testing.T) {
 	})
 }
 
+func testBigBufferWriteRead(t *testing.T, key string, data []byte, factory *EcosIOFactory) {
+	writer := factory.GetEcosWriter(key)
+	writeSize, err := writer.Write(data)
+	assert.NoError(t, err)
+	assert.Equal(t, len(data), writeSize)
+	assert.NoError(t, writer.Close())
+	t.Logf("Upload key: %v Finish", key)
+	if err != nil {
+		t.Errorf("PutObject() error = %v", err)
+		return
+	}
+
+	reader := factory.GetEcosReader(key)
+	readData := make([]byte, len(data))
+	readSize, err := reader.Read(readData)
+	t.Logf("get key: %v Finish", key)
+	assert.Equal(t, io.EOF, err)
+	assert.Equal(t, len(data), readSize)
+	assert.True(t, bytes.Equal(data, readData))
+}
+
+func testSmallBufferWriteRead(t *testing.T, key string, data []byte, factory *EcosIOFactory, bufferSize int) {
+	writer := factory.GetEcosWriter(key)
+	writeBuffer := make([]byte, bufferSize)
+	pending := len(data)
+	for pending > 0 {
+		wantSize := copy(writeBuffer, data[len(data)-pending:])
+		writeSize, err := writer.Write(writeBuffer[:wantSize])
+		assert.NoError(t, err)
+		assert.Equal(t, wantSize, writeSize)
+		t.Logf("upload size: %v", writeSize)
+		pending -= writeSize
+	}
+	assert.NoError(t, writer.Close())
+	t.Logf("Upload key: %v Finish", key)
+
+	reader := factory.GetEcosReader(key)
+	readBuffer := make([]byte, bufferSize)
+	result := make([]byte, 0, len(data))
+	for {
+		readSize, err := reader.Read(readBuffer)
+		result = append(result, readBuffer[:readSize]...)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			t.Errorf("Read() error = %v", err)
+		}
+	}
+	t.Logf("get key: %v Finish", key)
+	assert.Equal(t, len(result), len(data), "result size not equal to data size")
+	assert.True(t, bytes.Equal(data, result))
+}
+
 func genTestData(size int) []byte {
 	rand.Seed(time.Now().Unix())
 	directSize := 1024 * 1024 * 10
 	if size < directSize {
 		data := make([]byte, size)
-		for idx, _ := range data {
-			num := random(65, 90)
-			data[idx] = byte(num)
+		for idx := range data {
+			if idx%100 == 0 {
+				data[idx] = '\n'
+			} else {
+				data[idx] = byte(rand.Intn(26) + 97)
+			}
 		}
 		return data
 	}
 	d := make([]byte, directSize)
 	data := make([]byte, 0, size)
+	rand.Read(d)
 	for size-directSize > 0 {
 		data = append(data, d...)
 		size = size - directSize
 	}
 	data = append(data, d[0:size]...)
 	return data
-}
-
-func random(min, max int) int {
-	return rand.Intn(max-min) + min
 }
