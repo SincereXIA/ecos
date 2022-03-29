@@ -9,14 +9,59 @@ enum InfoType {
   NODE_INFO = 1;
   BUCKET_INFO = 2;
   CLUSTER_INFO = 3;
+  USER_INFO = 4;
+  GROUP_INFO = 5;
+  VOLUME_INFO = 6;
+  ACCESS_INFO = 7;
 }
 
+// BaseInfo collect all type of info
 message BaseInfo {
   oneof info{
     NodeInfo node_info = 1;
     ClusterInfo cluster_info = 2;
     BucketInfo bucket_info = 3;
+    UserInfo user_info = 4;
+    GroupInfo group_info = 5;
+    VolumeInfo volume_info = 6;
+    AccessInfo access_info = 7;
   }
+}
+
+// UserInfo is the info of ECOS user
+message UserInfo {
+  string user_id = 1;
+  string user_name = 2;
+  string user_group = 3;
+  string user_email = 4;
+  string user_password = 5;
+  string user_status = 6;
+  Timestamp user_created_at = 7;
+  Timestamp user_updated_at = 8;
+}
+
+message GroupInfo {
+  string group_id = 1;
+  string group_name = 2;
+  string group_description = 3;
+  Timestamp group_created_at = 4;
+  Timestamp group_updated_at = 5;
+}
+
+message AccessInfo {
+  string access_key = 1;
+  string access_secret = 2;
+  string user_id = 3;
+  string bucket_id = 4;
+}
+
+// VolumeInfo is the info of ECOS volume.
+// It contains the volume owner, quota, and used size.
+message VolumeInfo {
+  string volume_id = 1;
+  string user_id = 2;
+  uint64 quota_size = 3;
+  uint64 used_size = 4;
 }
 
 // Bucket 标识和权限
