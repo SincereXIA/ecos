@@ -1,6 +1,7 @@
 package object
 
 import (
+	"bytes"
 	"context"
 	"ecos/client/config"
 	edgeNodeTest "ecos/edge-node/test"
@@ -9,7 +10,6 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"reflect"
 	"runtime"
 	"testing"
 	"time"
@@ -76,7 +76,23 @@ func TestEcosWriterAndReader(t *testing.T) {
 			readSize, err := reader.Read(readData)
 			assert.Equal(t, io.EOF, err)
 			assert.Equal(t, tt.args.objectSize, readSize)
-			assert.Equal(t, true, reflect.DeepEqual(readData, data))
+			assert.True(t, bytes.Equal(data, readData))
+
+			// read again by small read buffer
+			reader = factory.GetEcosReader(tt.args.key)
+			readData = make([]byte, 1024*1024)
+			result := make([]byte, 0, tt.args.objectSize)
+			for {
+				readSize, err = reader.Read(readData)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					t.Errorf("Read() error = %v", err)
+				}
+				result = append(result, readData[:readSize]...)
+			}
+			assert.True(t, bytes.Equal(data, result))
 		})
 	}
 
@@ -99,6 +115,7 @@ func genTestData(size int) []byte {
 	}
 	d := make([]byte, directSize)
 	data := make([]byte, 0, size)
+	rand.Read(d)
 	for size-directSize > 0 {
 		data = append(data, d...)
 		size = size - directSize
