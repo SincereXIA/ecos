@@ -17,7 +17,7 @@ func init() {
 	Logger = NewDefaultLogrus()
 }
 
-func NewRaftLogger(module string) *logrus.Logger {
+func NewRaftLogger() *logrus.Logger {
 	logger := NewDefaultLogrus()
 	logger.SetFormatter(&logrus.TextFormatter{
 		ForceColors:            true,
@@ -34,8 +34,8 @@ func NewRaftLogger(module string) *logrus.Logger {
 	return logger
 }
 
-func callerPrettyfier(f *runtime.Frame) (string, string) {
-	f = getCaller()
+func callerPrettyfier(_ *runtime.Frame) (string, string) {
+	f := getCaller()
 	fullFilename := filepath.Base(f.File)
 	fullFunction := f.Function
 	function := fullFunction[strings.LastIndex(fullFunction, ".")+1:]
@@ -43,8 +43,8 @@ func callerPrettyfier(f *runtime.Frame) (string, string) {
 	return fmt.Sprintf("%10.10s │", function), fmt.Sprintf("%15.15s:%.3d", filename, f.Line)
 }
 
-func raftCallerPrettyfier(f *runtime.Frame) (string, string) {
-	f = getCaller()
+func raftCallerPrettyfier(_ *runtime.Frame) (string, string) {
+	f := getCaller()
 	var function string
 	if f != nil {
 		fullFilename := filepath.Base(f.File)
@@ -120,25 +120,6 @@ func (m *LogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	b.WriteString(newLog)
 	return b.Bytes(), nil
-}
-
-type LogLevel int
-
-const (
-	TraceLevel LogLevel = iota
-	DebugLevel
-	InfoLevel
-)
-
-func SetLogLevel(level LogLevel) {
-	switch level {
-	case TraceLevel:
-		logrus.SetLevel(logrus.TraceLevel)
-	case DebugLevel:
-		logrus.SetLevel(logrus.DebugLevel)
-	case InfoLevel:
-		logrus.SetLevel(logrus.InfoLevel)
-	}
 }
 
 func Tracef(format string, args ...interface{}) {
