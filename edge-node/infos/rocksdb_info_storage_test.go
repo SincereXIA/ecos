@@ -16,10 +16,8 @@ func TestRocksDBInfoStorage(t *testing.T) {
 	nodeInfoStorage := storageFactory.GetStorage(InfoType_NODE_INFO)
 	testStorage(nodeInfoStorage, t)
 	testStorageAndGet(nodeInfoStorage, t)
-	nodeInfoStorage.Close()
 	clusterIndoStorege := storageFactory.GetStorage(InfoType_CLUSTER_INFO)
 	testStorage(clusterIndoStorege, t)
-	clusterIndoStorege.Close()
 	_ = os.RemoveAll(testDataBaseDir)
 }
 

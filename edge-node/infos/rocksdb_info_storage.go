@@ -5,19 +5,13 @@ import (
 	"ecos/utils/database"
 	"ecos/utils/logger"
 	gorocksdb "github.com/SUMStudio/grocksdb"
-	"strconv"
 	"sync"
 )
 
 type RocksDBInfoStorage struct {
-	infoType string
-
-	db           *gorocksdb.DB
-	cfHandlers   []*gorocksdb.ColumnFamilyHandle
-	myHandler    *gorocksdb.ColumnFamilyHandle
-	opts         *gorocksdb.Options
-	readOptions  *gorocksdb.ReadOptions
-	writeOptions *gorocksdb.WriteOptions
+	db        *gorocksdb.DB
+	myCfName  string
+	myHandler *gorocksdb.ColumnFamilyHandle
 
 	onUpdateMap sync.Map
 }
@@ -28,7 +22,7 @@ func (s *RocksDBInfoStorage) Update(info Information) error {
 		logger.Errorf("Base info marshal failed, err: %v", err)
 		return err
 	}
-	err = s.db.PutCF(s.writeOptions, s.myHandler, []byte(info.GetID()), infoData)
+	err = s.db.PutCF(database.WriteOpts, s.myHandler, []byte(info.GetID()), infoData)
 	if err != nil {
 		logger.Errorf("Put info into rocksdb failed, err: %v", err)
 		return err
@@ -44,7 +38,7 @@ func (s *RocksDBInfoStorage) Update(info Information) error {
 }
 
 func (s *RocksDBInfoStorage) Delete(id string) error {
-	err := s.db.DeleteCF(s.writeOptions, s.myHandler, []byte(id))
+	err := s.db.DeleteCF(database.WriteOpts, s.myHandler, []byte(id))
 	if err != nil {
 		logger.Errorf("Delete id: %v failed, err: %v", id, err)
 		return err
@@ -53,7 +47,7 @@ func (s *RocksDBInfoStorage) Delete(id string) error {
 }
 
 func (s *RocksDBInfoStorage) Get(id string) (Information, error) {
-	infoData, err := s.db.GetCF(s.readOptions, s.myHandler, []byte(id))
+	infoData, err := s.db.GetCF(database.ReadOpts, s.myHandler, []byte(id))
 	defer infoData.Free()
 	if err != nil {
 		logger.Errorf("Get id: %v from rocksdb failed, err: %v", err)
@@ -69,7 +63,7 @@ func (s *RocksDBInfoStorage) Get(id string) (Information, error) {
 
 func (s *RocksDBInfoStorage) GetAll() ([]Information, error) {
 	result := make([]Information, 0)
-	it := s.db.NewIteratorCF(s.readOptions, s.myHandler)
+	it := s.db.NewIteratorCF(database.ReadOpts, s.myHandler)
 	defer it.Close()
 	it.SeekToFirst()
 
@@ -96,73 +90,76 @@ func (s *RocksDBInfoStorage) CancelOnUpdate(name string) {
 	s.onUpdateMap.Delete(name)
 }
 
-func (s *RocksDBInfoStorage) Close() {
-	s.opts.Destroy()
-	s.readOptions.Destroy()
-	s.writeOptions.Destroy()
-	for _, handler := range s.cfHandlers {
-		handler.Destroy()
-	}
-	s.db.Close()
-}
+func (factory *RocksDBInfoStorageFactory) NewRocksDBInfoStorage(cfName string) *RocksDBInfoStorage {
 
-func NewRocksDBInfoStorage(basePath string, infoType InfoType) *RocksDBInfoStorage {
-	opts, readOptions, writeOptions := database.InitRocksdb()
-	infoTypeString := strconv.Itoa(int(infoType))
-	cfNames := make([]string, 0)
-	if !common.PathExists(basePath) {
-		cfNames = []string{"default"}
-	} else {
-		var err error
-		cfNames, err = gorocksdb.ListColumnFamilies(opts, basePath)
-		if err != nil {
-			logger.Errorf("Get all column family names failed, err: %v", err)
-		}
-	}
-	cfNames = append(cfNames, infoTypeString)
-	cfOpts := make([]*gorocksdb.Options, 0)
-	for range cfNames {
-		cfOpts = append(cfOpts, opts)
-	}
-	db, handles, err := gorocksdb.OpenDbColumnFamilies(opts, basePath, cfNames, cfOpts)
-	if err != nil {
-		logger.Errorf("open data base with column families failed, err: %v", err)
-		return nil
-	}
-	var myHandler *gorocksdb.ColumnFamilyHandle
-	for idx, name := range cfNames {
-		if name == infoTypeString {
-			myHandler = handles[idx]
-		}
-	}
 	return &RocksDBInfoStorage{
-		infoType:     infoTypeString,
-		db:           db,
-		cfHandlers:   handles,
-		myHandler:    myHandler,
-		opts:         opts,
-		readOptions:  readOptions,
-		writeOptions: writeOptions,
+		db:        factory.db,
+		myCfName:  cfName,
+		myHandler: factory.cfHandleMap[cfName],
+
+		onUpdateMap: sync.Map{},
 	}
 
 }
 
 type RocksDBInfoStorageFactory struct {
-	basePath  string
-	cfHandles map[string]*gorocksdb.ColumnFamilyHandle
+	basePath    string
+	cfHandleMap map[string]*gorocksdb.ColumnFamilyHandle
+	cfNames     []string
+	db          *gorocksdb.DB
 }
 
 func (factory *RocksDBInfoStorageFactory) GetStorage(infoType InfoType) Storage {
+	if factory.cfHandleMap[string(infoType)] == nil {
+		err := factory.newColumnFamily(infoType)
+		if err != nil {
+			return nil
+		}
+	}
+	return factory.NewRocksDBInfoStorage(string(infoType))
+}
 
-	return NewRocksDBInfoStorage(factory.basePath, infoType)
+func (factory *RocksDBInfoStorageFactory) newColumnFamily(infoType InfoType) error {
+	handle, err := factory.db.CreateColumnFamily(database.Opts, string(infoType))
+	if err != nil {
+		logger.Errorf("New column family failed, err: %v", err)
+		return err
+	}
+	factory.cfHandleMap[string(infoType)] = handle
+	return nil
 }
 
 func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
-	err := common.InitParentPath(basePath)
+	err := common.InitPath(basePath)
 	if err != nil {
 		logger.Errorf("Init path %s failed, err: %v", basePath)
 	}
+	cfNames, err := gorocksdb.ListColumnFamilies(database.Opts, basePath)
+	if err != nil {
+		logger.Errorf("List column families failed, err: %v", err)
+	}
+	if len(cfNames) == 0 {
+		cfNames = append(cfNames, "default")
+	}
+	cfOpts := make([]*gorocksdb.Options, 0)
+	for range cfNames {
+		cfOpts = append(cfOpts, database.Opts)
+	}
+	db, handles, err := gorocksdb.OpenDbColumnFamilies(database.Opts, basePath, cfNames, cfOpts)
+	if err != nil {
+		logger.Errorf("Open rocksdb with ColumnFamilies failed, err: %v", err)
+	}
+
+	handleMap := make(map[string]*gorocksdb.ColumnFamilyHandle, 0)
+
+	for idx, cfName := range cfNames {
+		handleMap[cfName] = handles[idx]
+	}
+
 	return &RocksDBInfoStorageFactory{
-		basePath: basePath,
+		basePath:    basePath,
+		db:          db,
+		cfHandleMap: handleMap,
+		cfNames:     cfNames,
 	}
 }
