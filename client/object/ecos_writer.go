@@ -106,9 +106,9 @@ func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 		}
 		w.curChunk = chunk.(*localChunk)
 		w.chunkCount++
-		logger.Warningf("Acquired New Block: %v", w.chunkCount)
+		logger.Warningf("#37 Acquired New Chunk: %v", w.chunkCount)
 	}
-	logger.Warningf("Using Block: %v", w.chunkCount)
+	logger.Warningf("#37 Using Chunk: %v", w.chunkCount)
 	return w.curChunk, nil
 }
 
