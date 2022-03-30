@@ -5,6 +5,7 @@ import gorocksdb "github.com/SUMStudio/grocksdb"
 // InitRocksdb init Options, readOptions and writeOptions
 func InitRocksdb() (*gorocksdb.Options, *gorocksdb.ReadOptions, *gorocksdb.WriteOptions) {
 	opts := gorocksdb.NewDefaultOptions()
+	opts.SetCreateIfMissingColumnFamilies(true)
 	readOptions := gorocksdb.NewDefaultReadOptions()
 	writeOptions := gorocksdb.NewDefaultWriteOptions()
 	setRocksdbOptions(opts)

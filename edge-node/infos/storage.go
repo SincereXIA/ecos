@@ -11,6 +11,7 @@ type Storage interface {
 	Delete(id string) error
 	Get(id string) (Information, error)
 	GetAll() ([]Information, error)
+	Close()
 
 	// SetOnUpdate set a function, it will be called when any info update
 	SetOnUpdate(name string, f StorageUpdateFunc)
