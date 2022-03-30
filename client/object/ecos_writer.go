@@ -55,6 +55,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 		w.commitCurBlock()
 	}
 	if w.curBlock == nil {
+		logger.Warningf("Create New Block: %v", w.blockCount)
 		newBlock := &Block{
 			BlockInfo:   object.BlockInfo{},
 			status:      0,
@@ -77,6 +78,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 		w.blockCount++
 		w.curBlock = newBlock
 	}
+	logger.Warningf("Get Current Block: %v", w.curBlock.blockCount)
 	return w.curBlock
 }
 
