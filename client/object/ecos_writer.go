@@ -55,7 +55,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 		w.commitCurBlock()
 	}
 	if w.curBlock == nil {
-		logger.Warningf("Create New Block: %v", w.blockCount)
+		logger.Warningf("#37 Create New Block: %v", w.blockCount)
 		newBlock := &Block{
 			BlockInfo:   object.BlockInfo{},
 			status:      0,
@@ -78,7 +78,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 		w.blockCount++
 		w.curBlock = newBlock
 	}
-	logger.Warningf("Get Current Block: %v", w.curBlock.blockCount)
+	logger.Warningf("#37 Get Current Block: %v", w.curBlock.blockCount)
 	return w.curBlock
 }
 
@@ -106,7 +106,9 @@ func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 		}
 		w.curChunk = chunk.(*localChunk)
 		w.chunkCount++
+		logger.Warningf("Acquired New Block: %v", w.chunkCount)
 	}
+	logger.Warningf("Using Block: %v", w.chunkCount)
 	return w.curChunk, nil
 }
 
@@ -114,7 +116,6 @@ func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 //
 // curChunk shall be nil after calling this.
 func (w *EcosWriter) commitCurChunk() {
-	// TODO (xiong): 如果恰好写完了一个 block，writer 关闭的时候还会调用此方法，此时 curChunk 为 null，导致提交了一个空的 block
 	if w.curChunk == nil {
 		return // Temp fix by zhang
 	}

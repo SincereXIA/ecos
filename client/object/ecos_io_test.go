@@ -108,9 +108,11 @@ func testSmallBufferWriteRead(t *testing.T, key string, data []byte, factory *Ec
 	pending := len(data)
 	for pending > 0 {
 		wantSize := copy(writeBuffer, data[len(data)-pending:])
+		t.Logf("#37 Want %v bytes", wantSize)
 		writeSize, err := writer.Write(writeBuffer[:wantSize])
 		assert.NoError(t, err)
 		assert.Equal(t, wantSize, writeSize)
+		t.Logf("#37 Write %v bytes", writeSize)
 		pending -= writeSize
 	}
 	assert.NoError(t, writer.Close())

@@ -10,7 +10,7 @@ import (
 const blockSize = 1 << 22
 const chunkSize = 1 << 20
 const uploadTimeout = time.Second * 10
-const uploadBuffer = 1 << 25
+const uploadBuffer = 1 << 26
 const blockHash = true
 const objectHash = false
 
