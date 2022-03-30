@@ -6,6 +6,8 @@ import (
 	"ecos/client/config"
 	edgeNodeTest "ecos/edge-node/test"
 	"ecos/utils/common"
+	"ecos/utils/logger"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"math/rand"
@@ -60,6 +62,7 @@ func TestEcosWriterAndReader(t *testing.T) {
 			false,
 		},
 	}
+	logger.Logger.SetLevel(logrus.WarnLevel)
 	_ = common.InitAndClearPath(basePath)
 	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(ctx, basePath, 9)
 
@@ -106,34 +109,35 @@ func testSmallBufferWriteRead(t *testing.T, key string, data []byte, factory *Ec
 	writer := factory.GetEcosWriter(key)
 	writeBuffer := make([]byte, bufferSize)
 	pending := len(data)
+	count := 0
 	for pending > 0 {
+		count++
 		wantSize := copy(writeBuffer, data[len(data)-pending:])
-		t.Logf("#37 Want %v bytes", wantSize)
 		writeSize, err := writer.Write(writeBuffer[:wantSize])
 		assert.NoError(t, err)
 		assert.Equal(t, wantSize, writeSize)
-		t.Logf("#37 Write %v bytes", writeSize)
+		assert.Equal(t, count, writer.chunkCount)
 		pending -= writeSize
 	}
 	assert.NoError(t, writer.Close())
 	t.Logf("Upload key: %v Finish", key)
 
-	reader := factory.GetEcosReader(key)
-	readBuffer := make([]byte, bufferSize)
-	result := make([]byte, 0, len(data))
-	for {
-		readSize, err := reader.Read(readBuffer)
-		result = append(result, readBuffer[:readSize]...)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			t.Errorf("Read() error = %v", err)
-		}
-	}
-	t.Logf("get key: %v Finish", key)
-	assert.Equal(t, len(data), len(result), "result size not equal to data size")
-	assert.True(t, bytes.Equal(data, result))
+	//reader := factory.GetEcosReader(key)
+	//readBuffer := make([]byte, bufferSize)
+	//result := make([]byte, 0, len(data))
+	//for {
+	//	readSize, err := reader.Read(readBuffer)
+	//	result = append(result, readBuffer[:readSize]...)
+	//	if err != nil {
+	//		if err == io.EOF {
+	//			break
+	//		}
+	//		t.Errorf("Read() error = %v", err)
+	//	}
+	//}
+	//t.Logf("get key: %v Finish", key)
+	//assert.Equal(t, len(data), len(result), "result size not equal to data size")
+	//assert.True(t, bytes.Equal(data, result))
 }
 
 func genTestData(size int) []byte {
