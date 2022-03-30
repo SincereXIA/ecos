@@ -44,10 +44,6 @@ func (s *MemoryInfoStorage) Get(id string) (Information, error) {
 	return v.(Information), nil
 }
 
-func (s *MemoryInfoStorage) Close() {
-
-}
-
 func (s *MemoryInfoStorage) SetOnUpdate(name string, f StorageUpdateFunc) {
 	s.onUpdateMap.Store(name, f)
 }
