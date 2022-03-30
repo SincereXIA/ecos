@@ -2,8 +2,11 @@ package messenger
 
 import (
 	"ecos/edge-node/infos"
-	"ecos/messenger/demo"
+	"ecos/messenger/auth"
 	"ecos/utils/logger"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
+	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
@@ -18,15 +21,29 @@ type RpcServer struct {
 }
 
 func NewRpcServer(listenPort uint64) *RpcServer {
-	s := grpc.NewServer() // 创建gRPC服务器
-	demo.RegisterGreeterServer(s, &demo.Server{})
-	lis, err := net.Listen("tcp", ":"+strconv.FormatUint(listenPort, 10))
+	config := DefaultConfig
+	config.ListenPort = int(listenPort)
+	return NewRpcServerWithConfig(config)
+}
+
+func NewRpcServerWithConfig(config Config) *RpcServer {
+	listenPort := config.ListenPort
+	// 创建gRPC服务器
+	var unaryInterceptors []grpc.UnaryServerInterceptor
+	unaryInterceptors = append(unaryInterceptors, grpc_ctxtags.UnaryServerInterceptor())
+	if config.AuthEnabled {
+		unaryInterceptors = append(unaryInterceptors,
+			grpc_auth.UnaryServerInterceptor(auth.BasicAuthFunc))
+	}
+	s := grpc.NewServer(grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)))
+	lis, err := net.Listen("tcp", ":"+strconv.Itoa(listenPort))
 	if err != nil {
 		logger.Errorf("RpcServer run at: %v error: %v", listenPort, err)
 	}
+	port := uint64(lis.Addr().(*net.TCPAddr).Port)
 	server := &RpcServer{
 		Server:     s,
-		ListenPort: listenPort,
+		ListenPort: port,
 		listen:     lis,
 	}
 	return server
@@ -35,19 +52,10 @@ func NewRpcServer(listenPort uint64) *RpcServer {
 // NewRandomPortRpcServer return a new RpcServer with random port signed by os,
 // this should only be used in test. to avoid port conflict.
 func NewRandomPortRpcServer() (port uint64, server *RpcServer) {
-	lis, err := net.Listen("tcp", ":0")
-	if err != nil {
-		logger.Errorf("RpcServer run at random port error: %v", err)
-	}
-	port = uint64(lis.Addr().(*net.TCPAddr).Port)
+	server = NewRpcServerWithConfig(DefaultConfig)
+	port = server.ListenPort
 	logger.Warningf("[TEST ONLY] RpcServer create at random port: %v", port)
-	s := grpc.NewServer() // 创建gRPC服务器
-	server = &RpcServer{
-		Server:     s,
-		ListenPort: port,
-		listen:     lis,
-	}
-	return
+	return port, server
 }
 
 func (server *RpcServer) Run() error {
