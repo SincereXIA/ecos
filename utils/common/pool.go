@@ -47,10 +47,6 @@ func (p *Pool) Acquire() (io.Closer, error) {
 			return nil, errno.PoolClosed
 		}
 		return r, nil
-	default:
-		logger.Tracef("Acquire: New Resource")
-		// 调用资源创建函数创建资源
-		return p.factory()
 	}
 }
 
