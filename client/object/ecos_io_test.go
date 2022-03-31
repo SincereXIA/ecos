@@ -51,14 +51,13 @@ func TestEcosWriterAndReader(t *testing.T) {
 			},
 			false,
 		},
-		// TODO （xiong）: 现在 writer 写大文件会出现元数据中 block 重复的问题
-		//{"writer 32M object",
-		//	args{
-		//		1024 * 1024 * 32, // 32M
-		//		"/path/32M_obj",
-		//	},
-		//	false,
-		//},
+		{"writer 32M object",
+			args{
+				1024 * 1024 * 32, // 32M
+				"/path/32M_obj",
+			},
+			false,
+		},
 	}
 	_ = common.InitAndClearPath(basePath)
 	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(ctx, basePath, 9)
@@ -106,11 +105,14 @@ func testSmallBufferWriteRead(t *testing.T, key string, data []byte, factory *Ec
 	writer := factory.GetEcosWriter(key)
 	writeBuffer := make([]byte, bufferSize)
 	pending := len(data)
+	count := 0
 	for pending > 0 {
+		count++
 		wantSize := copy(writeBuffer, data[len(data)-pending:])
 		writeSize, err := writer.Write(writeBuffer[:wantSize])
 		assert.NoError(t, err)
 		assert.Equal(t, wantSize, writeSize)
+		assert.Equal(t, count, writer.chunkCount)
 		pending -= writeSize
 	}
 	assert.NoError(t, writer.Close())

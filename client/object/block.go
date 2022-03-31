@@ -68,7 +68,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	for _, chunk := range b.chunks {
 		err = stream.Send(&gaia.UploadBlockRequest{
 			Payload: &gaia.UploadBlockRequest_Chunk{
-				Chunk: &gaia.Chunk{Content: chunk.data},
+				Chunk: &gaia.Chunk{Content: chunk.data[:uint64(len(chunk.data))-chunk.freeSize]},
 			},
 		})
 		if err != nil && err != io.EOF {
