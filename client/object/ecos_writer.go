@@ -69,6 +69,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 			delFunc: func(self *Block) {
 				// Release Chunks
 				for _, chunk := range self.chunks {
+					chunk.freeSize = w.config.Object.ChunkSize
 					w.chunks.Release(chunk)
 				}
 				self.chunks = nil
@@ -140,8 +141,7 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 		if err != nil {
 			return offset, err
 		}
-		writeSize := minSize(int(chunk.freeSize), pending)
-		chunk.data = append(chunk.data, p[offset:offset+writeSize]...)
+		writeSize := copy(chunk.data[w.config.Object.ChunkSize-chunk.freeSize:], p[offset:])
 		chunk.freeSize -= uint64(writeSize)
 		if chunk.freeSize == 0 {
 			w.commitCurChunk()

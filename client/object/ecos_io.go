@@ -56,7 +56,10 @@ func NewEcosIOFactory(config *config.ClientConfig) *EcosIOFactory {
 }
 
 func (f *EcosIOFactory) newLocalChunk() (io.Closer, error) {
-	return &localChunk{freeSize: f.config.Object.ChunkSize}, nil
+	return &localChunk{
+		data:     make([]byte, f.config.Object.ChunkSize),
+		freeSize: f.config.Object.ChunkSize,
+	}, nil
 }
 
 // GetEcosWriter provide a EcosWriter for object associated with key
