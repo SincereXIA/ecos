@@ -1,7 +1,7 @@
 package object
 
 import (
-	clientNode "ecos/client/node"
+	agent "ecos/client/info-agent"
 	"ecos/client/user"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/sha256-simd"
 	"io"
+	"strconv"
 )
 
 type BlockStatus int
@@ -42,6 +43,7 @@ type Block struct {
 	blockPipes  []*pipeline.Pipeline
 
 	// These are for Upload and Release
+	infoAgent   *agent.InfoAgent
 	uploadCount int
 	delFunc     func(*Block)
 }
@@ -141,14 +143,14 @@ func (b *Block) updateBlockInfo() error {
 		b.BlockInfo.BlockId = GenBlockId()
 	}
 	logger.Debugf("Gen block info success: %v", &b.BlockInfo)
-	// TODO: Calculate Place Group from Block Info and ClusterInfo
 	b.BlockInfo.PgId = GenBlockPG(&b.BlockInfo)
 	return nil
 }
 
 func (b *Block) getUploadStream() (*UploadClient, error) {
-	serverInfo := clientNode.InfoStorage.GetNodeInfo(0, b.blockPipes[b.BlockInfo.PgId].RaftId[0])
-	client, err := NewGaiaClient(serverInfo)
+	idString := strconv.FormatUint(b.blockPipes[b.BlockInfo.PgId].RaftId[0], 10)
+	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
+	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo())
 	if err != nil {
 		logger.Errorf("Unable to start Gaia Client: %v", err)
 		return nil, err
@@ -178,7 +180,6 @@ func (b *Block) Close() error {
 		return err
 	}
 	go func() {
-		// TODO: Should We make this go routine repeating when a upload is failed?
 		// TODO (xiong): if upload is failed, now writer never can be close or writer won't know, we should fix it.
 		defer b.delFunc(b)
 		if client.cancel != nil {

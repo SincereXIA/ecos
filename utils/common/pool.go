@@ -40,14 +40,12 @@ func (p *Pool) Acquire() (io.Closer, error) {
 		p.resources <- res
 		p.curCount++
 	}
-	select {
-	case r, ok := <-p.resources: //检查是否有空闲的资源
-		logger.Tracef("Acquire: shared resource")
-		if !ok {
-			return nil, errno.PoolClosed
-		}
-		return r, nil
+	r, ok := <-p.resources //检查是否有空闲的资源
+	logger.Tracef("Acquire: shared resource")
+	if !ok {
+		return nil, errno.PoolClosed
 	}
+	return r, nil
 }
 
 // Release 将一个使用后的资源池释放回池里
