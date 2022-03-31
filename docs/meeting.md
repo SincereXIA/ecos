@@ -41,3 +41,48 @@
   - 实现一个接口观察当前 raft group 里面有那些节点 Q
   - Client Moon RPC X
   - Object Meta 和 BlockInfo 加上当前 term X
+
+
+## 2022/3/31
+
+- 进度对接：
+  - 测试时使用随机端口号，避免冲突
+  - 大重构: moon -> moon + watcher
+    - Moon（Info 同步）+ Watcher （边缘节点注册 & 加入集群 & ClusterInfo 维护）
+    - 什么是 info
+  - 客户端支持 object 下载
+    - 获取 info 的新方法: `info-agent` 
+      - 不再需要 `ClientNodeInfoStorage`
+  - InfoStorage 持久化进展
+  
+- 后续工作安排:
+  - xiong:
+    - S3 接口调研和实现
+      - 参考：https://github.com/minio/minio/blob/master/cmd/api-router.go
+      - 使用该工具检测 s3 兼容性: https://github.com/ceph/s3-tests
+      - 需要兼容的接口已列出
+      - 需要兼容该测试工具：https://github.com/minio/warp
+  - qiutb:
+    - InfoStorage 持久化
+    - Moon & Alaya 状态机 **快照**, 节点重启后状态机 & raft 恢复
+  - zhang:
+    - 多 bucket 支持，多用户支持
+    - rpc 接口鉴权
+
+- Info:
+  - 维持集群运行的信息，数据量小，更新不频繁
+  - 通过 Raft 在边缘集群的所有节点上同步
+  - UserInfo
+  - BucketInfo
+  - NodeInfo
+  - ClusterInfo
+  - 使用 RocksDB 存储
+- Meta:
+  - 对象元数据信息
+  - 使用 Raft 在同 PG 的三节点同步
+  - 包含对象 key、hash、分块 block ID、更新时间...
+  - 使用 RocksDB 存储
+- Block:
+  - 对象的分块数据信息
+  - 通过 PrimaryCopy / Stream / ClientCopy 分发到同 PG 的三节点中
+  - 每个 block 直接以单个文件的方式存储在边缘节点文件系统中
