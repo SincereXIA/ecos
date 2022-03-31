@@ -53,7 +53,6 @@ func TestEcosWriterAndReader(t *testing.T) {
 			},
 			false,
 		},
-		// TODO （xiong）: 现在 writer 写大文件会出现元数据中 block 重复的问题
 		{"writer 32M object",
 			args{
 				1024 * 1024 * 32, // 32M
@@ -73,7 +72,7 @@ func TestEcosWriterAndReader(t *testing.T) {
 			conf.NodePort = watchers[0].GetSelfInfo().RpcPort
 			factory := NewEcosIOFactory(conf)
 			data := genTestData(tt.args.objectSize)
-			// testBigBufferWriteRead(t, tt.args.key+"big", data, factory)
+			testBigBufferWriteRead(t, tt.args.key+"big", data, factory)
 			testSmallBufferWriteRead(t, tt.args.key+"small", data, factory, 1024*1024)
 		})
 	}
@@ -122,22 +121,22 @@ func testSmallBufferWriteRead(t *testing.T, key string, data []byte, factory *Ec
 	assert.NoError(t, writer.Close())
 	t.Logf("Upload key: %v Finish", key)
 
-	//reader := factory.GetEcosReader(key)
-	//readBuffer := make([]byte, bufferSize)
-	//result := make([]byte, 0, len(data))
-	//for {
-	//	readSize, err := reader.Read(readBuffer)
-	//	result = append(result, readBuffer[:readSize]...)
-	//	if err != nil {
-	//		if err == io.EOF {
-	//			break
-	//		}
-	//		t.Errorf("Read() error = %v", err)
-	//	}
-	//}
-	//t.Logf("get key: %v Finish", key)
-	//assert.Equal(t, len(data), len(result), "result size not equal to data size")
-	//assert.True(t, bytes.Equal(data, result))
+	reader := factory.GetEcosReader(key)
+	readBuffer := make([]byte, bufferSize)
+	result := make([]byte, 0, len(data))
+	for {
+		readSize, err := reader.Read(readBuffer)
+		result = append(result, readBuffer[:readSize]...)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			t.Errorf("Read() error = %v", err)
+		}
+	}
+	t.Logf("get key: %v Finish", key)
+	assert.Equal(t, len(data), len(result), "result size not equal to data size")
+	assert.True(t, bytes.Equal(data, result))
 }
 
 func genTestData(size int) []byte {
