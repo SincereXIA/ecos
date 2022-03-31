@@ -11,11 +11,10 @@ import (
 )
 
 type UploadClient struct {
-	serverAddr string
-	client     gaia.GaiaClient
-	context    context.Context
-	cancel     context.CancelFunc
-	stream     gaia.Gaia_UploadBlockDataClient
+	client  gaia.GaiaClient
+	context context.Context
+	cancel  context.CancelFunc
+	stream  gaia.Gaia_UploadBlockDataClient
 }
 
 // NewGaiaClient creates a client stream with 1s Timeout

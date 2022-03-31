@@ -3,8 +3,7 @@ package object
 import (
 	"context"
 	"ecos/client/config"
-	info_agent "ecos/client/info-agent"
-	clientNode "ecos/client/node"
+	agent "ecos/client/info-agent"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
@@ -17,7 +16,7 @@ import (
 )
 
 type EcosReader struct {
-	infoAgent   *info_agent.InfoAgent
+	infoAgent   *agent.InfoAgent
 	clusterInfo *infos.ClusterInfo
 	key         string
 
@@ -160,9 +159,9 @@ func (r *EcosReader) getObjMeta() error {
 	// use key to get pdId
 	pgId := GenObjectPG(r.key)
 
-	metaServerId := r.objPipes[pgId-1].RaftId[0]
-	metaServerInfo := clientNode.InfoStorage.GetNodeInfo(0, metaServerId)
-	metaClient, err := NewMetaClient(metaServerInfo)
+	metaServerIdString := strconv.FormatUint(r.objPipes[pgId-1].RaftId[0], 10)
+	metaServerInfo, _ := r.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
+	metaClient, err := NewMetaClient(metaServerInfo.BaseInfo().GetNodeInfo())
 	if err != nil {
 		logger.Errorf("New meta client failed, err: %v", err)
 		return err
@@ -174,7 +173,7 @@ func (r *EcosReader) getObjMeta() error {
 		logger.Errorf("get objMeta failed, err: %v", err)
 		return err
 	}
-	logger.Infof("get objMeta from raft [%v], succees, meta: %v", metaServerId, r.meta)
+	logger.Infof("get objMeta from raft [%v], success, meta: %v", metaServerIdString, r.meta)
 	return nil
 }
 
