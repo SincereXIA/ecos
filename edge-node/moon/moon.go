@@ -9,7 +9,6 @@ import (
 	"ecos/utils/timestamp"
 	"errors"
 	"github.com/google/go-cmp/cmp"
-	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -167,9 +166,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 	for _, info := range config.ClusterInfo.NodesInfo {
 		m.infoMap[info.RaftId] = info
 	}
-	newLogger := logger.NewRaftLogger()
-	newLogger.SetLevel(logrus.WarnLevel)
-	raft.SetLogger(newLogger)
+	raft.SetLogger(logger.NewRaftLogger())
 	return m
 }
 

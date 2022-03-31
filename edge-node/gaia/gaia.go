@@ -161,7 +161,7 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 
 func (g *Gaia) processChunk(chunk *UploadBlockRequest_Chunk, transporter *PrimaryCopyTransporter,
 	stream Gaia_UploadBlockDataServer) (err error) {
-	// data := chunk.Chunk.Content
+	data := chunk.Chunk.Content
 	if transporter == nil {
 		return stream.SendAndClose(&common.Result{
 			Status:  common.Result_FAIL,
@@ -169,14 +169,14 @@ func (g *Gaia) processChunk(chunk *UploadBlockRequest_Chunk, transporter *Primar
 			Message: errno.NoTransporterErr.Error(),
 		})
 	}
-	//_, err = transporter.Write(data)
-	//if err != nil {
-	//	return stream.SendAndClose(&common.Result{
-	//		Status:  common.Result_FAIL,
-	//		Code:    errno.CodeTransporterWriteFail,
-	//		Message: errno.TransporterWriteFail.Error() + err.Error(),
-	//	})
-	//}
+	_, err = transporter.Write(data)
+	if err != nil {
+		return stream.SendAndClose(&common.Result{
+			Status:  common.Result_FAIL,
+			Code:    errno.CodeTransporterWriteFail,
+			Message: errno.TransporterWriteFail.Error() + err.Error(),
+		})
+	}
 	return nil
 }
 
