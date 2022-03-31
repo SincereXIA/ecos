@@ -63,3 +63,9 @@ message NodeInfo {
   uint64 rpc_port = 4;
   uint64 capacity = 5;
 }
+
+message Information {
+    InfoType info_type = 1;
+    string id = 2;
+    BaseInfo info = 3;
+}
