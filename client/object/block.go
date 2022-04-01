@@ -2,7 +2,6 @@ package object
 
 import (
 	agent "ecos/client/info-agent"
-	"ecos/client/user"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
@@ -201,11 +200,6 @@ func (b *Block) Close() error {
 	return nil
 }
 
-// GenObjectId Generates ObjectId for a given object
-func GenObjectId(key string) string {
-	return user.GetUserVolume() + "/" + user.GetUserBucket() + key
-}
-
 // GenBlockId Generates BlockId for the `i` th block of a specific object
 //
 // This method ensures the global unique with UUID!
@@ -224,14 +218,7 @@ const (
 
 var (
 	blockMapper = common.NewMapper(blockPgNum)
-	objMapper   = common.NewMapper(objPgNum)
 )
-
-// GenObjectPG Generates PgId for ObjectMeta
-// PgId of ObjectMeta depends on `key` of Object
-func GenObjectPG(key string) uint64 {
-	return objMapper.MapIDtoPG(key)
-}
 
 // GenBlockPG Generates PgId for Block
 // PgId of Block depends on `BlockId` of Block

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"ecos/client/config"
+	"ecos/edge-node/infos"
+	"ecos/edge-node/moon"
 	edgeNodeTest "ecos/edge-node/test"
 	"ecos/utils/common"
 	"github.com/stretchr/testify/assert"
@@ -19,6 +21,11 @@ func TestEcosWriterAndReader(t *testing.T) {
 	_, filename, _, _ := runtime.Caller(0)
 	ctx, cancel := context.WithCancel(context.Background())
 	basePath := "./ecos-data/"
+	t.Cleanup(func() {
+		cancel()
+		_ = os.RemoveAll(basePath)
+	})
+
 	t.Logf("Current test filename: %s", filename)
 	type args struct {
 		objectSize int
@@ -62,22 +69,30 @@ func TestEcosWriterAndReader(t *testing.T) {
 	_ = common.InitAndClearPath(basePath)
 	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(ctx, basePath, 9)
 
+	// Add a test bucket first
+	bucketInfo := infos.GenBucketInfo("root", "default", "root")
+	_, err := watchers[0].GetMoon().ProposeInfo(ctx, &moon.ProposeInfoRequest{
+		Head:     nil,
+		Operate:  moon.ProposeInfoRequest_ADD,
+		Id:       bucketInfo.GetID(),
+		BaseInfo: bucketInfo.BaseInfo(),
+	})
+	if err != nil {
+		t.Errorf("Failed to add bucket: %v", err)
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := config.DefaultConfig
 			conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
 			conf.NodePort = watchers[0].GetSelfInfo().RpcPort
-			factory := NewEcosIOFactory(conf)
+			factory := NewEcosIOFactory(conf, "root", "default")
 			data := genTestData(tt.args.objectSize)
 			testBigBufferWriteRead(t, tt.args.key+"big", data, factory)
 			testSmallBufferWriteRead(t, tt.args.key+"small", data, factory, 1024*1024)
 		})
 	}
 
-	t.Cleanup(func() {
-		cancel()
-		_ = os.RemoveAll(basePath)
-	})
 }
 
 func testBigBufferWriteRead(t *testing.T, key string, data []byte, factory *EcosIOFactory) {

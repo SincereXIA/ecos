@@ -58,7 +58,7 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	request := &moon.ProposeInfoRequest{
 		Head: &common.Head{
 			Timestamp: timestamp.Now(),
-			Term:      w.getCurrentTerm(),
+			Term:      w.GetCurrentTerm(),
 		},
 		Operate:  moon.ProposeInfoRequest_ADD,
 		Id:       strconv.FormatUint(info.RaftId, 10),
@@ -130,7 +130,7 @@ func (w *Watcher) SetOnInfoUpdate(infoType infos.InfoType, name string, f infos.
 	return nil
 }
 
-func (w *Watcher) getCurrentTerm() uint64 {
+func (w *Watcher) GetCurrentTerm() uint64 {
 	return w.GetCurrentClusterInfo().Term
 }
 
@@ -274,7 +274,7 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 			request := &moon.ProposeInfoRequest{
 				Head: &common.Head{
 					Timestamp: timestamp.Now(),
-					Term:      watcher.getCurrentTerm(),
+					Term:      watcher.GetCurrentTerm(),
 				},
 				Operate: moon.ProposeInfoRequest_ADD,
 				Id:      strconv.FormatUint(clusterInfo.Term, 10),

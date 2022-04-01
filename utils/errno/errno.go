@@ -32,6 +32,9 @@ const (
 	CodeMoonRaftNotReady
 	CodeInfoTypeNotSupport
 	CodeInfoNotFound
+	CodeTermNotMatch
+	CodePgNotMatch
+	CodeRaftNodeNotFound
 )
 
 var (
@@ -39,6 +42,9 @@ var (
 	MoonRaftNotReady   = newErr(CodeMoonRaftNotReady, "moon raft not ready")
 	InfoTypeNotSupport = newErr(CodeInfoTypeNotSupport, "info type not support")
 	InfoNotFound       = newErr(CodeInfoNotFound, "info not found")
+	TermNotMatch       = newErr(CodeTermNotMatch, "term not match")
+	PgNotMatch         = newErr(CodePgNotMatch, "place group not match")
+	RaftNodeNotFound   = newErr(CodeRaftNodeNotFound, "raft node not found")
 )
 
 const (

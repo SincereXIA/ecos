@@ -61,12 +61,36 @@ func (a *Alaya) getRaftNode(pgID uint64) *Raft {
 }
 
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
+	// check if meta belongs to this PG
+	_, bucketID, key, err := object.SplitID(meta.ObjId)
+	if err != nil {
+		return nil, err
+	}
+	m := a.watcher.GetMoon()
+	info, err := m.GetInfoDirect(infos.InfoType_BUCKET_INFO, bucketID)
+	if err != nil {
+		return nil, err
+	}
+	bucketInfo := info.BaseInfo().GetBucketInfo()
+	pgID := object.GenObjPgID(bucketInfo, key, 10)
+	if meta.Term != a.watcher.GetCurrentTerm() {
+		return nil, errno.TermNotMatch
+	}
+	if meta.PgId != pgID {
+		logger.Warningf("meta pgID %d not match calculated pgID %d", meta.PgId, pgID)
+		return nil, errno.PgNotMatch
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		pgID := meta.PgId
-		err := a.getRaftNode(pgID).ProposeObjectMetaOperate(&MetaOperate{
+		raft := a.getRaftNode(pgID)
+		if raft == nil {
+			return nil, errno.RaftNodeNotFound
+		}
+		// 这里是同步操作
+		err = a.getRaftNode(pgID).ProposeObjectMetaOperate(&MetaOperate{
 			Operate: MetaOperate_PUT,
 			Meta:    meta,
 		})
@@ -76,7 +100,6 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 				Message: err.Error(),
 			}, err
 		}
-		// TODO: 检查元数据是否同步成功
 		logger.Infof("Alaya record object meta success, obj_id: %v, size: %v", meta.ObjId, meta.ObjSize)
 	}
 

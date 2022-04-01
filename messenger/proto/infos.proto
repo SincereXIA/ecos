@@ -67,7 +67,7 @@ message VolumeInfo {
 // Bucket 标识和权限
 message BucketInfo {
   string volume_id = 1;
-  string bucket_id = 2;
+  string bucket_name = 2;
   string user_id = 3;
   string group_id = 4;
   int32 mode = 5;
@@ -88,6 +88,10 @@ message ClusterInfo{
   NodeInfo leader_info = 2;
   repeated NodeInfo nodes_info = 3;
   Timestamp update_timestamp = 4;
+  int32 meta_pg_num = 5;
+  int32 meta_pg_size = 6;
+  int32 block_pg_num = 7;
+  int32 block_pg_size = 8;
 }
 
 message InfoStorageState {

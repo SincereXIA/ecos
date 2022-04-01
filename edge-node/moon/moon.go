@@ -92,7 +92,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 }
 
 func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoReply, error) {
-	info, err := m.infoStorageRegister.Get(request.InfoType, request.InfoId)
+	info, err := m.GetInfoDirect(request.InfoType, request.InfoId)
 	if err != nil {
 		logger.Warningf("get info from storage register fail: %v", err)
 		return &GetInfoReply{
@@ -109,6 +109,14 @@ func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoRepl
 		},
 		BaseInfo: info.BaseInfo(),
 	}, nil
+}
+
+func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Information, error) {
+	info, err := m.infoStorageRegister.Get(infoType, id)
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
 }
 
 func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {

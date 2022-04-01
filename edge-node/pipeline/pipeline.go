@@ -6,6 +6,14 @@ import (
 	"github.com/sincerexia/gocrush"
 )
 
+func GenMetaPipelines(clusterInfo infos.ClusterInfo) []*Pipeline {
+	return GenPipelines(clusterInfo, uint64(clusterInfo.MetaPgNum), uint64(clusterInfo.MetaPgSize))
+}
+
+func GenBlockPipelines(clusterInfo infos.ClusterInfo) []*Pipeline {
+	return GenPipelines(clusterInfo, uint64(clusterInfo.BlockPgNum), uint64(clusterInfo.BlockPgSize))
+}
+
 func GenPipelines(clusterInfo infos.ClusterInfo, pgNum uint64, groupSize uint64) []*Pipeline {
 	var rs []*Pipeline
 	rootNode := infos.NewRootNode()

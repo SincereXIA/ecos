@@ -7,18 +7,12 @@ import (
 	"time"
 )
 
-const blockSize = 1 << 22
 const chunkSize = 1 << 20
 const uploadTimeout = time.Second * 10
 const uploadBuffer = 1 << 25
-const blockHash = true
-const objectHash = false
 
 type ObjectConfig struct {
-	BlockSize  uint64
-	ChunkSize  uint64
-	BlockHash  bool
-	ObjectHash bool
+	ChunkSize uint64
 }
 
 type ClientConfig struct {
@@ -38,10 +32,7 @@ func init() {
 		DefaultConfig = &ClientConfig{
 			Config: config.Config{},
 			Object: ObjectConfig{
-				BlockSize:  blockSize,
-				ChunkSize:  chunkSize,
-				BlockHash:  blockHash,
-				ObjectHash: objectHash,
+				ChunkSize: chunkSize,
 			},
 			UploadTimeout: uploadTimeout,
 			UploadBuffer:  uploadBuffer,
