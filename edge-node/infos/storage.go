@@ -79,6 +79,9 @@ func (builder *StorageRegisterBuilder) getStorage(infoType InfoType) Storage {
 func (builder *StorageRegisterBuilder) registerAllStorage() {
 	builder.register.Register(InfoType_NODE_INFO, builder.getStorage(InfoType_NODE_INFO))
 	builder.register.Register(InfoType_CLUSTER_INFO, builder.getStorage(InfoType_CLUSTER_INFO))
+	builder.register.Register(InfoType_USER_INFO, builder.getStorage(InfoType_USER_INFO))
+	builder.register.Register(InfoType_BUCKET_INFO, builder.getStorage(InfoType_BUCKET_INFO))
+	builder.register.Register(InfoType_VOLUME_INFO, builder.getStorage(InfoType_VOLUME_INFO))
 }
 
 // GetStorageRegister return a StorageRegister
