@@ -4,8 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"ecos/client/config"
-	info_agent "ecos/client/info-agent"
-	clientNode "ecos/client/node"
+	agent "ecos/client/info-agent"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -18,7 +17,7 @@ import (
 
 // EcosIOFactory Generates EcosWriter with ClientConfig
 type EcosIOFactory struct {
-	infoAgent   *info_agent.InfoAgent
+	infoAgent   *agent.InfoAgent
 	config      *config.ClientConfig
 	clusterInfo *infos.ClusterInfo
 	objPipes    []*pipeline.Pipeline
@@ -42,11 +41,9 @@ func NewEcosIOFactory(config *config.ClientConfig) *EcosIOFactory {
 		return nil
 	}
 	// TODO: Retry?
-	clientNode.InfoStorage.SaveClusterInfoWithTerm(0, clusterInfo)
-	const groupNum = 3
 	// TODO: Get pgNum, groupNum from moon
 	ret := &EcosIOFactory{
-		infoAgent:   info_agent.NewInfoAgent(context.Background(), clusterInfo),
+		infoAgent:   agent.NewInfoAgent(context.Background(), clusterInfo),
 		clusterInfo: clusterInfo,
 		config:      config,
 		objPipes:    pipeline.GenPipelines(*clusterInfo, objPgNum, groupNum),
@@ -67,6 +64,7 @@ func (f *EcosIOFactory) GetEcosWriter(key string) EcosWriter {
 	maxChunk := uint(f.config.UploadBuffer / f.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(f.newLocalChunk, maxChunk, int(maxChunk))
 	return EcosWriter{
+		infoAgent:   f.infoAgent,
 		clusterInfo: f.clusterInfo,
 		key:         key,
 		config:      f.config,

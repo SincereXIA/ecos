@@ -2,7 +2,7 @@ package object
 
 import (
 	"ecos/client/config"
-	clientNode "ecos/client/node"
+	agent "ecos/client/info-agent"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -12,6 +12,7 @@ import (
 	"ecos/utils/timestamp"
 	"encoding/hex"
 	"hash"
+	"strconv"
 )
 
 type localChunk struct {
@@ -28,6 +29,7 @@ func (c *localChunk) Close() error {
 // EcosWriter When creating an object, use EcosWriter as a Writer
 // EcosWriter.Write can take []byte as input to create Chunk and Block for Object
 type EcosWriter struct {
+	infoAgent   *agent.InfoAgent
 	clusterInfo *infos.ClusterInfo
 	key         string
 	config      *config.ClientConfig
@@ -60,6 +62,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 			status:      0,
 			chunks:      nil,
 			key:         w.key,
+			infoAgent:   w.infoAgent,
 			clusterInfo: w.clusterInfo,
 			blockCount:  w.blockCount,
 			needHash:    w.config.Object.BlockHash,
@@ -113,9 +116,8 @@ func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 //
 // curChunk shall be nil after calling this.
 func (w *EcosWriter) commitCurChunk() {
-	// TODO (xiong): 如果恰好写完了一个 block，writer 关闭的时候还会调用此方法，此时 curChunk 为 null，导致提交了一个空的 block
 	if w.curChunk == nil {
-		return // Temp fix by zhang
+		return
 	}
 	block := w.getCurBlock()
 	block.chunks = append(block.chunks, w.curChunk)
@@ -218,5 +220,7 @@ func (w *EcosWriter) Close() error {
 
 func (w *EcosWriter) checkObjNodeByPg() *infos.NodeInfo {
 	logger.Infof("META PG: %v, NODE: %v", w.meta.PgId, w.objPipes[w.meta.PgId-1].RaftId)
-	return clientNode.InfoStorage.GetNodeInfo(0, w.objPipes[w.meta.PgId-1].RaftId[0])
+	idString := strconv.FormatUint(w.objPipes[w.meta.PgId-1].RaftId[0], 10)
+	nodeInfo, _ := w.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
+	return nodeInfo.BaseInfo().GetNodeInfo()
 }
