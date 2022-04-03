@@ -11,6 +11,8 @@ type Storage interface {
 	Delete(id string) error
 	Get(id string) (Information, error)
 	GetAll() ([]Information, error)
+	GetSnapshot() ([]byte, error)
+	RecoverFromSnapshot(snapshot []byte) error
 
 	// SetOnUpdate set a function, it will be called when any info update
 	SetOnUpdate(name string, f StorageUpdateFunc)
@@ -19,12 +21,15 @@ type Storage interface {
 
 type StorageFactory interface {
 	GetStorage(infoType InfoType) Storage
+	GetSnapshot() ([]byte, error)
+	RecoverFromSnapshot(snapshot []byte) error
 }
 
 // StorageRegister can auto operate information to corresponding storage.
 // It can identify and call storage by infoType.
 type StorageRegister struct {
-	storageMap map[InfoType]Storage
+	storageMap     map[InfoType]Storage
+	storageFactory StorageFactory
 }
 
 // Register while add an info storage into StorageRegister,
@@ -65,6 +70,17 @@ func (register *StorageRegister) Get(infoType InfoType, id string) (Information,
 	return InvalidInfo{}, errno.InfoTypeNotSupport
 }
 
+// GetSnapshot will return a snapshot of all Information from corresponding Storage
+func (register *StorageRegister) GetSnapshot() ([]byte, error) {
+	// TODO: This way to get need to optimize
+	return register.storageFactory.GetSnapshot()
+}
+
+// RecoverFromSnapshot will recover all Information from corresponding Storage
+func (register *StorageRegister) RecoverFromSnapshot(snapshot []byte) error {
+	return register.storageFactory.RecoverFromSnapshot(snapshot)
+}
+
 // StorageRegisterBuilder is used to build StorageRegister.
 type StorageRegisterBuilder struct {
 	register       *StorageRegister
@@ -94,7 +110,8 @@ func (builder *StorageRegisterBuilder) GetStorageRegister() *StorageRegister {
 func NewStorageRegisterBuilder(factory StorageFactory) *StorageRegisterBuilder {
 	return &StorageRegisterBuilder{
 		register: &StorageRegister{
-			storageMap: map[InfoType]Storage{},
+			storageMap:     map[InfoType]Storage{},
+			storageFactory: factory,
 		},
 		storageFactory: factory,
 	}

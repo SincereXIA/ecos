@@ -18,6 +18,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/golang-lru v0.5.4
+	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jedib0t/go-pretty/v6 v6.3.0
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
@@ -31,7 +32,10 @@ require (
 	github.com/spf13/cobra v1.4.0
 	github.com/stretchr/testify v1.7.1
 	github.com/wxnacy/wgo v1.0.4
+	go.etcd.io/etcd/client/pkg/v3 v3.5.2
 	go.etcd.io/etcd/raft/v3 v3.5.2
+	go.etcd.io/etcd/server/v3 v3.5.2
+	go.uber.org/zap v1.17.0
 	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29 // indirect
 	golang.org/x/net v0.0.0-20220403103023-749bd193bc2b
 	golang.org/x/sys v0.0.0-20220406163625-3f8b81556e12

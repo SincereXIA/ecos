@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
 	"google.golang.org/protobuf/testing/protocmp"
 	"strconv"
 	"sync"
@@ -33,22 +34,31 @@ type Moon struct {
 	// Moon Rpc
 	UnimplementedMoonServer
 
-	id            uint64 //raft节点的id
-	SelfInfo      *infos.NodeInfo
-	ctx           context.Context //context
-	cancel        context.CancelFunc
-	raftStorage   *raft.MemoryStorage //raft需要的内存结构
-	stableStorage Storage
-	cfg           *raft.Config //raft需要的配置
-	raft          raft.Node
-	ticker        <-chan time.Time //定时器，提供周期时钟源和超时触发能力
-	infoMap       map[uint64]*infos.NodeInfo
-	leaderID      uint64 // 注册时的 leader 信息
+	// Channels communication between Moon and Raft module
+	proposeC       chan<- string            // channel for proposing updates
+	confChangeC    chan<- raftpb.ConfChange // proposed cluster config changes
+	communicationC <-chan []raftpb.Message
+	commitC        <-chan *commit
+	errorC         <-chan error
+
+	id       uint64 //raft节点的id
+	raft     *raftNode
+	SelfInfo *infos.NodeInfo
+	ctx      context.Context //context
+	cancel   context.CancelFunc
+
+	infoMap     map[uint64]*infos.NodeInfo
+	infoStorage *infos.Storage
+	leaderID    uint64 // 注册时的 leader 信息
+
+	getSnapshot         func() ([]byte, error)
+	recoverFromSnapshot func([]byte) error
 
 	infoStorageRegister   *infos.StorageRegister
-	raftChan              chan raftpb.Message
 	appliedRequestChan    chan *ProposeInfoRequest
 	appliedConfChangeChan chan raftpb.ConfChange
+
+	snapshotter *snap.Snapshotter
 
 	mutex  sync.RWMutex
 	config *Config
@@ -82,7 +92,8 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 		logger.Errorf("receive unmarshalled propose info request: %v", request.Id)
 		return nil, err
 	}
-	err = m.raft.Propose(ctx, data)
+
+	m.proposeC <- string(data)
 
 	// wait propose apply
 	for {
@@ -101,6 +112,64 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 		},
 		LeaderInfo: nil,
 	}, err
+}
+
+func (m *Moon) loadSnapshot() (*raftpb.Snapshot, error) {
+	snapshot, err := m.snapshotter.Load()
+	if err == snap.ErrNoSnapshot {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return snapshot, nil
+}
+
+func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
+	for commit := range commitC {
+		if commit == nil {
+			snapshot, err := m.loadSnapshot()
+			if err != nil {
+				logger.Errorf("failed to load snapshot: %v", err)
+			}
+			if snapshot != nil {
+				logger.Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
+				if err := m.recoverFromSnapshot(snapshot.Data); err != nil {
+					logger.Errorf("failed to recover from snapshot: %v", err)
+				}
+			}
+			continue
+		}
+
+		for _, rawData := range commit.data {
+			// TODO: handle the data
+			var msg ProposeInfoRequest
+			data := []byte(rawData)
+			err := msg.Unmarshal(data)
+			if err != nil {
+				logger.Errorf("failed to unmarshal data: %v", err)
+			}
+			info := msg.BaseInfo
+			switch msg.Operate {
+			case ProposeInfoRequest_ADD:
+				logger.Tracef("%d add info %v", m.id, info.GetID())
+				err = m.infoStorageRegister.Update(info)
+
+			case ProposeInfoRequest_UPDATE:
+				err = m.infoStorageRegister.Update(info)
+			case ProposeInfoRequest_DELETE:
+				err = m.infoStorageRegister.Delete(info.GetInfoType(), msg.Id)
+			}
+			if err != nil {
+				logger.Errorf("Moon process moon message err: %v", err.Error())
+			}
+			m.appliedRequestChan <- &msg
+		}
+		close(commit.applyDoneC) // TODO:why ?
+	}
+	if err, ok := <-errorC; ok {
+		logger.Fatalf("commit stream error: %v", err)
+	}
 }
 
 func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoReply, error) {
@@ -133,45 +202,52 @@ func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Informat
 
 func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
 	data, _ := nodeInfo.Marshal()
-	err := m.raft.ProposeConfChange(ctx, raftpb.ConfChange{
+
+	m.confChangeC <- raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  nodeInfo.RaftId,
 		Context: data,
-	})
-	if err != nil {
-		return err
 	}
+
 	// TODO: add time out
 	<-m.appliedConfChangeChan
 	return nil
 }
 
 func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raftpb.Message, error) {
-	m.raftChan <- *message
+	m.raft.raftChan <- *message
 	return &raftpb.Message{}, nil
 }
 
-func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
+func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, getSnapshot func() ([]byte, error), recoverFromSnapshot func([]byte) error, rpcServer *messenger.RpcServer,
 	register *infos.StorageRegister) *Moon {
+
+	proposeC := make(chan string) // TODO: close
+	confChangeC := make(chan raftpb.ConfChange)
+	communicationC := make(chan []raftpb.Message)
+
 	ctx, cancel := context.WithCancel(ctx)
-	storage := raft.NewMemoryStorage()
+
 	m := &Moon{
-		id:                    0, // set raft id after register
-		SelfInfo:              selfInfo,
-		ctx:                   ctx,
-		cancel:                cancel,
-		raftStorage:           storage,
-		stableStorage:         NewStorage(config.RaftStoragePath),
-		cfg:                   nil, // set raft cfg after register
-		ticker:                time.NewTicker(time.Millisecond * 200).C,
+		proposeC:       proposeC,
+		confChangeC:    confChangeC,
+		communicationC: communicationC,
+
+		id:       0, // set raft id after register
+		SelfInfo: selfInfo,
+		ctx:      ctx,
+		cancel:   cancel,
+
 		mutex:                 sync.RWMutex{},
 		infoMap:               make(map[uint64]*infos.NodeInfo),
 		config:                config,
 		status:                StatusInit,
 		infoStorageRegister:   register,
-		raftChan:              make(chan raftpb.Message),
 		appliedRequestChan:    make(chan *ProposeInfoRequest, 100),
 		appliedConfChangeChan: make(chan raftpb.ConfChange, 100),
+
+		getSnapshot:         getSnapshot,
+		recoverFromSnapshot: recoverFromSnapshot,
 	}
 	leaderInfo := config.ClusterInfo.LeaderInfo
 	if leaderInfo != nil {
@@ -221,37 +297,13 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 }
 
 func (m *Moon) IsLeader() bool {
-	return m.raft.Status().Lead == m.id
-}
-
-func (m *Moon) process(entry raftpb.Entry) {
-	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var msg ProposeInfoRequest
-		err := msg.Unmarshal(entry.Data)
-		if err != nil {
-			logger.Errorf("unmarshal entry data fail: %v", err)
-		}
-		info := msg.BaseInfo
-		switch msg.Operate {
-		case ProposeInfoRequest_ADD:
-			logger.Tracef("%d add info %v", m.id, info.GetID())
-			err = m.infoStorageRegister.Update(info)
-		case ProposeInfoRequest_UPDATE:
-			err = m.infoStorageRegister.Update(info)
-		case ProposeInfoRequest_DELETE:
-			err = m.infoStorageRegister.Delete(info.GetInfoType(), msg.Id)
-		}
-		if err != nil {
-			logger.Errorf("Moon process moon message err: %v", err.Error())
-		}
-		// let request know it is already applied
-		m.appliedRequestChan <- &msg
-	}
+	return m.raft.node.Status().Lead == m.id
 }
 
 func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
 	m.status = StatusRegistering
 	m.SelfInfo = selfInfo
 	if leaderInfo != nil {
@@ -262,15 +314,6 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 	}
 
 	m.id = m.SelfInfo.RaftId
-	cfg := raft.Config{
-		ID:              m.SelfInfo.RaftId,
-		ElectionTick:    10,
-		HeartbeatTick:   1,
-		Storage:         m.raftStorage,
-		MaxSizePerMsg:   4096,
-		MaxInflightMsgs: 256,
-	}
-	m.cfg = &cfg
 
 	var peers []raft.Peer
 
@@ -287,7 +330,6 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 		}
 	}
 
-	m.raft = raft.StartNode(m.cfg, peers)
 }
 
 func (m *Moon) Run() {
@@ -296,47 +338,15 @@ func (m *Moon) Run() {
 	}
 	go m.reportSelfInfo()
 
+	// read commits from raft into storage until error
+	go m.readCommits(m.commitC, m.errorC)
 	for {
 		select {
 		case <-m.ctx.Done():
 			m.cleanup()
 			return
-		case <-m.ticker:
-			m.raft.Tick()
-		case rd := <-m.raft.Ready():
-			// 将HardState，entries写入持久化存储中
-			err := m.stableStorage.Save(rd.HardState, rd.Entries)
-			if err != nil {
-				logger.Errorf("save hardState of raft log entries fail")
-				return
-			}
-			if !raft.IsEmptySnap(rd.Snapshot) {
-				// 如果快照数据不为空，也需要保存快照数据到持久化存储中
-				err = m.stableStorage.SaveSnap(rd.Snapshot)
-				if err != nil {
-					return
-				}
-				err = m.raftStorage.ApplySnapshot(rd.Snapshot)
-				if err != nil {
-					return
-				}
-			}
-			_ = m.raftStorage.Append(rd.Entries)
-			go m.sendByRpc(rd.Messages)
-			for _, entry := range rd.CommittedEntries {
-				m.process(entry)
-				if entry.Type == raftpb.EntryConfChange {
-					var cc raftpb.ConfChange
-					_ = cc.Unmarshal(entry.Data)
-					m.raft.ApplyConfChange(cc)
-					if cc.Context != nil {
-						m.appliedConfChangeChan <- cc
-					}
-				}
-			}
-			m.raft.Advance()
-		case message := <-m.raftChan:
-			_ = m.raft.Step(m.ctx, message)
+		case msg := <-m.communicationC:
+			go m.sendByRpc(msg)
 		}
 	}
 }
@@ -347,12 +357,11 @@ func (m *Moon) Stop() {
 
 func (m *Moon) cleanup() {
 	logger.Warningf("moon %d stopped, start clean up", m.SelfInfo.RaftId)
-	m.raft.Stop()
-	m.stableStorage.Close()
+	m.raft.stopc <- struct{}{}
 }
 
 func (m *Moon) reportSelfInfo() {
-	for m.raft.Status().Lead == 0 {
+	for m.raft.node.Status().Lead == 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -379,5 +388,5 @@ func (m *Moon) GetLeaderID() uint64 {
 	if m.raft == nil {
 		return 0
 	}
-	return m.raft.Status().Lead
+	return m.raft.node.Status().Lead
 }
