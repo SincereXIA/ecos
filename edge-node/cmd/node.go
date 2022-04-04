@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 	"net/http"
-	"path"
 	"strconv"
 )
 
@@ -64,9 +63,10 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 
 	// Gen Alaya
 	logger.Infof("Start init Alaya ...")
-	dbBasePath := path.Join(conf.StoragePath, "/db")
-	metaDBPath := path.Join(dbBasePath, "/meta")
-	metaStorage := alaya.NewStableMetaStorage(metaDBPath)
+	//dbBasePath := path.Join(conf.StoragePath, "/db")
+	//metaDBPath := path.Join(dbBasePath, "/meta")
+	//metaStorage := alaya.NewStableMetaStorage(metaDBPath)
+	metaStorage := alaya.NewMemoryMetaStorage()
 	a := alaya.NewAlaya(ctx, w, metaStorage, rpc)
 
 	// Gen Gaia

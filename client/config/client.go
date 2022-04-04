@@ -1,6 +1,7 @@
 package config
 
 import (
+	"ecos/client/credentials"
 	"ecos/utils/config"
 	"ecos/utils/logger"
 	"os"
@@ -17,6 +18,7 @@ type ObjectConfig struct {
 
 type ClientConfig struct {
 	config.Config
+	Credential    credentials.Credential
 	Object        ObjectConfig
 	UploadTimeout time.Duration
 	UploadBuffer  uint64
@@ -30,7 +32,8 @@ var Config *ClientConfig
 func init() {
 	if DefaultConfig == nil {
 		DefaultConfig = &ClientConfig{
-			Config: config.Config{},
+			Config:     config.Config{},
+			Credential: credentials.New("root", "root"),
 			Object: ObjectConfig{
 				ChunkSize: chunkSize,
 			},

@@ -38,11 +38,11 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 	watcherClient := watcher.NewWatcherClient(conn)
 	reply, err := watcherClient.GetClusterInfo(context.Background(),
 		&watcher.GetClusterInfoRequest{Term: 0})
-	clusterInfo := reply.GetClusterInfo()
 	if err != nil {
 		logger.Errorf("get group info fail: %v", err)
 		return nil
 	}
+	clusterInfo := reply.GetClusterInfo()
 	// TODO: Retry?
 	// TODO: Get pgNum, groupNum from moon
 	ret := &EcosIOFactory{
