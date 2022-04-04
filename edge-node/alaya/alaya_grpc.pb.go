@@ -22,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 type AlayaClient interface {
 	RecordObjectMeta(ctx context.Context, in *object.ObjectMeta, opts ...grpc.CallOption) (*common.Result, error)
 	GetObjectMeta(ctx context.Context, in *MetaRequest, opts ...grpc.CallOption) (*object.ObjectMeta, error)
+	ListMeta(ctx context.Context, in *ListMetaRequest, opts ...grpc.CallOption) (*ObjectMetaList, error)
 	SendRaftMessage(ctx context.Context, in *PGRaftMessage, opts ...grpc.CallOption) (*PGRaftMessage, error)
 }
 
@@ -51,6 +52,15 @@ func (c *alayaClient) GetObjectMeta(ctx context.Context, in *MetaRequest, opts .
 	return out, nil
 }
 
+func (c *alayaClient) ListMeta(ctx context.Context, in *ListMetaRequest, opts ...grpc.CallOption) (*ObjectMetaList, error) {
+	out := new(ObjectMetaList)
+	err := c.cc.Invoke(ctx, "/messenger.Alaya/ListMeta", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *alayaClient) SendRaftMessage(ctx context.Context, in *PGRaftMessage, opts ...grpc.CallOption) (*PGRaftMessage, error) {
 	out := new(PGRaftMessage)
 	err := c.cc.Invoke(ctx, "/messenger.Alaya/SendRaftMessage", in, out, opts...)
@@ -66,6 +76,7 @@ func (c *alayaClient) SendRaftMessage(ctx context.Context, in *PGRaftMessage, op
 type AlayaServer interface {
 	RecordObjectMeta(context.Context, *object.ObjectMeta) (*common.Result, error)
 	GetObjectMeta(context.Context, *MetaRequest) (*object.ObjectMeta, error)
+	ListMeta(context.Context, *ListMetaRequest) (*ObjectMetaList, error)
 	SendRaftMessage(context.Context, *PGRaftMessage) (*PGRaftMessage, error)
 	mustEmbedUnimplementedAlayaServer()
 }
@@ -79,6 +90,9 @@ func (UnimplementedAlayaServer) RecordObjectMeta(context.Context, *object.Object
 }
 func (UnimplementedAlayaServer) GetObjectMeta(context.Context, *MetaRequest) (*object.ObjectMeta, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetObjectMeta not implemented")
+}
+func (UnimplementedAlayaServer) ListMeta(context.Context, *ListMetaRequest) (*ObjectMetaList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListMeta not implemented")
 }
 func (UnimplementedAlayaServer) SendRaftMessage(context.Context, *PGRaftMessage) (*PGRaftMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendRaftMessage not implemented")
@@ -132,6 +146,24 @@ func _Alaya_GetObjectMeta_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Alaya_ListMeta_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMetaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AlayaServer).ListMeta(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/messenger.Alaya/ListMeta",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AlayaServer).ListMeta(ctx, req.(*ListMetaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Alaya_SendRaftMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PGRaftMessage)
 	if err := dec(in); err != nil {
@@ -164,6 +196,10 @@ var Alaya_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetObjectMeta",
 			Handler:    _Alaya_GetObjectMeta_Handler,
+		},
+		{
+			MethodName: "ListMeta",
+			Handler:    _Alaya_ListMeta_Handler,
 		},
 		{
 			MethodName: "SendRaftMessage",

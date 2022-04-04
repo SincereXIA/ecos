@@ -12,7 +12,6 @@ import (
 	"ecos/utils/timestamp"
 	"encoding/hex"
 	"hash"
-	"path"
 	"strconv"
 )
 
@@ -163,10 +162,9 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 }
 
 func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
-	prefix := w.bucketInfo.GetID()
 	pgID := object.GenObjPgID(w.bucketInfo, objectKey, 10)
 	meta := &object.ObjectMeta{
-		ObjId:      path.Join(prefix, objectKey),
+		ObjId:      object.GenObjectId(w.bucketInfo, objectKey),
 		ObjSize:    w.writeSize,
 		UpdateTime: timestamp.Now(),
 		//TODO: check if need hash

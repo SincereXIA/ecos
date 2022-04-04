@@ -76,9 +76,27 @@ func TestNewAlaya(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
+	testMetaNum := 100
+
 	t.Run("update objectMeta", func(t *testing.T) {
-		metas := genTestMetas(watchers, bucketInfo, 100)
+		metas := genTestMetas(watchers, bucketInfo, testMetaNum)
 		updateMetas(t, watchers, alayas, metas, bucketInfo)
+		t.Run("list all objectMeta", func(t *testing.T) {
+			var allMetas []*object.ObjectMeta
+			for i := 1; i <= int(bucketInfo.Config.KeySlotNum); i++ {
+				pgID := object.GenSlotPgID(bucketInfo.GetID(), int32(i), 10)
+				nodeID := pipelines[pgID-1].RaftId[0]
+				alaya := alayas[nodeID-1]
+				ms, err := alaya.ListMeta(ctx, &ListMetaRequest{
+					Prefix: path.Join(bucketInfo.GetID(), strconv.Itoa(i)),
+				})
+				if err != nil {
+					t.Errorf("list meta err: %v", err)
+				}
+				allMetas = append(allMetas, ms.Metas...)
+			}
+			assert.Equal(t, testMetaNum, len(allMetas))
+		})
 	})
 
 	t.Run("add new nodes", func(t *testing.T) {
@@ -117,10 +135,10 @@ func TestNewAlaya(t *testing.T) {
 func genTestMetas(watchers []*watcher.Watcher,
 	bucketInfo *infos.BucketInfo, num int) []*object.ObjectMeta {
 	metas := make([]*object.ObjectMeta, num)
-	prefix := bucketInfo.GetID()
 	for i := 0; i < num; i++ {
+		key := "test" + strconv.Itoa(i)
 		meta := &object.ObjectMeta{
-			ObjId:      path.Join(prefix, "test"+strconv.Itoa(i)),
+			ObjId:      object.GenObjectId(bucketInfo, key),
 			ObjSize:    100,
 			UpdateTime: timestamp.Now(),
 			ObjHash:    "",
@@ -137,7 +155,7 @@ func updateMetas(t *testing.T, watchers []*watcher.Watcher,
 	alayas []*Alaya, metas []*object.ObjectMeta, bucketInfo *infos.BucketInfo) {
 	p := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 	for _, meta := range metas {
-		_, _, key, err := object.SplitID(meta.ObjId)
+		_, _, key, _, err := object.SplitID(meta.ObjId)
 		pgID := object.GenObjPgID(bucketInfo, key, 10)
 		nodeIndex := p[pgID-1].RaftId[0]
 		a := alayas[nodeIndex-1]
@@ -153,7 +171,9 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	var alayas []*Alaya
 	nodeNum := len(watchers)
 	for i := 0; i < nodeNum; i++ {
-		metaStorage := NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
+		// TODO (qiutb): apply stable meta storage
+		//metaStorage := NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
+		metaStorage := NewMemoryMetaStorage()
 		a := NewAlaya(ctx, watchers[i], metaStorage, rpcServers[i])
 		alayas = append(alayas, a)
 	}

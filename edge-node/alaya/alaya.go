@@ -62,7 +62,7 @@ func (a *Alaya) getRaftNode(pgID uint64) *Raft {
 
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
 	// check if meta belongs to this PG
-	_, bucketID, key, err := object.SplitID(meta.ObjId)
+	_, bucketID, key, _, err := object.SplitID(meta.ObjId)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 	}, nil
 }
 
-func (a *Alaya) GetObjectMeta(ctx context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
+func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
 	objId := req.ObjId
 	objMeta, err := a.MetaStorage.GetMeta(objId)
 	if err != nil {
@@ -116,6 +116,16 @@ func (a *Alaya) GetObjectMeta(ctx context.Context, req *MetaRequest) (*object.Ob
 		return nil, err
 	}
 	return objMeta, nil
+}
+
+func (a *Alaya) ListMeta(_ context.Context, req *ListMetaRequest) (*ObjectMetaList, error) {
+	metas, _ := a.MetaStorage.List(req.Prefix)
+	for _, meta := range metas {
+		meta.Term = a.watcher.GetCurrentTerm()
+	}
+	return &ObjectMetaList{
+		Metas: metas,
+	}, nil
 }
 
 func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (*PGRaftMessage, error) {

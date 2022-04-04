@@ -14,7 +14,7 @@ import (
 type MetaStorage interface {
 	RecordMeta(meta *object.ObjectMeta) error
 	GetMeta(objID string) (meta *object.ObjectMeta, err error)
-	GetMetaInPG(pgID uint64, off int, len int) ([]*object.ObjectMeta, error)
+	List(prefix string) ([]*object.ObjectMeta, error)
 	Close()
 }
 
@@ -44,8 +44,13 @@ func (s *MemoryMetaStorage) GetMeta(objID string) (meta *object.ObjectMeta, err 
 	return nil, errno.MetaNotExist
 }
 
-func (s *MemoryMetaStorage) GetMetaInPG(pgID uint64, off int, len int) ([]*object.ObjectMeta, error) {
-	return nil, nil
+func (s *MemoryMetaStorage) List(prefix string) (metas []*object.ObjectMeta, err error) {
+	for _, m := range s.metaMap {
+		if m.ObjId[:len(prefix)] == prefix {
+			metas = append(metas, m)
+		}
+	}
+	return
 }
 
 func (s *MemoryMetaStorage) Close() {
@@ -86,10 +91,6 @@ func (s *StableMetaStorage) GetMeta(objID string) (meta *object.ObjectMeta, err 
 	}
 	metaData.Free()
 	return &M, nil
-}
-
-func (s *StableMetaStorage) GetMetaInPG(pgID uint64, off int, len int) ([]*object.ObjectMeta, error) {
-	return nil, nil
 }
 
 func (s *StableMetaStorage) Close() {

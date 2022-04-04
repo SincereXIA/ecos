@@ -39,7 +39,9 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	var alayas []*alaya.Alaya
 	nodeNum := len(watchers)
 	for i := 0; i < nodeNum; i++ {
-		metaStorage := alaya.NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
+		// TODO (qiutb): implement rocksdb MetaStorage
+		//metaStorage := alaya.NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
+		metaStorage := alaya.NewMemoryMetaStorage()
 		a := alaya.NewAlaya(ctx, watchers[i], metaStorage, rpcServers[i])
 		alayas = append(alayas, a)
 	}

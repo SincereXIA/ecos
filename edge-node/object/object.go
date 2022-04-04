@@ -5,32 +5,40 @@ import (
 	utilsCommon "ecos/utils/common"
 	"errors"
 	"path"
+	"strconv"
 	"strings"
 )
 
-func genPgID(bucketID string, slot, pgNum int32) uint64 {
+func GenSlotPgID(bucketID string, slot, pgNum int32) uint64 {
 	str := bucketID + "/" + string(slot)
 	pg := utilsCommon.NewMapper(uint64(pgNum)).MapIDtoPG(str)
 	return pg
 }
 
+// CalculateSlot returns the slot number of the object
+// 1 <= slot number <= slotNum
 func CalculateSlot(objectKey string, slotNum int32) int32 {
 	m := utilsCommon.NewMapper(uint64(slotNum))
 	slot := m.MapIDtoPG(objectKey)
 	return int32(slot)
 }
 
-func SplitID(objectID string) (volumeID, bucketID, key string, err error) {
+func SplitID(objectID string) (volumeID, bucketID, key string, slotID int32, err error) {
 	objectID = path.Clean(objectID)
 	objectID = strings.TrimPrefix(objectID, "/")
-	split := strings.SplitN(objectID, "/", 3)
-	if len(split) != 3 {
+	split := strings.SplitN(objectID, "/", 4)
+	if len(split) != 4 {
 		// TODO error
-		return "", "", "", errors.New("split objectID error")
+		return "", "", "", 0, errors.New("split objectID error")
 	}
-	volumeID, bucketID, key = split[0], split[1], split[2]
+	volumeID, bucketID, key = split[0], split[1], split[3]
 	bucketID = path.Join(volumeID, bucketID)
 	key = strings.TrimPrefix(key, "/")
+	slot, err := strconv.Atoi(split[2])
+	if err != nil {
+		return "", "", "", 0, errors.New("split objectID error")
+	}
+	slotID = int32(slot)
 	return
 }
 
@@ -38,14 +46,15 @@ func GenObjPgID(bucketInfo *infos.BucketInfo, objectKey string, pgNum int32) (pg
 	objectKey = strings.TrimPrefix(objectKey, "/")
 	bucketID := bucketInfo.GetID()
 	slotNum := bucketInfo.GetConfig().KeySlotNum
-	pgID = genPgID(bucketID, CalculateSlot(objectKey, slotNum), pgNum)
+	pgID = GenSlotPgID(bucketID, CalculateSlot(objectKey, slotNum), pgNum)
 	return pgID
 }
 
 // GenObjectId Generates ObjectId for a given object
 func GenObjectId(bucketInfo *infos.BucketInfo, key string) string {
 	prefix := bucketInfo.GetID()
+	slot := CalculateSlot(key, bucketInfo.GetConfig().KeySlotNum)
 	key = path.Clean(key)
-	objID := path.Join(prefix, key)
+	objID := path.Join(prefix, strconv.FormatInt(int64(slot), 10), key)
 	return objID
 }

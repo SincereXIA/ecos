@@ -10,7 +10,17 @@ option go_package = "ecos/edge-node/alaya";
 service Alaya {
   rpc RecordObjectMeta(ObjectMeta) returns (Result) {}
   rpc GetObjectMeta(MetaRequest) returns (ObjectMeta) {}
+  rpc ListMeta(ListMetaRequest) returns (ObjectMetaList) {}
+
   rpc SendRaftMessage (PGRaftMessage) returns (PGRaftMessage) {}
+}
+
+message ListMetaRequest {
+  string prefix = 1;
+}
+
+message ObjectMetaList{
+  repeated ObjectMeta metas = 1;
 }
 
 
