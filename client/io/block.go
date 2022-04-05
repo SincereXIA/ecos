@@ -1,4 +1,4 @@
-package object
+package io
 
 import (
 	agent "ecos/client/info-agent"
@@ -55,7 +55,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 			Message: &gaia.ControlMessage{
 				Code:     gaia.ControlMessage_BEGIN,
 				Block:    &b.BlockInfo,
-				Pipeline: b.blockPipes[b.PgId],
+				Pipeline: b.blockPipes[b.PgId-1],
 				Term:     b.clusterInfo.Term,
 			},
 		},
@@ -147,7 +147,7 @@ func (b *Block) updateBlockInfo() error {
 }
 
 func (b *Block) getUploadStream() (*UploadClient, error) {
-	idString := strconv.FormatUint(b.blockPipes[b.BlockInfo.PgId].RaftId[0], 10)
+	idString := strconv.FormatUint(b.blockPipes[b.BlockInfo.PgId-1].RaftId[0], 10)
 	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
 	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo())
 	if err != nil {

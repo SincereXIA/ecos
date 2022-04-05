@@ -4,6 +4,7 @@ import (
 	"context"
 	"ecos/client/config"
 	info_agent "ecos/client/info-agent"
+	"ecos/client/io"
 	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
@@ -83,4 +84,8 @@ func (client *Client) ListObjects(ctx context.Context, bucketName string) ([]*ob
 		result = append(result, reply.Metas...)
 	}
 	return result, nil
+}
+
+func (client *Client) GetIOFactory(bucketName string) *io.EcosIOFactory {
+	return io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
 }

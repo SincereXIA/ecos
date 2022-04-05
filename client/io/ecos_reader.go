@@ -1,4 +1,4 @@
-package object
+package io
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		return block.([]byte), nil
 	}
 	pgID := GenBlockPG(blockInfo)
-	gaiaServerId := r.blockPipes[pgID].RaftId[0]
+	gaiaServerId := r.blockPipes[pgID-1].RaftId[0]
 	info, err := r.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId, 10))
 	gaiaServerInfo := info.BaseInfo().GetNodeInfo()
 	if err != nil {

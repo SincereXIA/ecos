@@ -32,7 +32,7 @@ func SplitID(objectID string) (volumeID, bucketID, key string, slotID int32, err
 		return "", "", "", 0, errors.New("split objectID error")
 	}
 	volumeID, bucketID, key = split[0], split[1], split[3]
-	bucketID = path.Join(volumeID, bucketID)
+	bucketID = path.Join("/", volumeID, bucketID)
 	key = strings.TrimPrefix(key, "/")
 	slot, err := strconv.Atoi(split[2])
 	if err != nil {

@@ -1,4 +1,4 @@
-package object
+package io
 
 import (
 	"bytes"
@@ -12,13 +12,11 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"runtime"
 	"testing"
 	"time"
 )
 
 func TestEcosWriterAndReader(t *testing.T) {
-	_, filename, _, _ := runtime.Caller(0)
 	ctx, cancel := context.WithCancel(context.Background())
 	basePath := "./ecos-data/"
 	t.Cleanup(func() {
@@ -26,7 +24,6 @@ func TestEcosWriterAndReader(t *testing.T) {
 		_ = os.RemoveAll(basePath)
 	})
 
-	t.Logf("Current test filename: %s", filename)
 	type args struct {
 		objectSize int
 		key        string

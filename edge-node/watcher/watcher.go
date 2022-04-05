@@ -173,6 +173,10 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 		LeaderInfo:      leaderInfo.BaseInfo().GetNodeInfo(),
 		NodesInfo:       clusterNodes,
 		UpdateTimestamp: nil,
+		MetaPgNum:       10,
+		MetaPgSize:      3,
+		BlockPgNum:      100,
+		BlockPgSize:     3,
 	}
 }
 
