@@ -142,7 +142,6 @@ func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 	}
 	if change.Type == raftpb.ConfChangeRemoveNode {
 		go func() {
-			time.Sleep(1 * time.Second)
 			r.Stop()
 		}()
 	}
@@ -197,7 +196,6 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 	if len(NodeIDs) == 0 {
 		return nil
 	}
-	// TODO: do it by new leader
 	removeSelf := false
 	data, _ := r.getPipeline().Marshal()
 	for _, id := range NodeIDs {
@@ -237,7 +235,7 @@ func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 		InfoId:   strconv.FormatUint(nodeID, 10),
 		InfoType: infos.InfoType_NODE_INFO,
 	}
-	result, err := r.watcher.GetMoon().GetInfo(r.ctx, req)
+	result, err := r.watcher.GetMonitor().GetInfo(r.ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -348,12 +346,12 @@ func (r *Raft) askForLeader() {
 	logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
 	r.raft.TransferLeadership(r.ctx, r.raft.Status().Lead, r.raft.Status().ID)
 	for {
-		time.Sleep(time.Second)
 		if r.isLeader() {
 			return
 		}
 		logger.Infof("PG: %v, node %v not leader", r.pgID, r.raftCfg.ID)
 		r.raft.TransferLeadership(r.ctx, r.raft.Status().Lead, r.raft.Status().ID)
+		time.Sleep(time.Second)
 	}
 }
 

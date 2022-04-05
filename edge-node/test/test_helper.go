@@ -9,11 +9,19 @@ import (
 	"ecos/utils/logger"
 	"path"
 	"strconv"
+	"testing"
 	"time"
 )
 
-func RunTestEdgeNodeCluster(ctx context.Context, basePath string, num int) ([]*watcher.Watcher, []*messenger.RpcServer) {
-	watchers, rpcServers, _ := watcher.GenTestWatcherCluster(ctx, basePath, num)
+func RunTestEdgeNodeCluster(t *testing.T, ctx context.Context, mock bool,
+	basePath string, num int) ([]*watcher.Watcher, []*messenger.RpcServer) {
+	var watchers []*watcher.Watcher
+	var rpcServers []*messenger.RpcServer
+	if mock {
+		watchers, rpcServers, _, _ = watcher.GenMockWatcherCluster(t, ctx, basePath, num)
+	} else {
+		watchers, rpcServers, _ = watcher.GenTestWatcherCluster(ctx, basePath, num)
+	}
 	alayas := GenAlayaCluster(ctx, basePath, watchers, rpcServers)
 	_ = GenGaiaCluster(ctx, basePath, watchers, rpcServers)
 

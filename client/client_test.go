@@ -25,13 +25,13 @@ func TestClient(t *testing.T) {
 		_ = os.RemoveAll(basePath)
 	})
 	_ = common.InitAndClearPath(basePath)
-	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(ctx, basePath, 9)
+	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, true, basePath, 9)
 
 	// Add a test bucket first
 	bucketName := "default"
 	bucketInfo := infos.GenBucketInfo("root", bucketName, "root")
 
-	_, err := watchers[0].GetMoon().ProposeInfo(ctx, &moon.ProposeInfoRequest{
+	_, err := watchers[0].GetMonitor().ProposeInfo(ctx, &moon.ProposeInfoRequest{
 		Head:     nil,
 		Operate:  moon.ProposeInfoRequest_ADD,
 		Id:       bucketInfo.GetID(),

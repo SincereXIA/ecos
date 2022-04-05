@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/sirupsen/logrus"
+	"go.etcd.io/etcd/raft/v3"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,6 +16,7 @@ var Logger *logrus.Logger
 
 func init() {
 	Logger = NewDefaultLogrus()
+	raft.SetLogger(NewRaftLogger())
 }
 
 func NewRaftLogger() *logrus.Logger {

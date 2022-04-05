@@ -66,7 +66,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 	if err != nil {
 		return nil, err
 	}
-	m := a.watcher.GetMoon()
+	m := a.watcher.GetMonitor()
 	info, err := m.GetInfoDirect(infos.InfoType_BUCKET_INFO, bucketID)
 	if err != nil {
 		return nil, err
@@ -212,9 +212,9 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 		// Add new raft node
 		var raft *Raft
 		if oldPipelines != nil {
-			raft = a.MakeAlayaRaftInPipeline(p, oldPipelines[pgID-1])
+			raft = a.makeAlayaRaftInPipeline(p, oldPipelines[pgID-1])
 		} else {
-			raft = a.MakeAlayaRaftInPipeline(p, nil)
+			raft = a.makeAlayaRaftInPipeline(p, nil)
 		}
 		if a.state == UPDATING {
 			go func(raft *Raft) {
@@ -243,7 +243,8 @@ func NewAlaya(ctx context.Context, watcher *watcher.Watcher,
 	clusterInfo := watcher.GetCurrentClusterInfo()
 	a.ApplyNewClusterInfo(&clusterInfo)
 	a.state = READY
-	_ = a.watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO, "moon", a.applyNewClusterInfo)
+	_ = a.watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO,
+		"alaya-"+a.watcher.GetSelfInfo().Uuid, a.applyNewClusterInfo)
 
 	return &a
 }
@@ -302,14 +303,14 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 	return ok
 }
 
-// MakeAlayaRaftInPipeline Make a new raft node for a single pipeline (PG), it will:
+// makeAlayaRaftInPipeline Make a new raft node for a single pipeline (PG), it will:
 //
 // 1. Create a raft message chan if not exist
 //
 // 2. New an alaya raft node **but not run it**
 //
 // when leaderID is not zero, it while add to an existed raft group
-func (a *Alaya) MakeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pipeline) *Raft {
+func (a *Alaya) makeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pipeline) *Raft {
 	pgID := p.PgId
 	c, ok := a.PGMessageChans.Load(pgID)
 	if !ok {

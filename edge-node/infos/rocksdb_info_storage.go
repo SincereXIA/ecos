@@ -132,7 +132,7 @@ func (factory *RocksDBInfoStorageFactory) newColumnFamily(infoType InfoType) err
 func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	err := common.InitPath(basePath)
 	if err != nil {
-		logger.Errorf("Init path %s failed, err: %v", basePath)
+		logger.Errorf("Set path %s failed, err: %v", basePath)
 	}
 	cfNames, err := gorocksdb.ListColumnFamilies(database.Opts, basePath)
 	if err != nil {
