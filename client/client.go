@@ -55,7 +55,7 @@ func New(config *config.ClientConfig) (*Client, error) {
 
 func (client *Client) ListObjects(ctx context.Context, bucketName string) ([]*object.ObjectMeta, error) {
 	userID := client.config.Credential.GetUserID()
-	bucketID := path.Join("/", userID, bucketName)
+	bucketID := infos.GenBucketID(userID, bucketName)
 	info, err := client.infoAgent.Get(infos.InfoType_BUCKET_INFO, bucketID)
 	if err != nil {
 		return nil, err

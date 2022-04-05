@@ -15,7 +15,11 @@ func (m *BucketInfo) BaseInfo() *BaseInfo {
 }
 
 func (m *BucketInfo) GetID() string {
-	return path.Join("/", m.VolumeId, m.BucketName)
+	return GenBucketID(m.VolumeId, m.BucketName)
+}
+
+func GenBucketID(volumeId, bucketName string) string {
+	return path.Join("/", volumeId, bucketName)
 }
 
 // GenBucketInfo generates a new BucketInfo from a volume and a bucket name.
@@ -49,5 +53,5 @@ func GetBucketID(volumeID, bucketName string) string {
 		logger.Errorf("bucketName %s contains /", bucketName)
 		return ""
 	}
-	return path.Join("/", volumeID, bucketName)
+	return GenBucketID(volumeID, bucketName)
 }
