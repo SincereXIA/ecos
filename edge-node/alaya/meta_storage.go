@@ -7,10 +7,12 @@ import (
 	"ecos/utils/logger"
 	gorocksdb "github.com/SUMStudio/grocksdb"
 	"github.com/gogo/protobuf/proto"
+	"sync"
 )
 
 // MetaStorage Store ObjectMeta
 // MetaStorage 负责对象元数据的持久化存储
+// MetaStorage should be thread safe, because it is used by multiple raft.
 type MetaStorage interface {
 	RecordMeta(meta *object.ObjectMeta) error
 	GetMeta(objID string) (meta *object.ObjectMeta, err error)
@@ -25,7 +27,7 @@ var ( // rocksdb的设置参数
 )
 
 type MemoryMetaStorage struct {
-	metaMap map[string]*object.ObjectMeta
+	metaMap sync.Map
 }
 
 type StableMetaStorage struct {
@@ -33,23 +35,24 @@ type StableMetaStorage struct {
 }
 
 func (s *MemoryMetaStorage) RecordMeta(meta *object.ObjectMeta) error {
-	s.metaMap[meta.ObjId] = meta
+	s.metaMap.Store(meta.ObjId, meta)
 	return nil
 }
 
 func (s *MemoryMetaStorage) GetMeta(objID string) (meta *object.ObjectMeta, err error) {
-	if m, ok := s.metaMap[objID]; ok {
-		return m, nil
+	if m, ok := s.metaMap.Load(objID); ok {
+		return m.(*object.ObjectMeta), nil
 	}
 	return nil, errno.MetaNotExist
 }
 
 func (s *MemoryMetaStorage) List(prefix string) (metas []*object.ObjectMeta, err error) {
-	for _, m := range s.metaMap {
-		if m.ObjId[:len(prefix)] == prefix {
-			metas = append(metas, m)
+	s.metaMap.Range(func(key, value interface{}) bool {
+		if key.(string)[:len(prefix)] == prefix {
+			metas = append(metas, value.(*object.ObjectMeta))
 		}
-	}
+		return true
+	})
 	return
 }
 
@@ -59,7 +62,7 @@ func (s *MemoryMetaStorage) Close() {
 
 func NewMemoryMetaStorage() *MemoryMetaStorage {
 	return &MemoryMetaStorage{
-		metaMap: make(map[string]*object.ObjectMeta),
+		metaMap: sync.Map{},
 	}
 }
 
