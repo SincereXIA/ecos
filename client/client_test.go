@@ -18,6 +18,8 @@ import (
 func TestClient(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	basePath := "./ecos-data/"
+	objectNum := 20
+
 	t.Cleanup(func() {
 		cancel()
 		_ = os.RemoveAll(basePath)
@@ -50,7 +52,7 @@ func TestClient(t *testing.T) {
 
 	factory := client.GetIOFactory(bucketName)
 	objectSize := 1024 * 1024 * 10 //10M
-	for i := 0; i < 100; i++ {
+	for i := 0; i < objectNum; i++ {
 		data := genTestData(objectSize)
 		writer := factory.GetEcosWriter("test" + strconv.Itoa(i))
 		size, err := writer.Write(data)
@@ -62,7 +64,7 @@ func TestClient(t *testing.T) {
 	t.Run("test get object meta", func(t *testing.T) {
 		meta, err := client.ListObjects(ctx, bucketName)
 		assert.NoError(t, err, "Failed to list objects")
-		assert.Equal(t, 100, len(meta), "object count not match")
+		assert.Equal(t, objectNum, len(meta), "object count not match")
 	})
 }
 
