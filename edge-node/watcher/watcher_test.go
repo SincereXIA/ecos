@@ -6,33 +6,27 @@ import (
 	"testing"
 )
 
-func TestNewWatcher(t *testing.T) {
-	basePath := "./ecos-data"
-	nodeNum := 9
-	ctx := context.Background()
-	// Run Sun
-
-	watchers, rpcServers, _ := GenTestWatcherCluster(ctx, basePath, nodeNum)
-
-	for i := 0; i < nodeNum; i++ {
-		go func(rpc *messenger.RpcServer) {
-			err := rpc.Run()
-			if err != nil {
-				t.Errorf("rpc server run error: %v", err)
-			}
-		}(rpcServers[i])
-	}
-
-	RunAllTestWatcher(watchers)
-	WaitAllTestWatcherOK(watchers)
+func TestWatcher(t *testing.T) {
+	t.Run("watcher with real moon", func(t *testing.T) {
+		testWatcher(t, false)
+	})
+	t.Run("watcher with mock moon", func(t *testing.T) {
+		testWatcher(t, true)
+	})
 }
 
-func TestNewWatcherMockMoon(t *testing.T) {
+func testWatcher(t *testing.T, mock bool) {
 	basePath := "./ecos-data"
 	nodeNum := 9
 	ctx := context.Background()
-
-	watchers, rpcServers, _, controllers := GenMockWatcherCluster(t, ctx, basePath, nodeNum)
+	var watchers []*Watcher
+	var rpcServers []*messenger.RpcServer
+	// Run Sun
+	if mock {
+		watchers, rpcServers, _, _ = GenMockWatcherCluster(t, ctx, basePath, nodeNum)
+	} else {
+		watchers, rpcServers, _ = GenTestWatcherCluster(ctx, basePath, nodeNum)
+	}
 
 	for i := 0; i < nodeNum; i++ {
 		go func(rpc *messenger.RpcServer) {
@@ -46,7 +40,10 @@ func TestNewWatcherMockMoon(t *testing.T) {
 	RunAllTestWatcher(watchers)
 	WaitAllTestWatcherOK(watchers)
 
-	for i := 0; i < nodeNum; i++ {
-		controllers[i].Finish()
-	}
+	t.Cleanup(func() {
+		for i := 0; i < nodeNum; i++ {
+			watchers[i].moon.Stop()
+			rpcServers[i].Stop()
+		}
+	})
 }

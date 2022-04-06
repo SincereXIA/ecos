@@ -66,7 +66,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 	if err != nil {
 		return nil, err
 	}
-	m := a.watcher.GetMonitor()
+	m := a.watcher.GetMoon()
 	info, err := m.GetInfoDirect(infos.InfoType_BUCKET_INFO, bucketID)
 	if err != nil {
 		return nil, err

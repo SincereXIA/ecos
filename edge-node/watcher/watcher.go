@@ -206,7 +206,7 @@ func (w *Watcher) StartMoon() {
 	go w.moon.Run()
 }
 
-func (w *Watcher) GetMonitor() moon.InfoController {
+func (w *Watcher) GetMoon() moon.InfoController {
 	return w.moon
 }
 

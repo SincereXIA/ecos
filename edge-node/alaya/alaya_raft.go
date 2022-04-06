@@ -235,7 +235,7 @@ func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 		InfoId:   strconv.FormatUint(nodeID, 10),
 		InfoType: infos.InfoType_NODE_INFO,
 	}
-	result, err := r.watcher.GetMonitor().GetInfo(r.ctx, req)
+	result, err := r.watcher.GetMoon().GetInfo(r.ctx, req)
 	if err != nil {
 		return nil, err
 	}

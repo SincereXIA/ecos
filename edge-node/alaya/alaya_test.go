@@ -69,7 +69,7 @@ func TestNewAlaya(t *testing.T) {
 	}
 
 	bucketInfo := infos.GenBucketInfo("root", "default", "root")
-	_, err := watchers[0].GetMonitor().ProposeInfo(ctx, &moon.ProposeInfoRequest{
+	_, err := watchers[0].GetMoon().ProposeInfo(ctx, &moon.ProposeInfoRequest{
 		Operate:  moon.ProposeInfoRequest_ADD,
 		Id:       bucketInfo.GetID(),
 		BaseInfo: bucketInfo.BaseInfo(),

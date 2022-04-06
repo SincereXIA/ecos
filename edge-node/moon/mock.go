@@ -72,6 +72,6 @@ func InitMock(m *MockInfoController, rpcServer *messenger.RpcServer,
 	m.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(state.Set).AnyTimes()
 	m.EXPECT().ProposeConfChangeAddNode(gomock.Any(), gomock.Any()).AnyTimes()
 	m.EXPECT().GetLeaderID().DoAndReturn(state.GetLeaderID).AnyTimes()
-	m.EXPECT().Stop().Times(1)
+	m.EXPECT().Stop().AnyTimes()
 	RegisterMoonServer(rpcServer, m)
 }

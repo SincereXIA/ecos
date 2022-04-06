@@ -31,7 +31,7 @@ func TestClient(t *testing.T) {
 	bucketName := "default"
 	bucketInfo := infos.GenBucketInfo("root", bucketName, "root")
 
-	_, err := watchers[0].GetMonitor().ProposeInfo(ctx, &moon.ProposeInfoRequest{
+	_, err := watchers[0].GetMoon().ProposeInfo(ctx, &moon.ProposeInfoRequest{
 		Head:     nil,
 		Operate:  moon.ProposeInfoRequest_ADD,
 		Id:       bucketInfo.GetID(),
