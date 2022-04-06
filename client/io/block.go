@@ -1,8 +1,7 @@
-package object
+package io
 
 import (
 	agent "ecos/client/info-agent"
-	"ecos/client/user"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
@@ -51,12 +50,13 @@ type Block struct {
 // Upload provides a way to upload self to a given stream
 func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	// Start Upload by ControlMessage with Code BEGIN
+	pipe := b.blockPipes[b.PgId-1]
 	start := &gaia.UploadBlockRequest{
 		Payload: &gaia.UploadBlockRequest_Message{
 			Message: &gaia.ControlMessage{
 				Code:     gaia.ControlMessage_BEGIN,
 				Block:    &b.BlockInfo,
-				Pipeline: b.blockPipes[b.PgId],
+				Pipeline: pipe,
 				Term:     b.clusterInfo.Term,
 			},
 		},
@@ -90,12 +90,12 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 			Message: &gaia.ControlMessage{
 				Code:     gaia.ControlMessage_EOF,
 				Block:    &b.BlockInfo,
-				Pipeline: b.blockPipes[b.PgId],
+				Pipeline: pipe,
 				Term:     b.clusterInfo.Term,
 			},
 		},
 	}
-	logger.Infof("PG: %v, NODE: %v", b.PgId, b.blockPipes[b.PgId].RaftId)
+	logger.Infof("PG: %v, NODE: %v", b.PgId, pipe.RaftId)
 	err = stream.Send(end)
 	if err != nil && err != io.EOF {
 		logger.Errorf("uploadBlock error: %v", err)
@@ -148,7 +148,7 @@ func (b *Block) updateBlockInfo() error {
 }
 
 func (b *Block) getUploadStream() (*UploadClient, error) {
-	idString := strconv.FormatUint(b.blockPipes[b.BlockInfo.PgId].RaftId[0], 10)
+	idString := strconv.FormatUint(b.blockPipes[b.BlockInfo.PgId-1].RaftId[0], 10)
 	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
 	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo())
 	if err != nil {
@@ -201,11 +201,6 @@ func (b *Block) Close() error {
 	return nil
 }
 
-// GenObjectId Generates ObjectId for a given object
-func GenObjectId(key string) string {
-	return user.GetUserVolume() + "/" + user.GetUserBucket() + key
-}
-
 // GenBlockId Generates BlockId for the `i` th block of a specific object
 //
 // This method ensures the global unique with UUID!
@@ -224,14 +219,7 @@ const (
 
 var (
 	blockMapper = common.NewMapper(blockPgNum)
-	objMapper   = common.NewMapper(objPgNum)
 )
-
-// GenObjectPG Generates PgId for ObjectMeta
-// PgId of ObjectMeta depends on `key` of Object
-func GenObjectPG(key string) uint64 {
-	return objMapper.MapIDtoPG(key)
-}
 
 // GenBlockPG Generates PgId for Block
 // PgId of Block depends on `BlockId` of Block

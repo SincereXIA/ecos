@@ -1,28 +1,24 @@
 package config
 
 import (
+	"ecos/client/credentials"
 	"ecos/utils/config"
 	"ecos/utils/logger"
 	"os"
 	"time"
 )
 
-const blockSize = 1 << 22
 const chunkSize = 1 << 20
 const uploadTimeout = time.Second * 10
 const uploadBuffer = 1 << 25
-const blockHash = true
-const objectHash = false
 
 type ObjectConfig struct {
-	BlockSize  uint64
-	ChunkSize  uint64
-	BlockHash  bool
-	ObjectHash bool
+	ChunkSize uint64
 }
 
 type ClientConfig struct {
 	config.Config
+	Credential    credentials.Credential
 	Object        ObjectConfig
 	UploadTimeout time.Duration
 	UploadBuffer  uint64
@@ -36,12 +32,10 @@ var Config *ClientConfig
 func init() {
 	if DefaultConfig == nil {
 		DefaultConfig = &ClientConfig{
-			Config: config.Config{},
+			Config:     config.Config{},
+			Credential: credentials.New("root", "root"),
 			Object: ObjectConfig{
-				BlockSize:  blockSize,
-				ChunkSize:  chunkSize,
-				BlockHash:  blockHash,
-				ObjectHash: objectHash,
+				ChunkSize: chunkSize,
 			},
 			UploadTimeout: uploadTimeout,
 			UploadBuffer:  uploadBuffer,

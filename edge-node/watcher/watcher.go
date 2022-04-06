@@ -33,7 +33,7 @@ import (
 //   for this night and all the nights to come.
 type Watcher struct {
 	selfNodeInfo *infos.NodeInfo
-	moon         *moon.Moon
+	moon         moon.InfoController
 	register     *infos.StorageRegister
 	timer        *time.Timer
 	config       *Config
@@ -58,7 +58,7 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	request := &moon.ProposeInfoRequest{
 		Head: &common.Head{
 			Timestamp: timestamp.Now(),
-			Term:      w.getCurrentTerm(),
+			Term:      w.GetCurrentTerm(),
 		},
 		Operate:  moon.ProposeInfoRequest_ADD,
 		Id:       strconv.FormatUint(info.RaftId, 10),
@@ -130,7 +130,7 @@ func (w *Watcher) SetOnInfoUpdate(infoType infos.InfoType, name string, f infos.
 	return nil
 }
 
-func (w *Watcher) getCurrentTerm() uint64 {
+func (w *Watcher) GetCurrentTerm() uint64 {
 	return w.GetCurrentClusterInfo().Term
 }
 
@@ -173,13 +173,17 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 		LeaderInfo:      leaderInfo.BaseInfo().GetNodeInfo(),
 		NodesInfo:       clusterNodes,
 		UpdateTimestamp: nil,
+		MetaPgNum:       10,
+		MetaPgSize:      3,
+		BlockPgNum:      100,
+		BlockPgSize:     3,
 	}
 }
 
 func (w *Watcher) RequestJoinCluster(leaderInfo *infos.NodeInfo) error {
 	if leaderInfo == nil || leaderInfo.RaftId == w.selfNodeInfo.RaftId {
 		// 此节点为集群中第一个节点
-		w.moon.Init(leaderInfo, nil)
+		w.moon.Set(w.selfNodeInfo, leaderInfo, nil)
 		return nil
 	}
 
@@ -194,7 +198,7 @@ func (w *Watcher) RequestJoinCluster(leaderInfo *infos.NodeInfo) error {
 		logger.Errorf("Request join to group err: %v", err.Error())
 		return err
 	}
-	w.moon.Init(leaderInfo, reply.PeersNodeInfo)
+	w.moon.Set(w.selfNodeInfo, leaderInfo, reply.PeersNodeInfo)
 	return nil
 }
 
@@ -202,7 +206,7 @@ func (w *Watcher) StartMoon() {
 	go w.moon.Run()
 }
 
-func (w *Watcher) GetMoon() *moon.Moon {
+func (w *Watcher) GetMoon() moon.InfoController {
 	return w.moon
 }
 
@@ -226,7 +230,6 @@ func (w *Watcher) AskSky() (leaderInfo *infos.NodeInfo, err error) {
 	}
 	// update raftID for watcher and moon
 	w.selfNodeInfo.RaftId = result.RaftId
-	w.moon.SelfInfo = w.selfNodeInfo
 	return result.ClusterInfo.LeaderInfo, nil
 }
 
@@ -249,7 +252,7 @@ func (w *Watcher) Run() {
 }
 
 func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer,
-	m *moon.Moon, register *infos.StorageRegister) *Watcher {
+	m moon.InfoController, register *infos.StorageRegister) *Watcher {
 	watcherCtx, cancelFunc := context.WithCancel(ctx)
 	watcher := &Watcher{
 		moon:         m,
@@ -261,7 +264,7 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 	}
 	nodeInfoStorage := watcher.register.GetStorage(infos.InfoType_NODE_INFO)
 	clusterInfoStorage := watcher.register.GetStorage(infos.InfoType_CLUSTER_INFO)
-	nodeInfoStorage.SetOnUpdate("watcher", func(info infos.Information) {
+	nodeInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, func(info infos.Information) {
 		if !watcher.moon.IsLeader() {
 			return
 		}
@@ -274,7 +277,7 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 			request := &moon.ProposeInfoRequest{
 				Head: &common.Head{
 					Timestamp: timestamp.Now(),
-					Term:      watcher.getCurrentTerm(),
+					Term:      watcher.GetCurrentTerm(),
 				},
 				Operate: moon.ProposeInfoRequest_ADD,
 				Id:      strconv.FormatUint(clusterInfo.Term, 10),
@@ -293,7 +296,7 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 			logger.Infof("[NEW TERM] leader propose new cluster info success")
 		})
 	})
-	clusterInfoStorage.SetOnUpdate("watcher", func(info infos.Information) {
+	clusterInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, func(info infos.Information) {
 		watcher.clusterInfoMutex.Lock()
 		defer watcher.clusterInfoMutex.Unlock()
 		logger.Infof("[NEW TERM] node %v get new term: %v, node num: %v",

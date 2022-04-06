@@ -1,4 +1,4 @@
-package object
+package io
 
 import (
 	"ecos/client/config"
@@ -31,6 +31,7 @@ func (c *localChunk) Close() error {
 type EcosWriter struct {
 	infoAgent   *agent.InfoAgent
 	clusterInfo *infos.ClusterInfo
+	bucketInfo  *infos.BucketInfo
 	key         string
 	config      *config.ClientConfig
 	Status      BlockStatus
@@ -45,15 +46,16 @@ type EcosWriter struct {
 	finishedBlocks chan *Block
 	blockPipes     []*pipeline.Pipeline
 
-	meta     *object.ObjectMeta
-	objHash  hash.Hash
-	objPipes []*pipeline.Pipeline
+	writeSize uint64
+	objHash   hash.Hash
+	objPipes  []*pipeline.Pipeline
 }
 
 // getCurBlock ensures to return with a Block can put new Chunk in
 func (w *EcosWriter) getCurBlock() *Block {
+	blockSize := w.bucketInfo.Config.BlockSize
 	if w.curBlock != nil && len(w.curBlock.chunks) ==
-		int(w.config.Object.BlockSize/w.config.Object.ChunkSize) {
+		int(blockSize/w.config.Object.ChunkSize) {
 		w.commitCurBlock()
 	}
 	if w.curBlock == nil {
@@ -65,7 +67,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 			infoAgent:   w.infoAgent,
 			clusterInfo: w.clusterInfo,
 			blockCount:  w.blockCount,
-			needHash:    w.config.Object.BlockHash,
+			needHash:    w.bucketInfo.Config.BlockHashEnable,
 			blockPipes:  w.blockPipes,
 			uploadCount: 0,
 			delFunc: func(self *Block) {
@@ -149,8 +151,8 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 		pending -= writeSize
 	}
 	// Update ObjectMeta of EcosWriter.meta.ObjHash
-	w.meta.ObjSize += uint64(offset)
-	if w.config.Object.ObjectHash {
+	w.writeSize += uint64(offset)
+	if w.bucketInfo.Config.ObjectHashEnable {
 		w.objHash.Write(p[:offset])
 	}
 	if offset != lenP {
@@ -159,32 +161,39 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 	return lenP, nil
 }
 
-// commitMeta will set EcosWriter collect info of Block s and generate ObjectMeta.
-// Then these infos will be sent to AlayaServer
-func (w *EcosWriter) commitMeta() error {
-	w.meta.ObjId = GenObjectId(w.key)
-	// w.meta.ObjSize has been set in EcosWriter.Write
-	w.meta.UpdateTime = timestamp.Now()
-	w.meta.Term = w.clusterInfo.Term
-	if w.config.Object.ObjectHash {
-		w.meta.ObjHash = hex.EncodeToString(w.objHash.Sum(nil))
-	} else {
-		w.meta.ObjHash = ""
+func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
+	pgID := object.GenObjPgID(w.bucketInfo, objectKey, 10)
+	meta := &object.ObjectMeta{
+		ObjId:      object.GenObjectId(w.bucketInfo, objectKey),
+		ObjSize:    w.writeSize,
+		UpdateTime: timestamp.Now(),
+		//TODO: check if need hash
+		ObjHash:  hex.EncodeToString(w.objHash.Sum(nil)),
+		PgId:     pgID,
+		Blocks:   nil,
+		Term:     w.clusterInfo.Term,
+		MetaData: nil,
 	}
-	w.meta.PgId = GenObjectPG(w.key)
 	// w.meta.Blocks is set here. The map and Block.Close ensures the Block Status
 	logger.Debugf("commit blocks num: %v", len(w.blocks))
 	for i := 1; i <= len(w.blocks); i++ {
 		block := w.blocks[i]
-		w.meta.Blocks = append(w.meta.Blocks, &block.BlockInfo)
+		meta.Blocks = append(meta.Blocks, &block.BlockInfo)
 	}
-	metaServerNode := w.checkObjNodeByPg()
+	return meta
+}
+
+// commitMeta will set EcosWriter collect info of Block s and generate ObjectMeta.
+// Then these infos will be sent to AlayaServer
+func (w *EcosWriter) commitMeta() error {
+	meta := w.genMeta(w.key)
+	metaServerNode := w.getObjNodeByPg(meta.PgId)
 	metaClient, err := NewMetaClient(metaServerNode)
 	if err != nil {
 		logger.Errorf("Upload Object Failed: %v", err)
 		return err
 	}
-	result, err := metaClient.SubmitMeta(w.meta)
+	result, err := metaClient.SubmitMeta(meta)
 	if err != nil {
 		logger.Errorf("Upload Object Failed: %v with Error %v", result, err)
 		return err
@@ -218,9 +227,9 @@ func (w *EcosWriter) Close() error {
 	return nil
 }
 
-func (w *EcosWriter) checkObjNodeByPg() *infos.NodeInfo {
-	logger.Infof("META PG: %v, NODE: %v", w.meta.PgId, w.objPipes[w.meta.PgId-1].RaftId)
-	idString := strconv.FormatUint(w.objPipes[w.meta.PgId-1].RaftId[0], 10)
+func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {
+	logger.Infof("META PG: %v, NODE: %v", pgID, w.objPipes[pgID-1].RaftId)
+	idString := strconv.FormatUint(w.objPipes[pgID-1].RaftId[0], 10)
 	nodeInfo, _ := w.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
 	return nodeInfo.BaseInfo().GetNodeInfo()
 }

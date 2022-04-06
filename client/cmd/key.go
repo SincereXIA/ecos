@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"ecos/client/config"
-	"ecos/client/object"
+	ecosIO "ecos/client/io"
 	"ecos/utils/logger"
 	"fmt"
 	"github.com/spf13/cobra"
@@ -39,14 +39,19 @@ func init() {
 }
 
 func KeyPut(key string, path string) {
-	factory := object.NewEcosIOFactory(config.DefaultConfig)
+	factory := ecosIO.NewEcosIOFactory(config.DefaultConfig, "root", "default")
 	writer := factory.GetEcosWriter(key)
 	fi, err := os.Open(path)
 	if err != nil {
 		logger.Errorf("open file: %v, fail: %v", path, err)
 		os.Exit(1)
 	}
-	defer fi.Close()
+	defer func(fi *os.File) {
+		err = fi.Close()
+		if err != nil {
+			logger.Errorf("close file: %v, fail: %v", path, err)
+		}
+	}(fi)
 	_, err = io.Copy(&writer, fi)
 	if err != nil {
 		logger.Errorf("put key fail: %v", err)

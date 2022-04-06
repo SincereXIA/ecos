@@ -6,13 +6,27 @@ import (
 	"testing"
 )
 
-func TestNewWatcher(t *testing.T) {
+func TestWatcher(t *testing.T) {
+	t.Run("watcher with real moon", func(t *testing.T) {
+		testWatcher(t, false)
+	})
+	t.Run("watcher with mock moon", func(t *testing.T) {
+		testWatcher(t, true)
+	})
+}
+
+func testWatcher(t *testing.T, mock bool) {
 	basePath := "./ecos-data"
 	nodeNum := 9
 	ctx := context.Background()
+	var watchers []*Watcher
+	var rpcServers []*messenger.RpcServer
 	// Run Sun
-
-	watchers, rpcServers, _ := GenTestWatcherCluster(ctx, basePath, nodeNum)
+	if mock {
+		watchers, rpcServers, _, _ = GenMockWatcherCluster(t, ctx, basePath, nodeNum)
+	} else {
+		watchers, rpcServers, _ = GenTestWatcherCluster(ctx, basePath, nodeNum)
+	}
 
 	for i := 0; i < nodeNum; i++ {
 		go func(rpc *messenger.RpcServer) {
@@ -25,4 +39,11 @@ func TestNewWatcher(t *testing.T) {
 
 	RunAllTestWatcher(watchers)
 	WaitAllTestWatcherOK(watchers)
+
+	t.Cleanup(func() {
+		for i := 0; i < nodeNum; i++ {
+			watchers[i].moon.Stop()
+			rpcServers[i].Stop()
+		}
+	})
 }

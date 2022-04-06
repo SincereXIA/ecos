@@ -1,4 +1,4 @@
-package object
+package io
 
 import (
 	"context"
@@ -18,6 +18,7 @@ import (
 type EcosReader struct {
 	infoAgent   *agent.InfoAgent
 	clusterInfo *infos.ClusterInfo
+	bucketInfo  *infos.BucketInfo
 	key         string
 
 	blockPipes     []*pipeline.Pipeline
@@ -49,7 +50,7 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		return block.([]byte), nil
 	}
 	pgID := GenBlockPG(blockInfo)
-	gaiaServerId := r.blockPipes[pgID].RaftId[0]
+	gaiaServerId := r.blockPipes[pgID-1].RaftId[0]
 	info, err := r.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId, 10))
 	gaiaServerInfo := info.BaseInfo().GetNodeInfo()
 	if err != nil {
@@ -70,7 +71,7 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		logger.Warningf("blockClient responds err: %v", err)
 		return nil, err
 	}
-	block := make([]byte, 0, r.config.Object.BlockSize)
+	block := make([]byte, 0, r.bucketInfo.Config.BlockSize)
 	for {
 		rs, err := res.Recv()
 		if err != nil {
@@ -100,8 +101,9 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 	count, pending := int64(0), len(p)
 
 	// 预计本次需要读取几个 block
-	blockNum := (pending + r.curBlockOffset) / int(r.config.Object.BlockSize)
-	if blockNum*int(r.config.Object.BlockSize) < pending {
+	blockSize := int(r.bucketInfo.Config.BlockSize)
+	blockNum := (pending + r.curBlockOffset) / blockSize
+	if blockNum*blockSize < pending {
 		blockNum++ // 如果最后一个 block 仍未填满，需要读取下一个 block
 	}
 	waitGroup := sync.WaitGroup{}
@@ -109,8 +111,8 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 	isEOF := true              // 是否每一个 block 都已经读取完毕
 	offset := r.curBlockOffset // 第一个 block 需要加入上次读的偏移
 	for i := 0; i < blockNum && r.curBlockIndex < len(r.meta.Blocks); i++ {
-		start := i * int(r.config.Object.BlockSize)
-		end := start + int(r.config.Object.BlockSize)
+		start := i * blockSize
+		end := start + blockSize
 		if end > len(p) {
 			end = len(p)
 		}
@@ -157,8 +159,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 
 func (r *EcosReader) getObjMeta() error {
 	// use key to get pdId
-	pgId := GenObjectPG(r.key)
-
+	pgId := object.GenObjPgID(r.bucketInfo, r.key, 10)
 	metaServerIdString := strconv.FormatUint(r.objPipes[pgId-1].RaftId[0], 10)
 	metaServerInfo, _ := r.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
 	metaClient, err := NewMetaClient(metaServerInfo.BaseInfo().GetNodeInfo())
@@ -167,7 +168,7 @@ func (r *EcosReader) getObjMeta() error {
 		return err
 	}
 
-	objID := GenObjectId(r.key)
+	objID := object.GenObjectId(r.bucketInfo, r.key)
 	r.meta, err = metaClient.GetObjMeta(objID)
 	if err != nil {
 		logger.Errorf("get objMeta failed, err: %v", err)
@@ -180,7 +181,7 @@ func (r *EcosReader) getObjMeta() error {
 func (r *EcosReader) getHistoryClusterInfo() error {
 	info, err := r.infoAgent.Get(infos.InfoType_CLUSTER_INFO, strconv.FormatUint(r.meta.Term, 10))
 	if err != nil {
-		logger.Errorf("get term [%v] cluster info failed, err: %v", err)
+		logger.Errorf("get term %v cluster info failed, err: %v", r.meta.Term, err)
 		return err
 	}
 	r.clusterInfo = info.BaseInfo().GetClusterInfo()

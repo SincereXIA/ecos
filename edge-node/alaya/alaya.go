@@ -61,12 +61,36 @@ func (a *Alaya) getRaftNode(pgID uint64) *Raft {
 }
 
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
+	// check if meta belongs to this PG
+	_, bucketID, key, _, err := object.SplitID(meta.ObjId)
+	if err != nil {
+		return nil, err
+	}
+	m := a.watcher.GetMoon()
+	info, err := m.GetInfoDirect(infos.InfoType_BUCKET_INFO, bucketID)
+	if err != nil {
+		return nil, err
+	}
+	bucketInfo := info.BaseInfo().GetBucketInfo()
+	pgID := object.GenObjPgID(bucketInfo, key, 10)
+	if meta.Term != a.watcher.GetCurrentTerm() {
+		return nil, errno.TermNotMatch
+	}
+	if meta.PgId != pgID {
+		logger.Warningf("meta pgID %d not match calculated pgID %d", meta.PgId, pgID)
+		return nil, errno.PgNotMatch
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		pgID := meta.PgId
-		err := a.getRaftNode(pgID).ProposeObjectMetaOperate(&MetaOperate{
+		raft := a.getRaftNode(pgID)
+		if raft == nil {
+			return nil, errno.RaftNodeNotFound
+		}
+		// 这里是同步操作
+		err = a.getRaftNode(pgID).ProposeObjectMetaOperate(&MetaOperate{
 			Operate: MetaOperate_PUT,
 			Meta:    meta,
 		})
@@ -76,7 +100,6 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 				Message: err.Error(),
 			}, err
 		}
-		// TODO: 检查元数据是否同步成功
 		logger.Infof("Alaya record object meta success, obj_id: %v, size: %v", meta.ObjId, meta.ObjSize)
 	}
 
@@ -85,7 +108,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 	}, nil
 }
 
-func (a *Alaya) GetObjectMeta(ctx context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
+func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
 	objId := req.ObjId
 	objMeta, err := a.MetaStorage.GetMeta(objId)
 	if err != nil {
@@ -93,6 +116,16 @@ func (a *Alaya) GetObjectMeta(ctx context.Context, req *MetaRequest) (*object.Ob
 		return nil, err
 	}
 	return objMeta, nil
+}
+
+func (a *Alaya) ListMeta(_ context.Context, req *ListMetaRequest) (*ObjectMetaList, error) {
+	metas, _ := a.MetaStorage.List(req.Prefix)
+	for _, meta := range metas {
+		meta.Term = a.watcher.GetCurrentTerm()
+	}
+	return &ObjectMetaList{
+		Metas: metas,
+	}, nil
 }
 
 func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (*PGRaftMessage, error) {
@@ -179,9 +212,9 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 		// Add new raft node
 		var raft *Raft
 		if oldPipelines != nil {
-			raft = a.MakeAlayaRaftInPipeline(p, oldPipelines[pgID-1])
+			raft = a.makeAlayaRaftInPipeline(p, oldPipelines[pgID-1])
 		} else {
-			raft = a.MakeAlayaRaftInPipeline(p, nil)
+			raft = a.makeAlayaRaftInPipeline(p, nil)
 		}
 		if a.state == UPDATING {
 			go func(raft *Raft) {
@@ -210,7 +243,8 @@ func NewAlaya(ctx context.Context, watcher *watcher.Watcher,
 	clusterInfo := watcher.GetCurrentClusterInfo()
 	a.ApplyNewClusterInfo(&clusterInfo)
 	a.state = READY
-	_ = a.watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO, "moon", a.applyNewClusterInfo)
+	_ = a.watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO,
+		"alaya-"+a.watcher.GetSelfInfo().Uuid, a.applyNewClusterInfo)
 
 	return &a
 }
@@ -269,14 +303,14 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 	return ok
 }
 
-// MakeAlayaRaftInPipeline Make a new raft node for a single pipeline (PG), it will:
+// makeAlayaRaftInPipeline Make a new raft node for a single pipeline (PG), it will:
 //
 // 1. Create a raft message chan if not exist
 //
 // 2. New an alaya raft node **but not run it**
 //
 // when leaderID is not zero, it while add to an existed raft group
-func (a *Alaya) MakeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pipeline) *Raft {
+func (a *Alaya) makeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pipeline) *Raft {
 	pgID := p.PgId
 	c, ok := a.PGMessageChans.Load(pgID)
 	if !ok {

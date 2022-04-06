@@ -1,4 +1,4 @@
-package object
+package io
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"ecos/client/config"
 	agent "ecos/client/info-agent"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
@@ -17,17 +16,21 @@ import (
 
 // EcosIOFactory Generates EcosWriter with ClientConfig
 type EcosIOFactory struct {
+	volumeID   string
+	bucketName string
+
 	infoAgent   *agent.InfoAgent
 	config      *config.ClientConfig
 	clusterInfo *infos.ClusterInfo
 	objPipes    []*pipeline.Pipeline
 	blockPipes  []*pipeline.Pipeline
+	bucketInfo  *infos.BucketInfo
 }
 
 // NewEcosIOFactory Constructor for EcosIOFactory
 //
 // nodeAddr shall provide the address to get ClusterInfo from
-func NewEcosIOFactory(config *config.ClientConfig) *EcosIOFactory {
+func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) *EcosIOFactory {
 	conn, err := messenger.GetRpcConn(config.NodeAddr, config.NodePort)
 	if err != nil {
 		return nil
@@ -35,20 +38,29 @@ func NewEcosIOFactory(config *config.ClientConfig) *EcosIOFactory {
 	watcherClient := watcher.NewWatcherClient(conn)
 	reply, err := watcherClient.GetClusterInfo(context.Background(),
 		&watcher.GetClusterInfoRequest{Term: 0})
-	clusterInfo := reply.GetClusterInfo()
 	if err != nil {
 		logger.Errorf("get group info fail: %v", err)
 		return nil
 	}
+	clusterInfo := reply.GetClusterInfo()
 	// TODO: Retry?
 	// TODO: Get pgNum, groupNum from moon
 	ret := &EcosIOFactory{
+		volumeID:   volumeID,
+		bucketName: bucketName,
+
 		infoAgent:   agent.NewInfoAgent(context.Background(), clusterInfo),
 		clusterInfo: clusterInfo,
 		config:      config,
 		objPipes:    pipeline.GenPipelines(*clusterInfo, objPgNum, groupNum),
 		blockPipes:  pipeline.GenPipelines(*clusterInfo, blockPgNum, groupNum),
 	}
+	info, err := ret.infoAgent.Get(infos.InfoType_BUCKET_INFO, infos.GetBucketID(volumeID, bucketName))
+	if err != nil {
+		logger.Errorf("get bucket info fail: %v", err)
+		return nil
+	}
+	ret.bucketInfo = info.BaseInfo().GetBucketInfo()
 	return ret
 }
 
@@ -64,22 +76,15 @@ func (f *EcosIOFactory) GetEcosWriter(key string) EcosWriter {
 	maxChunk := uint(f.config.UploadBuffer / f.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(f.newLocalChunk, maxChunk, int(maxChunk))
 	return EcosWriter{
-		infoAgent:   f.infoAgent,
-		clusterInfo: f.clusterInfo,
-		key:         key,
-		config:      f.config,
-		Status:      READING,
-		chunks:      chunkPool,
-		blocks:      map[int]*Block{},
-		blockPipes:  f.blockPipes,
-		meta: &object.ObjectMeta{
-			ObjId:      "",
-			ObjSize:    0,
-			UpdateTime: nil,
-			ObjHash:    "",
-			PgId:       0,
-			Blocks:     []*object.BlockInfo{},
-		},
+		infoAgent:      f.infoAgent,
+		clusterInfo:    f.clusterInfo,
+		bucketInfo:     f.bucketInfo,
+		key:            key,
+		config:         f.config,
+		Status:         READING,
+		chunks:         chunkPool,
+		blocks:         map[int]*Block{},
+		blockPipes:     f.blockPipes,
 		objHash:        sha256.New(),
 		objPipes:       f.objPipes,
 		finishedBlocks: make(chan *Block),
@@ -91,6 +96,7 @@ func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 	return &EcosReader{
 		infoAgent:     f.infoAgent,
 		clusterInfo:   f.clusterInfo,
+		bucketInfo:    f.bucketInfo,
 		key:           key,
 		blockPipes:    nil,
 		curBlockIndex: 0,

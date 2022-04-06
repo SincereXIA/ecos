@@ -17,6 +17,18 @@ import (
 	"time"
 )
 
+type InfoController interface {
+	MoonServer
+
+	GetInfoDirect(infoType infos.InfoType, id string) (infos.Information, error)
+	ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error
+	IsLeader() bool
+	Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo)
+	GetLeaderID() uint64
+	Stop()
+	Run()
+}
+
 type Moon struct {
 	// Moon Rpc
 	UnimplementedMoonServer
@@ -79,7 +91,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 			break
 		} else {
 			m.appliedRequestChan <- applied
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 
@@ -92,7 +104,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 }
 
 func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoReply, error) {
-	info, err := m.infoStorageRegister.Get(request.InfoType, request.InfoId)
+	info, err := m.GetInfoDirect(request.InfoType, request.InfoId)
 	if err != nil {
 		logger.Warningf("get info from storage register fail: %v", err)
 		return &GetInfoReply{
@@ -109,6 +121,14 @@ func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoRepl
 		},
 		BaseInfo: info.BaseInfo(),
 	}, nil
+}
+
+func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Information, error) {
+	info, err := m.infoStorageRegister.Get(infoType, id)
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
 }
 
 func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
@@ -166,7 +186,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 	for _, info := range config.ClusterInfo.NodesInfo {
 		m.infoMap[info.RaftId] = info
 	}
-	raft.SetLogger(logger.NewRaftLogger())
+
 	return m
 }
 
@@ -233,10 +253,11 @@ func (m *Moon) process(entry raftpb.Entry) {
 	}
 }
 
-func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
+func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.status = StatusRegistering
+	m.SelfInfo = selfInfo
 	if leaderInfo != nil {
 		m.infoMap[leaderInfo.RaftId] = leaderInfo
 	}
@@ -275,7 +296,7 @@ func (m *Moon) Init(leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 
 func (m *Moon) Run() {
 	if m.raft == nil {
-		m.Init(nil, m.config.ClusterInfo.NodesInfo)
+		m.Set(m.SelfInfo, nil, m.config.ClusterInfo.NodesInfo)
 	}
 	go m.reportSelfInfo()
 
@@ -336,7 +357,7 @@ func (m *Moon) cleanup() {
 
 func (m *Moon) reportSelfInfo() {
 	for m.raft.Status().Lead == 0 {
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	logger.Infof("%v join group success, start report self info", m.id)

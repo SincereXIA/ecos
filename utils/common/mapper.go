@@ -4,18 +4,28 @@ import (
 	"ecos/utils/logger"
 	"github.com/serialx/hashring"
 	"strconv"
+	"sync"
 )
 
 type Mapper struct {
 	ring *hashring.HashRing
 }
 
-func NewMapper(pgNum uint64) Mapper {
+var mapperCatch = sync.Map{}
+
+func NewMapper(pgNum uint64) *Mapper {
+	// Get from cache
+	if m, ok := mapperCatch.Load(pgNum); ok {
+		return m.(*Mapper)
+	}
+	// Create new
 	pgs := make([]string, 0, pgNum)
 	for i := uint64(1); i <= pgNum; i++ {
 		pgs = append(pgs, strconv.FormatUint(i, 10))
 	}
-	return Mapper{ring: hashring.New(pgs)}
+	m := &Mapper{ring: hashring.New(pgs)}
+	mapperCatch.Store(pgNum, m)
+	return m
 }
 
 func (m *Mapper) MapIDtoPG(id string) uint64 {
