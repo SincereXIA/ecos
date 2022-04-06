@@ -50,12 +50,13 @@ type Block struct {
 // Upload provides a way to upload self to a given stream
 func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	// Start Upload by ControlMessage with Code BEGIN
+	pipe := b.blockPipes[b.PgId-1]
 	start := &gaia.UploadBlockRequest{
 		Payload: &gaia.UploadBlockRequest_Message{
 			Message: &gaia.ControlMessage{
 				Code:     gaia.ControlMessage_BEGIN,
 				Block:    &b.BlockInfo,
-				Pipeline: b.blockPipes[b.PgId-1],
+				Pipeline: pipe,
 				Term:     b.clusterInfo.Term,
 			},
 		},
@@ -89,12 +90,12 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 			Message: &gaia.ControlMessage{
 				Code:     gaia.ControlMessage_EOF,
 				Block:    &b.BlockInfo,
-				Pipeline: b.blockPipes[b.PgId],
+				Pipeline: pipe,
 				Term:     b.clusterInfo.Term,
 			},
 		},
 	}
-	logger.Infof("PG: %v, NODE: %v", b.PgId, b.blockPipes[b.PgId].RaftId)
+	logger.Infof("PG: %v, NODE: %v", b.PgId, pipe.RaftId)
 	err = stream.Send(end)
 	if err != nil && err != io.EOF {
 		logger.Errorf("uploadBlock error: %v", err)
