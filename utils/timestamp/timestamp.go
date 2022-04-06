@@ -11,6 +11,10 @@ func Now() *Timestamp {
 }
 
 func (m *Timestamp) Format(layout string) string {
-	t := time.Unix(m.Seconds, m.Nanos)
+	t := m.GetTime()
 	return t.Format(layout)
+}
+
+func (m *Timestamp) GetTime() time.Time {
+	return time.Unix(0, m.Nanos)
 }
