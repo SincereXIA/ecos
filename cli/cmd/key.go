@@ -23,7 +23,6 @@ var keyPutCmd = &cobra.Command{
 	Use:   "put ecos_key local_path",
 	Short: "put a local file as an object in ecos, remote key: ecos_key, local file path: local_path",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("key put cmd")
 		KeyPut(args[0], args[1])
 	},
 	Args: cobra.ExactArgs(2),
@@ -33,7 +32,6 @@ var keyListCmd = &cobra.Command{
 	Use:   "list bucket_name",
 	Short: "list objects in ecos bucket",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("key list cmd")
 		KeyList(args[0])
 	},
 	Args: cobra.ExactArgs(1),
@@ -86,11 +84,20 @@ func KeyList(bucketName string) {
 		os.Exit(1)
 	}
 	objects, err := c.ListObjects(ctx, bucketName)
+	tableStyle := table.StyleDefault
+	tableStyle.Options = table.Options{
+		DrawBorder:      false,
+		SeparateColumns: false,
+		SeparateFooter:  false,
+		SeparateHeader:  true,
+		SeparateRows:    false,
+	}
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
+	t.SetStyle(tableStyle)
 	t.AppendHeader(table.Row{"Size", "LastModified", "Key"})
 	for _, object := range objects {
-		t.AppendRow(table.Row{object.Size, object.UpdateTime.String(), object.ObjId})
+		t.AppendRow(table.Row{fmt.Sprintf("%d", object.ObjSize), object.UpdateTime.Format("2006-01-02 15:04:05"), object.ObjId})
 	}
 	t.Render()
 }
