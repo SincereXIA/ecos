@@ -8,6 +8,7 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path"
@@ -16,18 +17,47 @@ import (
 	"time"
 )
 
-func TestRaft(t *testing.T) {
+func TestMoon(t *testing.T) {
+	t.Run("Real Moon", func(t *testing.T) {
+		testMoon(t, false)
+	})
+	t.Run("Mock Moon", func(t *testing.T) {
+		testMoon(t, true)
+	})
+}
+
+func testMoon(t *testing.T, mock bool) {
 	basePath := "./ecos-data/db/moon"
 	nodeNum := 9
 	ctx := context.Background()
-	moons, rpcServers, err := createMoons(ctx, nodeNum, basePath)
-	assert.NoError(t, err)
+	var moons []InfoController
+	var rpcServers []*messenger.RpcServer
+	var err error
 
+	if mock {
+		isLeader := true
+		builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
+		register := builder.GetStorageRegister()
+
+		for i := 0; i < nodeNum; i++ {
+			raftID := uint64(i + 1)
+			ctrl := gomock.NewController(t)
+			moon := NewMockInfoController(ctrl)
+			port, rpcServer := messenger.NewRandomPortRpcServer()
+			nodeInfo := infos.NewSelfInfo(raftID, "127.0.0.1", port)
+
+			InitMock(moon, rpcServer, register, nodeInfo, isLeader)
+			isLeader = false
+			moons = append(moons, moon)
+			rpcServers = append(rpcServers, rpcServer)
+		}
+	} else {
+		moons, rpcServers, err = createMoons(ctx, nodeNum, basePath)
+		assert.NoError(t, err)
+	}
 	// 启动所有 moon 节点
-	var nodeInfos []*infos.NodeInfo
 	for i := 0; i < nodeNum; i++ {
 		index := i
-		nodeInfos = append(nodeInfos, moons[i].SelfInfo)
 		go func() {
 			err := rpcServers[index].Run()
 			if err != nil {
@@ -36,6 +66,7 @@ func TestRaft(t *testing.T) {
 		}()
 		go moons[i].Run()
 	}
+
 	t.Cleanup(func() {
 		for i := 0; i < nodeNum; i++ {
 			moons[i].Stop()
@@ -75,18 +106,29 @@ func TestRaft(t *testing.T) {
 				}},
 			},
 		}
-		_, err = moon.ProposeInfo(context.Background(), request)
+		_, err := moon.ProposeInfo(context.Background(), request)
 		assert.NoError(t, err)
 		time.Sleep(time.Second * 1)
-		storage := moons[nodeNum-1].infoStorageRegister.GetStorage(infos.InfoType_CLUSTER_INFO)
-		info, err := storage.Get("666")
-		assert.NoError(t, err)
-		assert.Equal(t, request.BaseInfo.GetClusterInfo().LeaderInfo.RaftId,
-			info.BaseInfo().GetClusterInfo().LeaderInfo.RaftId)
 	})
+
+	t.Run("get info", func(t *testing.T) {
+		moon := moons[leader-1]
+		request := &GetInfoRequest{
+			Head: &common2.Head{
+				Timestamp: timestamp.Now(),
+				Term:      0,
+			},
+			InfoType: infos.InfoType_CLUSTER_INFO,
+			InfoId:   "666",
+		}
+		response, err := moon.GetInfo(ctx, request)
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(6), response.BaseInfo.GetClusterInfo().LeaderInfo.RaftId)
+	})
+
 }
 
-func waitMoonsOK(moons []*Moon) int {
+func waitMoonsOK(moons []InfoController) int {
 	leader := -1
 	for {
 		ok := true
@@ -107,13 +149,13 @@ func waitMoonsOK(moons []*Moon) int {
 	return leader
 }
 
-func createMoons(ctx context.Context, num int, basePath string) ([]*Moon, []*messenger.RpcServer, error) {
+func createMoons(ctx context.Context, num int, basePath string) ([]InfoController, []*messenger.RpcServer, error) {
 	err := common.InitAndClearPath(basePath)
 	if err != nil {
 		return nil, nil, err
 	}
 	var rpcServers []*messenger.RpcServer
-	var moons []*Moon
+	var moons []InfoController
 	var nodeInfos []*infos.NodeInfo
 	var moonConfigs []*Config
 
