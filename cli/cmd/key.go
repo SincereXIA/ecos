@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"context"
+	"ecos/client"
 	"ecos/client/config"
 	ecosIO "ecos/client/io"
 	"ecos/utils/logger"
 	"fmt"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 	"io"
 	"os"
@@ -12,7 +15,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var keyCmd = &cobra.Command{
-	Use:   "key {put}",
+	Use:   "key {put | list}",
 	Short: "operate object in ecos by key",
 }
 
@@ -24,6 +27,16 @@ var keyPutCmd = &cobra.Command{
 		KeyPut(args[0], args[1])
 	},
 	Args: cobra.ExactArgs(2),
+}
+
+var keyListCmd = &cobra.Command{
+	Use:   "list bucket_name",
+	Short: "list objects in ecos bucket",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("key list cmd")
+		KeyList(args[0])
+	},
+	Args: cobra.ExactArgs(1),
 }
 
 func init() {
@@ -63,4 +76,21 @@ func KeyPut(key string, path string) {
 		os.Exit(1)
 	}
 	logger.Infof("put key: %v success", key)
+}
+
+func KeyList(bucketName string) {
+	ctx := context.Background()
+	c, err := client.New(config.DefaultConfig)
+	if err != nil {
+		logger.Errorf("create client fail: %v", err)
+		os.Exit(1)
+	}
+	objects, err := c.ListObjects(ctx, bucketName)
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.AppendHeader(table.Row{"Size", "LastModified", "Key"})
+	for _, object := range objects {
+		t.AppendRow(table.Row{object.Size, object.UpdateTime.String(), object.ObjId})
+	}
+	t.Render()
 }

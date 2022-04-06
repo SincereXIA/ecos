@@ -251,6 +251,23 @@ func (w *Watcher) Run() {
 	logger.Infof("moon init success, NodeID: %v", w.GetSelfInfo().RaftId)
 }
 
+func (w *Watcher) initCluster() {
+	rootDefaultBucket := infos.GenBucketInfo("root", "default", "root")
+	_, err := w.moon.GetInfoDirect(infos.InfoType_BUCKET_INFO, rootDefaultBucket.GetID())
+	if err == nil { // root default bucket exist
+		return
+	}
+	logger.Infof("init root default bucket")
+	_, err = w.moon.ProposeInfo(w.ctx, &moon.ProposeInfoRequest{
+		Operate:  moon.ProposeInfoRequest_ADD,
+		Id:       rootDefaultBucket.GetID(),
+		BaseInfo: rootDefaultBucket.BaseInfo(),
+	})
+	if err != nil {
+		logger.Errorf("init cluster fail: %v", err)
+	}
+}
+
 func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer,
 	m moon.InfoController, register *infos.StorageRegister) *Watcher {
 	watcherCtx, cancelFunc := context.WithCancel(ctx)
@@ -297,6 +314,9 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 		})
 	})
 	clusterInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, func(info infos.Information) {
+		if watcher.currentClusterInfo.Term == uint64(0) && watcher.moon.IsLeader() { // first time
+			go watcher.initCluster()
+		}
 		watcher.clusterInfoMutex.Lock()
 		defer watcher.clusterInfoMutex.Unlock()
 		logger.Infof("[NEW TERM] node %v get new term: %v, node num: %v",

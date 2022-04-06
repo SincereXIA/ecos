@@ -2,6 +2,8 @@ package watcher
 
 import (
 	"context"
+	"ecos/edge-node/infos"
+	moon2 "ecos/edge-node/moon"
 	"ecos/messenger"
 	"testing"
 )
@@ -39,6 +41,17 @@ func testWatcher(t *testing.T, mock bool) {
 
 	RunAllTestWatcher(watchers)
 	WaitAllTestWatcherOK(watchers)
+
+	moon := watchers[0].moon
+	bucket := infos.GenBucketInfo("test", "default", "test")
+	_, err := moon.ProposeInfo(ctx, &moon2.ProposeInfoRequest{
+		Operate:  moon2.ProposeInfoRequest_ADD,
+		Id:       bucket.GetID(),
+		BaseInfo: bucket.BaseInfo(),
+	})
+	if err != nil {
+		t.Errorf("propose bucket error: %v", err)
+	}
 
 	t.Cleanup(func() {
 		for i := 0; i < nodeNum; i++ {
