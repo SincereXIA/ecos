@@ -16,7 +16,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var keyCmd = &cobra.Command{
-	Use:   "key {put | list}",
+	Use:   "key {put | get | list}",
 	Short: "operate object in ecos by key",
 }
 
@@ -30,6 +30,16 @@ var keyPutCmd = &cobra.Command{
 	Args: cobra.ExactArgs(2),
 }
 
+var keyGetCmd = &cobra.Command{
+	Use:   "get ecos_key local_path",
+	Short: "get an remote object in ecos, remote key: ecos_key, local file path: local_path",
+	Run: func(cmd *cobra.Command, args []string) {
+		readConfig(cmd, args)
+		KeyGet(args[0], args[1])
+	},
+	Args: cobra.ExactArgs(2),
+}
+
 var keyListCmd = &cobra.Command{
 	Use:   "list bucket_name",
 	Short: "list objects in ecos bucket",
@@ -38,6 +48,31 @@ var keyListCmd = &cobra.Command{
 		KeyList(args[0])
 	},
 	Args: cobra.ExactArgs(1),
+}
+
+func KeyGet(key string, path string) {
+	c := getClient()
+	factory := c.GetIOFactory("default")
+	reader := factory.GetEcosReader(key)
+
+	file, err := os.Create(path)
+	if err != nil {
+		logger.Errorf("create file: %v error: %v", path, err)
+		os.Exit(1)
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			logger.Errorf("close file: %v error: %v", path, err)
+			os.Exit(1)
+		}
+	}(file)
+
+	_, err = io.Copy(file, reader)
+	if err != nil {
+		logger.Errorf("get object: %v error: %v", key, err)
+		os.Exit(1)
+	}
 }
 
 func KeyPut(key string, path string) {
@@ -71,14 +106,11 @@ func KeyPut(key string, path string) {
 
 func KeyList(bucketName string) {
 	ctx := context.Background()
-	var conf config.ClientConfig
-	_ = configUtil.GetConf(&conf)
-	c, err := client.New(&conf)
-	if err != nil {
-		logger.Errorf("create client fail: %v", err)
-		os.Exit(1)
-	}
+	c := getClient()
 	objects, err := c.ListObjects(ctx, bucketName)
+	if err != nil {
+		logger.Errorf("list objects fail: %v", err)
+	}
 	tableStyle := table.StyleDefault
 	tableStyle.Options = table.Options{
 		DrawBorder:      false,
@@ -95,4 +127,15 @@ func KeyList(bucketName string) {
 		t.AppendRow(table.Row{fmt.Sprintf("%d", object.ObjSize), object.UpdateTime.Format("2006-01-02 15:04:05"), object.ObjId})
 	}
 	t.Render()
+}
+
+func getClient() *client.Client {
+	var conf config.ClientConfig
+	_ = configUtil.GetConf(&conf)
+	c, err := client.New(&conf)
+	if err != nil {
+		logger.Errorf("create client fail: %v", err)
+		os.Exit(1)
+	}
+	return c
 }
