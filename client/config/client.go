@@ -39,7 +39,7 @@ func init() {
 			},
 			UploadTimeout: uploadTimeout,
 			UploadBuffer:  uploadBuffer,
-			NodeAddr:      "ecos-edge-dev",
+			NodeAddr:      "ecos-edge-dev.ecos.svc.cluster.local",
 			NodePort:      3267,
 		}
 	}

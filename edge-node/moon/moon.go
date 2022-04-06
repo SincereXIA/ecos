@@ -239,6 +239,7 @@ func (m *Moon) process(entry raftpb.Entry) {
 		info := msg.BaseInfo
 		switch msg.Operate {
 		case ProposeInfoRequest_ADD:
+			logger.Tracef("%d add info %v", m.id, info.GetID())
 			err = m.infoStorageRegister.Update(info)
 		case ProposeInfoRequest_UPDATE:
 			err = m.infoStorageRegister.Update(info)

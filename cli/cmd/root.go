@@ -17,6 +17,7 @@ var rootCmd = &cobra.Command{
 func Execute() {
 	rootCmd.AddCommand(keyCmd)
 	keyCmd.AddCommand(keyPutCmd)
+	keyCmd.AddCommand(keyListCmd)
 
 	err := rootCmd.Execute()
 	if err != nil {
