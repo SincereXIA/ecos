@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"ecos/client/config"
+	configUtil "ecos/utils/config"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -25,6 +27,13 @@ func Execute() {
 	}
 }
 
+func readConfig(cmd *cobra.Command, _ []string) {
+	confPath := cmd.Flag("config").Value.String()
+	conf := config.DefaultConfig
+	configUtil.Register(&conf, confPath)
+	configUtil.ReadAll()
+}
+
 func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -35,4 +44,6 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.PersistentFlags().StringP("config", "c", "./client.json",
+		"config file path")
 }

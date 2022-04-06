@@ -20,22 +20,23 @@ var confDefaultMap = make(map[string]interface{})
 
 // Read config from confPath and set value to conf interface
 // and record it into confMap for next time get
-func Read(confPath string, conf interface{}) {
+func Read(confPath string, conf interface{}) error {
 	buf, err := ioutil.ReadFile(confPath)
 	if err != nil {
 		logger.Warningf("load config file: %v failed: %v", confPath, err)
-		return
+		return GetDefaultConf(conf)
 	}
 	err = json.Unmarshal(buf, conf)
 	if err != nil {
 		logger.Warningf("decode config file: %v failed: %v", confPath, err)
-		return
+		return GetDefaultConf(conf)
 	}
 
 	copyValueFromDefault(conf, confDefaultMap[getConfType(conf)])
 
 	// set
 	confMap[getConfType(conf)] = conf
+	return nil
 }
 
 func copyValueFromDefault(newConf interface{}, defaultConf interface{}) {
@@ -56,6 +57,27 @@ func copyValueFromDefault(newConf interface{}, defaultConf interface{}) {
 			defaultV := defaultVal.Field(i)
 			f.Set(defaultV)
 		}
+	}
+}
+
+func copyValue(src interface{}, dst interface{}) {
+	if src == nil || dst == nil {
+		return
+	}
+	srcType := reflect.TypeOf(src)
+	srcVal := reflect.ValueOf(src)
+	dstVal := reflect.ValueOf(dst)
+	if srcType.Kind() == reflect.Ptr {
+		srcType = srcType.Elem()
+		srcVal = srcVal.Elem()
+		dstVal = dstVal.Elem()
+	} else {
+		return
+	}
+
+	for i := 0; i < srcType.NumField(); i++ {
+		f := dstVal.Field(i)
+		f.Set(srcVal.Field(i))
 	}
 }
 
@@ -82,20 +104,25 @@ func isBlank(value reflect.Value) bool {
 // User config json file path is confPath.
 func Register(defaultConf interface{}, confPath string) {
 	confDefault, _ := copystructure.Copy(defaultConf)
-	confDefaultMap[getConfType(defaultConf)] = confDefault
-	confMap[reflect.TypeOf(defaultConf).Name()] = defaultConf
-	confPathMap[reflect.TypeOf(defaultConf).Name()] = confPath
+	key := getConfType(confDefault)
+	confDefaultMap[key] = confDefault
+	confMap[key] = defaultConf
+	confPathMap[key] = confPath
 }
 
 func getConfType(conf interface{}) string {
-	return reflect.TypeOf(conf).Name()
+	confType := reflect.TypeOf(conf)
+	if confType.Kind() == reflect.Ptr {
+		confType = confType.Elem()
+	}
+	return confType.Name()
 }
 
 // GetConf set the config value to conf interface
 // the conf interface must Register() before
 func GetConf(conf interface{}) error {
-	var ok bool
-	if conf, ok = confMap[getConfType(conf)]; ok {
+	if c, ok := confMap[getConfType(conf)]; ok {
+		copyValue(c, conf)
 		return nil
 	}
 	return errors.New("config not found")

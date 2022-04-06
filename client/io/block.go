@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/sha256-simd"
 	"io"
-	"strconv"
 )
 
 type BlockStatus int
@@ -147,22 +146,6 @@ func (b *Block) updateBlockInfo() error {
 	return nil
 }
 
-func (b *Block) getUploadStream() (*UploadClient, error) {
-	idString := strconv.FormatUint(b.blockPipes[b.BlockInfo.PgId-1].RaftId[0], 10)
-	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
-	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo())
-	if err != nil {
-		logger.Errorf("Unable to start Gaia Client: %v", err)
-		return nil, err
-	}
-	err = client.NewUploadStream()
-	if err != nil {
-		logger.Errorf("Unable to start upload stream: %v", err)
-		return nil, err
-	}
-	return client, nil
-}
-
 func (b *Block) Close() error {
 	if len(b.chunks) == 0 {
 		return nil // Temp fix by zhang
@@ -175,29 +158,6 @@ func (b *Block) Close() error {
 	if err != nil {
 		return err
 	}
-	client, err := b.getUploadStream()
-	if err != nil {
-		return err
-	}
-	go func() {
-		// TODO (xiong): if upload is failed, now writer never can be close or writer won't know, we should fix it.
-		defer b.delFunc(b)
-		if client.cancel != nil {
-			defer client.cancel()
-		}
-		err = b.Upload(client.stream)
-		if err != nil {
-			b.status = FAILED
-			return
-		} else {
-			_, err = client.GetUploadResult()
-			if err != nil {
-				b.status = FAILED
-				return
-			}
-			b.status = FINISHED
-		}
-	}()
 	return nil
 }
 

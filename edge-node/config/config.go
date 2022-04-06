@@ -7,6 +7,7 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/config"
 	"errors"
+	"github.com/mohae/deepcopy"
 	"net"
 	"os"
 	"path"
@@ -70,9 +71,9 @@ func InitConfig(conf *Config) error {
 	storagePath := conf.StoragePath
 	confPath := path.Join(storagePath + "/config/edge_node.json")
 	s, err := os.Stat(confPath)
-	var persistConf Config
+	persistConf := deepcopy.Copy(DefaultConfig).(Config)
 	if err == nil && !s.IsDir() && s.Size() > 0 {
-		config.Read(confPath, &persistConf)
+		_ = config.Read(confPath, &persistConf)
 		conf.WatcherConfig.SelfNodeInfo.Uuid =
 			persistConf.WatcherConfig.SelfNodeInfo.Uuid
 	}

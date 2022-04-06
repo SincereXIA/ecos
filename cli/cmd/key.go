@@ -5,6 +5,7 @@ import (
 	"ecos/client"
 	"ecos/client/config"
 	ecosIO "ecos/client/io"
+	configUtil "ecos/utils/config"
 	"ecos/utils/logger"
 	"fmt"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -23,6 +24,7 @@ var keyPutCmd = &cobra.Command{
 	Use:   "put ecos_key local_path",
 	Short: "put a local file as an object in ecos, remote key: ecos_key, local file path: local_path",
 	Run: func(cmd *cobra.Command, args []string) {
+		readConfig(cmd, args)
 		KeyPut(args[0], args[1])
 	},
 	Args: cobra.ExactArgs(2),
@@ -32,25 +34,16 @@ var keyListCmd = &cobra.Command{
 	Use:   "list bucket_name",
 	Short: "list objects in ecos bucket",
 	Run: func(cmd *cobra.Command, args []string) {
+		readConfig(cmd, args)
 		KeyList(args[0])
 	},
 	Args: cobra.ExactArgs(1),
 }
 
-func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.client.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	//rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-}
-
 func KeyPut(key string, path string) {
-	factory := ecosIO.NewEcosIOFactory(config.DefaultConfig, "root", "default")
+	var conf config.ClientConfig
+	_ = configUtil.GetConf(&conf)
+	factory := ecosIO.NewEcosIOFactory(&conf, "root", "default")
 	writer := factory.GetEcosWriter(key)
 	fi, err := os.Open(path)
 	if err != nil {
@@ -78,7 +71,9 @@ func KeyPut(key string, path string) {
 
 func KeyList(bucketName string) {
 	ctx := context.Background()
-	c, err := client.New(config.DefaultConfig)
+	var conf config.ClientConfig
+	_ = configUtil.GetConf(&conf)
+	c, err := client.New(&conf)
 	if err != nil {
 		logger.Errorf("create client fail: %v", err)
 		os.Exit(1)

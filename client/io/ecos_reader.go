@@ -57,7 +57,7 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		logger.Errorf("get gaia server info failed, err: %v", err)
 	}
 	logger.Debugf("get block %10.10s from %v", blockID, gaiaServerInfo.RaftId)
-	client, err := NewGaiaClient(gaiaServerInfo)
+	client, err := NewGaiaClient(gaiaServerInfo, r.config)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (r *EcosReader) getObjMeta() error {
 	pgId := object.GenObjPgID(r.bucketInfo, r.key, 10)
 	metaServerIdString := strconv.FormatUint(r.objPipes[pgId-1].RaftId[0], 10)
 	metaServerInfo, _ := r.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
-	metaClient, err := NewMetaClient(metaServerInfo.BaseInfo().GetNodeInfo())
+	metaClient, err := NewMetaClient(metaServerInfo.BaseInfo().GetNodeInfo(), r.config)
 	if err != nil {
 		logger.Errorf("New meta client failed, err: %v", err)
 		return err

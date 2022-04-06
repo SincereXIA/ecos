@@ -86,6 +86,22 @@ func (w *EcosWriter) getCurBlock() *Block {
 	return w.curBlock
 }
 
+func (w *EcosWriter) getUploadStream(b *Block) (*UploadClient, error) {
+	idString := strconv.FormatUint(b.blockPipes[b.BlockInfo.PgId-1].RaftId[0], 10)
+	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
+	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo(), w.config)
+	if err != nil {
+		logger.Errorf("Unable to start Gaia Client: %v", err)
+		return nil, err
+	}
+	err = client.NewUploadStream()
+	if err != nil {
+		logger.Errorf("Unable to start upload stream: %v", err)
+		return nil, err
+	}
+	return client, nil
+}
+
 // commitCurBlock submits curBlock to GaiaServer and save it to BlockMap.
 //
 // curBlock shall be nil after calling this.
@@ -93,6 +109,28 @@ func (w *EcosWriter) commitCurBlock() {
 	// TODO: Upload And Retries?
 	go func(i int, block *Block) {
 		err := block.Close()
+		client, err := w.getUploadStream(block)
+		if err != nil {
+			logger.Errorf("Failed to get upload stream: %v", err)
+			return
+		}
+		// TODO (xiong): if upload is failed, now writer never can be close or writer won't know, we should fix it.
+		defer block.delFunc(block)
+		if client.cancel != nil {
+			defer client.cancel()
+		}
+		err = block.Upload(client.stream)
+		if err != nil {
+			block.status = FAILED
+			return
+		} else {
+			_, err = client.GetUploadResult()
+			if err != nil {
+				block.status = FAILED
+				return
+			}
+			block.status = FINISHED
+		}
 		if err != nil {
 			logger.Warningf("Err while Closing Block %v: %v", i, err)
 		}
@@ -188,7 +226,7 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 func (w *EcosWriter) commitMeta() error {
 	meta := w.genMeta(w.key)
 	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	metaClient, err := NewMetaClient(metaServerNode)
+	metaClient, err := NewMetaClient(metaServerNode, w.config)
 	if err != nil {
 		logger.Errorf("Upload Object Failed: %v", err)
 		return err
