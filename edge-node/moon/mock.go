@@ -5,12 +5,14 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"github.com/golang/mock/gomock"
+	"sync"
 )
 
 type State struct {
 	InfoStorageRegister *infos.StorageRegister
 	SelfInfo            *infos.NodeInfo
 	SelfIsLeader        bool
+	mutex               sync.RWMutex
 }
 
 func (state *State) Run() {
@@ -18,6 +20,8 @@ func (state *State) Run() {
 }
 
 func (state *State) IsLeader() bool {
+	state.mutex.RLock()
+	defer state.mutex.RUnlock()
 	return state.SelfIsLeader
 }
 
@@ -43,6 +47,8 @@ func (state *State) GetInfo(_ context.Context, req *GetInfoRequest) (*GetInfoRep
 }
 
 func (state *State) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
+	state.mutex.Lock()
+	defer state.mutex.Unlock()
 	state.SelfInfo = selfInfo
 	state.SelfIsLeader = leaderInfo != nil && leaderInfo.RaftId == selfInfo.RaftId
 }
