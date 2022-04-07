@@ -22,6 +22,9 @@ func Execute() {
 	keyCmd.AddCommand(keyGetCmd)
 	keyCmd.AddCommand(keyListCmd)
 
+	rootCmd.AddCommand(cpCmd)
+	rootCmd.AddCommand(lsCmd)
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)

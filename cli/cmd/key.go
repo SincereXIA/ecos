@@ -16,7 +16,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var keyCmd = &cobra.Command{
-	Use:   "key {put | get | list}",
+	Use:   "key {put | get | list | describe}",
 	Short: "operate object in ecos by key",
 }
 
