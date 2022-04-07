@@ -128,7 +128,9 @@ ecos-docker-build:
 deploy-job:      # This job runs in the deploy stage.
   stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
   rules:
-    - if: $BRANCH_NAME != "main"
+    - if: $BRANCH_NAME == "main"
+      when: on_success
+    - if: $BRANCH_NAME != "main" && $CI_PIPELINE_SOURCE != 'merge_request_event'
       when: manual
   needs: []
   image:

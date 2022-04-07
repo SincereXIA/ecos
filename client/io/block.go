@@ -62,7 +62,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	}
 	err := stream.Send(start)
 	if err != nil && err != io.EOF {
-		logger.Errorf("uploadBlock error: %v", err)
+		logger.Errorf("uploadBlock stream send control msg error: %v", err)
 		return err
 	}
 	byteCount := uint64(0)
@@ -73,7 +73,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 			},
 		})
 		if err != nil && err != io.EOF {
-			logger.Errorf("uploadBlock error: %v", err)
+			logger.Errorf("uploadBlock send chunk error: %v", err)
 			return err
 		}
 		byteCount += uint64(len(chunk.data))
@@ -97,7 +97,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	logger.Infof("PG: %v, NODE: %v", b.PgId, pipe.RaftId)
 	err = stream.Send(end)
 	if err != nil && err != io.EOF {
-		logger.Errorf("uploadBlock error: %v", err)
+		logger.Errorf("uploadBlock send EOF error: %v", err)
 		return err
 	}
 	return nil

@@ -10,13 +10,13 @@ var cpCmd = &cobra.Command{
 	Short: "Copy local path to ecos object",
 	Run: func(cmd *cobra.Command, args []string) {
 		readConfig(cmd, args)
-		if strings.HasPrefix(args[1], "ecos://") {
-			args[1] = strings.TrimPrefix(args[1], "ecos://")
-			bucketName := strings.Split(args[1], "/")[0]
+		if strings.HasPrefix(args[1], EcosUrlPrefix) {
+			args[1] = strings.TrimPrefix(args[1], EcosUrlPrefix)
+			bucketName := strings.Split(args[1], EcosUrlPrefix)[0]
 			key := strings.Split(args[1], "/")[1]
 			KeyPut(bucketName, key, args[0])
-		} else if strings.HasPrefix(args[0], "ecos://") {
-			args[0] = strings.TrimPrefix(args[0], "ecos://")
+		} else if strings.HasPrefix(args[0], EcosUrlPrefix) {
+			args[0] = strings.TrimPrefix(args[0], EcosUrlPrefix)
 			bucketName := strings.Split(args[0], "/")[0]
 			key := strings.Split(args[0], "/")[1]
 			KeyGet(bucketName, key, args[1])

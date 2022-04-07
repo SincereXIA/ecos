@@ -170,6 +170,10 @@ func KeyDescribe(bucketName, key string) {
 		os.Exit(1)
 	}
 	obj, err := bucket.Get(key)
+	if err != nil {
+		logger.Errorf("get object fail: %v", err)
+		os.Exit(1)
+	}
 	state, err := obj.State()
 	if err != nil {
 		logger.Errorf("get object state fail: %v", err)
