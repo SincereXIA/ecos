@@ -129,6 +129,10 @@ func KeyList(bucketName string) {
 	t.Render()
 }
 
+func KeyDescribe(key string) {
+
+}
+
 func getClient() *client.Client {
 	var conf config.ClientConfig
 	_ = configUtil.GetConf(&conf)

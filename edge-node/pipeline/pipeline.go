@@ -6,6 +6,30 @@ import (
 	"github.com/sincerexia/gocrush"
 )
 
+type ClusterPipelines struct {
+	Term           uint64
+	MetaPipelines  []*Pipeline
+	BlockPipelines []*Pipeline
+}
+
+func (cp *ClusterPipelines) GetMetaPG(pgID uint64) []uint64 {
+	return cp.MetaPipelines[pgID-1].RaftId
+}
+
+func (cp *ClusterPipelines) GetBlockPG(pgID uint64) []uint64 {
+	return cp.BlockPipelines[pgID-1].RaftId
+}
+
+func NewClusterPipelines(info *infos.ClusterInfo) (*ClusterPipelines, error) {
+	metaPipelines := GenMetaPipelines(*info)
+	blockPipelines := GenBlockPipelines(*info)
+	return &ClusterPipelines{
+		Term:           info.Term,
+		MetaPipelines:  metaPipelines,
+		BlockPipelines: blockPipelines,
+	}, nil
+}
+
 func GenMetaPipelines(clusterInfo infos.ClusterInfo) []*Pipeline {
 	return GenPipelines(clusterInfo, uint64(clusterInfo.MetaPgNum), uint64(clusterInfo.MetaPgSize))
 }
