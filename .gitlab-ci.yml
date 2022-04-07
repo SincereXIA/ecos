@@ -127,7 +127,9 @@ ecos-docker-build:
 
 deploy-job:      # This job runs in the deploy stage.
   stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
-  when: manual
+  rules:
+    - if: $BRANCH_NAME != "main"
+      when: manual
   needs: []
   image:
     name: bitnami/kubectl:1.22.6-debian-10-r7
