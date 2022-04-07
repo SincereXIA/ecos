@@ -36,6 +36,7 @@ type Watcher struct {
 	moon         moon.InfoController
 	register     *infos.StorageRegister
 	timer        *time.Timer
+	timerMutex   sync.Mutex
 	config       *Config
 	ctx          context.Context
 
@@ -282,6 +283,8 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 	nodeInfoStorage := watcher.register.GetStorage(infos.InfoType_NODE_INFO)
 	clusterInfoStorage := watcher.register.GetStorage(infos.InfoType_CLUSTER_INFO)
 	nodeInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, func(info infos.Information) {
+		watcher.timerMutex.Lock()
+		defer watcher.timerMutex.Unlock()
 		if !watcher.moon.IsLeader() {
 			return
 		}
