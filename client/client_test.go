@@ -45,7 +45,7 @@ func TestClient(t *testing.T) {
 	conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
 	conf.NodePort = watchers[0].GetSelfInfo().RpcPort
 
-	client, err := New(conf)
+	client, err := New(&conf)
 	if err != nil {
 		t.Errorf("Failed to create client: %v", err)
 	}

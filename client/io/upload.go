@@ -18,14 +18,14 @@ type UploadClient struct {
 }
 
 // NewGaiaClient creates a client stream with 1s Timeout
-func NewGaiaClient(serverInfo *infos.NodeInfo) (*UploadClient, error) {
+func NewGaiaClient(serverInfo *infos.NodeInfo, conf *config.ClientConfig) (*UploadClient, error) {
 	var newClient UploadClient
 	conn, err := messenger.GetRpcConnByNodeInfo(serverInfo)
 	if err != nil {
 		return nil, err
 	}
 	newClient.client = gaia.NewGaiaClient(conn)
-	if configTimeout := config.Config.UploadTimeout; configTimeout > 0 {
+	if configTimeout := conf.UploadTimeout; configTimeout > 0 {
 		newClient.context, newClient.cancel = context.WithTimeout(context.Background(), configTimeout)
 	} else {
 		newClient.context = context.Background()
@@ -43,13 +43,6 @@ func (c *UploadClient) NewUploadStream() error {
 
 // GetUploadResult return the result of last closed object uploading
 func (c *UploadClient) GetUploadResult() (*common.Result, error) {
-	//err := c.stream.CloseSend()
-	//if err != nil {
-	//	logger.Errorf("Close grpc stream err: %v", err)
-	//	return nil, err
-	//} else {
-	//	logger.Infof("Closed grpc stream")
-	//}
 	// TODO (xiong): cannot get recv because context deadline exceeded
 	result, err := c.stream.CloseAndRecv()
 	if err != nil {

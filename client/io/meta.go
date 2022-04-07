@@ -18,7 +18,7 @@ type MetaClient struct {
 }
 
 // NewMetaClient create a client with config
-func NewMetaClient(serverNode *infos.NodeInfo) (*MetaClient, error) {
+func NewMetaClient(serverNode *infos.NodeInfo, conf *config.ClientConfig) (*MetaClient, error) {
 	var newClient = MetaClient{
 		serverNode: serverNode,
 	}
@@ -27,7 +27,7 @@ func NewMetaClient(serverNode *infos.NodeInfo) (*MetaClient, error) {
 		return nil, err
 	}
 	newClient.client = alaya.NewAlayaClient(conn)
-	if configTimeout := config.Config.UploadTimeout; configTimeout > 0 {
+	if configTimeout := conf.UploadTimeout; configTimeout > 0 {
 		newClient.context, newClient.cancel = context.WithTimeout(context.Background(), configTimeout)
 	} else {
 		newClient.context = context.Background()

@@ -5,6 +5,7 @@ import (
 	"ecos/client"
 	"ecos/client/config"
 	ecosIO "ecos/client/io"
+	configUtil "ecos/utils/config"
 	"ecos/utils/logger"
 	"fmt"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -15,42 +16,95 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var keyCmd = &cobra.Command{
-	Use:   "key {put | list}",
+	Use:   "key {put | get | list | describe}",
 	Short: "operate object in ecos by key",
 }
 
 var keyPutCmd = &cobra.Command{
-	Use:   "put ecos_key local_path",
+	Use:   "put [bucketName] ecos_key local_path",
 	Short: "put a local file as an object in ecos, remote key: ecos_key, local file path: local_path",
 	Run: func(cmd *cobra.Command, args []string) {
-		KeyPut(args[0], args[1])
+		readConfig(cmd, args)
+		if len(args) == 3 {
+			KeyPut(args[0], args[1], args[2])
+		} else {
+			KeyPut("default", args[0], args[1])
+		}
 	},
-	Args: cobra.ExactArgs(2),
+	Args: cobra.RangeArgs(2, 3),
+}
+
+var keyGetCmd = &cobra.Command{
+	Use:   "get [bucketName] ecos_key local_path",
+	Short: "get an remote object in ecos, remote key: ecos_key, local file path: local_path",
+	Run: func(cmd *cobra.Command, args []string) {
+		readConfig(cmd, args)
+		if len(args) == 3 {
+			KeyGet(args[0], args[1], args[2])
+		} else {
+			KeyGet("default", args[0], args[1])
+		}
+	},
+	Args: cobra.RangeArgs(2, 3),
 }
 
 var keyListCmd = &cobra.Command{
 	Use:   "list bucket_name",
 	Short: "list objects in ecos bucket",
 	Run: func(cmd *cobra.Command, args []string) {
-		KeyList(args[0])
+		readConfig(cmd, args)
+		if len(args) == 1 {
+			KeyList(args[0])
+		} else {
+			KeyList("default")
+		}
 	},
-	Args: cobra.ExactArgs(1),
+	Args: cobra.RangeArgs(0, 1),
 }
 
-func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.client.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	//rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+var keyDescribeCmd = &cobra.Command{
+	Use:   "describe [bucketName] ecos_key",
+	Short: "describe an object in ecos, remote key: ecos_key",
+	Run: func(cmd *cobra.Command, args []string) {
+		readConfig(cmd, args)
+		if len(args) == 2 {
+			KeyDescribe(args[0], args[1])
+		} else {
+			KeyDescribe("default", args[0])
+		}
+	},
+	Args: cobra.RangeArgs(1, 2),
 }
 
-func KeyPut(key string, path string) {
-	factory := ecosIO.NewEcosIOFactory(config.DefaultConfig, "root", "default")
+func KeyGet(bucketName string, key string, path string) {
+	c := getClient()
+	factory := c.GetIOFactory(bucketName)
+	reader := factory.GetEcosReader(key)
+
+	file, err := os.Create(path)
+	if err != nil {
+		logger.Errorf("create file: %v error: %v", path, err)
+		os.Exit(1)
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			logger.Errorf("close file: %v error: %v", path, err)
+			os.Exit(1)
+		}
+	}(file)
+
+	_, err = io.Copy(file, reader)
+	if err != nil {
+		logger.Errorf("get object: %v error: %v", key, err)
+		os.Exit(1)
+	}
+}
+
+func KeyPut(bucketName string, key string, path string) {
+	var conf config.ClientConfig
+	_ = configUtil.GetConf(&conf)
+	factory := ecosIO.NewEcosIOFactory(&conf, "root", bucketName)
 	writer := factory.GetEcosWriter(key)
 	fi, err := os.Open(path)
 	if err != nil {
@@ -78,12 +132,11 @@ func KeyPut(key string, path string) {
 
 func KeyList(bucketName string) {
 	ctx := context.Background()
-	c, err := client.New(config.DefaultConfig)
-	if err != nil {
-		logger.Errorf("create client fail: %v", err)
-		os.Exit(1)
-	}
+	c := getClient()
 	objects, err := c.ListObjects(ctx, bucketName)
+	if err != nil {
+		logger.Errorf("list objects fail: %v", err)
+	}
 	tableStyle := table.StyleDefault
 	tableStyle.Options = table.Options{
 		DrawBorder:      false,
@@ -100,4 +153,42 @@ func KeyList(bucketName string) {
 		t.AppendRow(table.Row{fmt.Sprintf("%d", object.ObjSize), object.UpdateTime.Format("2006-01-02 15:04:05"), object.ObjId})
 	}
 	t.Render()
+}
+
+func KeyDescribe(bucketName, key string) {
+	var conf config.ClientConfig
+	_ = configUtil.GetConf(&conf)
+	c, err := client.New(&conf)
+	if err != nil {
+		logger.Errorf("create client fail: %v", err)
+		os.Exit(1)
+	}
+	operator := c.GetVolumeOperator()
+	bucket, err := operator.Get(bucketName)
+	if err != nil {
+		logger.Errorf("get bucket fail: %v", err)
+		os.Exit(1)
+	}
+	obj, err := bucket.Get(key)
+	if err != nil {
+		logger.Errorf("get object fail: %v", err)
+		os.Exit(1)
+	}
+	state, err := obj.State()
+	if err != nil {
+		logger.Errorf("get object state fail: %v", err)
+		os.Exit(1)
+	}
+	fmt.Println(state)
+}
+
+func getClient() *client.Client {
+	var conf config.ClientConfig
+	_ = configUtil.GetConf(&conf)
+	c, err := client.New(&conf)
+	if err != nil {
+		logger.Errorf("create client fail: %v", err)
+		os.Exit(1)
+	}
+	return c
 }
