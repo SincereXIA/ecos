@@ -89,3 +89,10 @@ func (client *Client) ListObjects(ctx context.Context, bucketName string) ([]*ob
 func (client *Client) GetIOFactory(bucketName string) *io.EcosIOFactory {
 	return io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
 }
+
+func (client *Client) GetVolumeOperator() Operator {
+	return &VolumeOperator{
+		volumeID: client.config.Credential.GetUserID(),
+		client:   client,
+	}
+}

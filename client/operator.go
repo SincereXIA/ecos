@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
@@ -8,6 +9,7 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
+	"encoding/json"
 	"github.com/gogo/protobuf/jsonpb"
 	"strconv"
 )
@@ -21,6 +23,16 @@ type Operator interface {
 type VolumeOperator struct {
 	volumeID string
 	client   *Client
+}
+
+func (v *VolumeOperator) Remove(key string) (Operator, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (v *VolumeOperator) State() (string, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (v *VolumeOperator) Get(key string) (Operator, error) {
@@ -102,5 +114,10 @@ func (o *ObjectOperator) State() (string, error) {
 	if err != nil {
 		return "marshal data error", err
 	}
-	return jsonData, nil
+	var pretty bytes.Buffer
+	err = json.Indent(&pretty, []byte(jsonData), "", "  ")
+	if err != nil {
+		return "indent data error", err
+	}
+	return pretty.String(), nil
 }

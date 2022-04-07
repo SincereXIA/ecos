@@ -141,9 +141,9 @@ func GetDefaultConf(conf interface{}) error {
 // ReadAll read all config file registered before,
 // and update configMap
 func ReadAll() {
-	logger.Infof("start read all config file")
+	logger.Tracef("start read all config file")
 	for key, conf := range confMap {
-		Read(confPathMap[key], conf)
+		_ = Read(confPathMap[key], conf)
 	}
 }
 
