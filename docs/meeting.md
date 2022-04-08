@@ -86,3 +86,34 @@
   - 对象的分块数据信息
   - 通过 PrimaryCopy / Stream / ClientCopy 分发到同 PG 的三节点中
   - 每个 block 直接以单个文件的方式存储在边缘节点文件系统中
+
+## 2022/4/08
+
+- 进度对接
+  - zhangjh:
+    - 鉴权 Interceptor
+    - meta list 实现
+    - mock moon
+    - CLI 功能支持: get, describe, list
+    - 正在实现中：Delete
+    - 新工具：
+      - 如何生成一个 objectID
+      - 如何计算 cluster 的 pipeline
+  - qiutb:
+    - 快照
+    - WAL
+    - rocksdb storage
+  - xionghc:
+    - S3 进度
+    - 中期报告
+- 后续工作:
+  - 新节点加入集群扩容
+    - 新的 cluster info 发布
+    - moon info 同步
+    - alaya 同步，无用元数据删除 (alaya storage 可能需要大改，可能需要按 pg 分区存放)
+  - 功能完善
+    - 完整鉴权逻辑，用户注册，创建 bucket
+  - S3 测试安排上
+    - ut 里引入 aws s3 go sdk
+  - 性能测试
+    - 引入性能测试，防止不当功能拓展引起性能下降
