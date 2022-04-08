@@ -11,12 +11,17 @@ service Alaya {
   rpc RecordObjectMeta(ObjectMeta) returns (Result) {}
   rpc GetObjectMeta(MetaRequest) returns (ObjectMeta) {}
   rpc ListMeta(ListMetaRequest) returns (ObjectMetaList) {}
+  rpc DeleteMeta(DeleteMetaRequest) returns (Result) {}
 
   rpc SendRaftMessage (PGRaftMessage) returns (PGRaftMessage) {}
 }
 
 message ListMetaRequest {
   string prefix = 1;
+}
+
+message DeleteMetaRequest {
+  string obj_id = 1;
 }
 
 message ObjectMetaList{

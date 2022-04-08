@@ -9,6 +9,7 @@ import (
 	commonMessenger "ecos/messenger/common"
 	"ecos/utils/common"
 	"ecos/utils/errno"
+	"ecos/utils/logger"
 	"io"
 	"os"
 	"path"
@@ -18,6 +19,7 @@ import (
 type PrimaryCopyTransporter struct {
 	info     *object.BlockInfo
 	pipeline *pipeline.Pipeline
+	basePath string
 
 	localWriter   io.Writer
 	remoteWriters []io.Writer
@@ -29,18 +31,16 @@ type PrimaryCopyTransporter struct {
 // when pipeline contains only self node, it will only write to local
 func NewPrimaryCopyTransporter(ctx context.Context, info *object.BlockInfo, pipeline *pipeline.Pipeline,
 	selfID uint64, clusterInfo *infos.ClusterInfo, basePath string) (t *PrimaryCopyTransporter, err error) {
-	var localWriter io.Writer
+	transporter := &PrimaryCopyTransporter{
+		info:     info,
+		pipeline: pipeline,
+		basePath: basePath,
+		ctx:      ctx,
+	}
 	// 创建远端 writer
 	var remoteWriters []io.Writer
 	for _, nodeID := range pipeline.RaftId {
 		if selfID == nodeID {
-			// 创建本地 writer
-			blockPath := path.Join(basePath, info.BlockId)
-			_ = common.InitParentPath(blockPath)
-			localWriter, err = os.Create(blockPath)
-			if err != nil {
-				return nil, err // TODO: trans to ecos err
-			}
 			continue
 		}
 		nodeInfo := getNodeInfo(clusterInfo, nodeID)
@@ -54,17 +54,34 @@ func NewPrimaryCopyTransporter(ctx context.Context, info *object.BlockInfo, pipe
 		}
 		remoteWriters = append(remoteWriters, writer)
 	}
+	logger.Debugf("Gaia: %v create remoteWriters: %v", selfID, remoteWriters)
+	transporter.remoteWriters = remoteWriters
+	return transporter, nil
+}
 
-	return &PrimaryCopyTransporter{
-		ctx:           ctx,
-		info:          info,
-		pipeline:      pipeline,
-		localWriter:   localWriter,
-		remoteWriters: remoteWriters,
-	}, nil
+func (transporter *PrimaryCopyTransporter) GetStoragePath() string {
+	return path.Join(transporter.basePath, transporter.info.BlockId)
+}
+
+func (transporter *PrimaryCopyTransporter) init() error {
+	// 创建本地 writer
+	blockPath := transporter.GetStoragePath()
+	_ = common.InitParentPath(blockPath)
+	localWriter, err := os.Create(blockPath)
+	if err != nil {
+		return err // TODO: trans to ecos err
+	}
+	transporter.localWriter = localWriter
+	return nil
 }
 
 func (transporter *PrimaryCopyTransporter) Write(chunk []byte) (n int, err error) {
+	if transporter.localWriter == nil {
+		err := transporter.init()
+		if err != nil {
+			return 0, err
+		}
+	}
 	// MultiWriter 貌似不是并行的
 	multiWriter := io.MultiWriter(append(transporter.remoteWriters, transporter.localWriter)...)
 	return multiWriter.Write(chunk)
@@ -91,10 +108,25 @@ func (transporter *PrimaryCopyTransporter) Close() error {
 	return nil
 }
 
+func (transporter *PrimaryCopyTransporter) Delete() error {
+	localPath := transporter.GetStoragePath()
+	for _, remoteWriter := range transporter.remoteWriters {
+		err := remoteWriter.(*RemoteWriter).Delete()
+		if err != nil {
+			return err
+		}
+	}
+	err := os.Remove(localPath)
+	return err
+}
+
 // RemoteWriter change byte flow to Gaia rpc request and send it.
 type RemoteWriter struct {
+	ctx       context.Context
+	client    GaiaClient
 	stream    Gaia_UploadBlockDataClient
 	blockInfo *object.BlockInfo
+	pipeline  *pipeline.Pipeline
 }
 
 // NewRemoteWriter return a new RemoteWriter.
@@ -105,23 +137,36 @@ func NewRemoteWriter(ctx context.Context, blockInfo *object.BlockInfo, nodeInfo 
 		// TODO: return err
 	}
 	client := NewGaiaClient(conn)
-	stream, err := client.UploadBlockData(ctx)
+	return &RemoteWriter{
+		ctx:       ctx,
+		client:    client,
+		blockInfo: blockInfo,
+		pipeline:  makeSingleNodePipeline(nodeInfo, p),
+	}, err
+}
+
+func (w *RemoteWriter) init() error {
+	stream, err := w.client.UploadBlockData(w.ctx)
 	err = stream.Send(&UploadBlockRequest{
 		Payload: &UploadBlockRequest_Message{
 			Message: &ControlMessage{
 				Code:     ControlMessage_BEGIN,
-				Block:    blockInfo,
-				Pipeline: makeSingleNodePipeline(nodeInfo, p),
+				Block:    w.blockInfo,
+				Pipeline: w.pipeline,
 			},
 		},
 	})
-	if err != nil {
-		return nil, err
-	}
-	return &RemoteWriter{stream: stream, blockInfo: blockInfo}, err
+	w.stream = stream
+	return err
 }
 
 func (w *RemoteWriter) Write(chunk []byte) (n int, err error) {
+	if w.stream == nil {
+		err := w.init()
+		if err != nil {
+			return 0, err
+		}
+	}
 	err = w.stream.Send(&UploadBlockRequest{
 		Payload: &UploadBlockRequest_Chunk{
 			Chunk: &Chunk{
@@ -149,6 +194,17 @@ func (w *RemoteWriter) Close() error {
 		return errno.RemoteGaiaFail
 	}
 	return err
+}
+
+func (w *RemoteWriter) Delete() error {
+	_, err := w.client.DeleteBlock(w.ctx, &DeleteBlockRequest{
+		BlockId:  w.blockInfo.BlockId,
+		Pipeline: w.pipeline,
+	})
+	if err != nil {
+		return errno.RemoteGaiaFail
+	}
+	return nil
 }
 
 func getNodeInfo(clusterInfo *infos.ClusterInfo, nodeID uint64) *infos.NodeInfo {

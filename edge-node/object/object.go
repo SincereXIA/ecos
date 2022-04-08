@@ -59,3 +59,10 @@ func GenObjectId(bucketInfo *infos.BucketInfo, key string) string {
 	objID := path.Join(prefix, strconv.FormatInt(int64(slot), 10), key)
 	return objID
 }
+
+// GenBlockPgID Generates Block PgID for a given block
+func GenBlockPgID(blockID string, pgNum int32) uint64 {
+	m := utilsCommon.NewMapper(uint64(pgNum))
+	pg := m.MapIDtoPG(blockID)
+	return pg
+}

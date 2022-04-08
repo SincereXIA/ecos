@@ -49,7 +49,7 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 	if block, ok := r.cachedBlocks.Load(blockID); ok {
 		return block.([]byte), nil
 	}
-	pgID := GenBlockPG(blockInfo)
+	pgID := object.GenBlockPgID(blockInfo.BlockId, r.clusterInfo.BlockPgNum)
 	gaiaServerId := r.blockPipes[pgID-1].RaftId[0]
 	info, err := r.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId, 10))
 	gaiaServerInfo := info.BaseInfo().GetNodeInfo()

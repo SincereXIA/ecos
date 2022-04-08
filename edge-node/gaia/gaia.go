@@ -3,6 +3,7 @@ package gaia
 import (
 	"bufio"
 	"context"
+	"ecos/edge-node/object"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
@@ -117,6 +118,29 @@ func (g *Gaia) GetBlockData(req *GetBlockRequest, server Gaia_GetBlockDataServer
 	return nil
 }
 
+func (g *Gaia) DeleteBlock(_ context.Context, req *DeleteBlockRequest) (*common.Result, error) {
+	clusterInfo, err := g.watcher.GetClusterInfoByTerm(req.Term)
+	if err != nil {
+		logger.Errorf("get cluster info by term: %v failed, err: %v", req.Term, err)
+		return nil, err
+	}
+	blockInfo := &object.BlockInfo{
+		BlockId: req.BlockId,
+	}
+	t, err := NewPrimaryCopyTransporter(g.ctx, blockInfo, req.Pipeline, g.watcher.GetSelfInfo().RaftId,
+		&clusterInfo, g.config.BasePath)
+	if err != nil {
+		logger.Errorf("new primary copy transporter failed, err: %v", err)
+		return nil, err
+	}
+	err = t.Delete()
+	if err != nil {
+		logger.Errorf("delete block failed, err: %v", err)
+		return nil, err
+	}
+	return &common.Result{Status: common.Result_OK}, nil
+}
+
 // processControlMessage will modify transporter when receive ControlMessage_BEGIN
 func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transporter *PrimaryCopyTransporter,
 	stream Gaia_UploadBlockDataServer) (err error) {
@@ -136,7 +160,7 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 			return err
 		}
 		*transporter = *t
-		logger.Infof("Gaia start receive block: %v", msg.Block.BlockId)
+		logger.Infof("Gaia %v start receive block: %v", g.watcher.GetSelfInfo().RaftId, msg.Block.BlockId)
 	case ControlMessage_EOF:
 		// 确认转发成功，关闭连接
 		err := transporter.Close()
@@ -146,7 +170,7 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 				Message: err.Error(),
 			})
 		}
-		logger.Infof("Gaia save block: %v success", msg.Block.BlockId)
+		logger.Infof("Gaia %v save block: %v success", g.watcher.GetSelfInfo().RaftId, msg.Block.BlockId)
 		return stream.SendAndClose(&common.Result{
 			Status: common.Result_OK,
 		})

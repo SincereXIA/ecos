@@ -2,6 +2,7 @@ package alaya
 
 import (
 	"context"
+	"ecos/edge-node/cleaner"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -36,6 +37,7 @@ type Alaya struct {
 	raftNodeStopChan chan uint64 // 内部 raft node 主动退出时，使用该 chan 通知 alaya
 
 	MetaStorage MetaStorage
+	cleaner     *cleaner.Cleaner
 
 	state State
 
@@ -60,27 +62,35 @@ func (a *Alaya) getRaftNode(pgID uint64) *Raft {
 	return raft.(*Raft)
 }
 
-func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
+func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
 	// check if meta belongs to this PG
 	_, bucketID, key, _, err := object.SplitID(meta.ObjId)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	m := a.watcher.GetMoon()
 	info, err := m.GetInfoDirect(infos.InfoType_BUCKET_INFO, bucketID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	bucketInfo := info.BaseInfo().GetBucketInfo()
 	pgID := object.GenObjPgID(bucketInfo, key, 10)
 	if meta.Term != a.watcher.GetCurrentTerm() {
-		return nil, errno.TermNotMatch
+		return errno.TermNotMatch
 	}
 	if meta.PgId != pgID {
 		logger.Warningf("meta pgID %d not match calculated pgID %d", meta.PgId, pgID)
-		return nil, errno.PgNotMatch
+		return errno.PgNotMatch
 	}
+	return nil
+}
 
+func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
+	err := a.checkObject(meta)
+	if err != nil {
+		return nil, err
+	}
+	pgID := meta.PgId
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -109,13 +119,55 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 }
 
 func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
-	objId := req.ObjId
-	objMeta, err := a.MetaStorage.GetMeta(objId)
+	objID := req.ObjId
+	objMeta, err := a.MetaStorage.GetMeta(objID)
 	if err != nil {
 		logger.Errorf("alaya get metaStorage by objID failed, err: %v", err)
 		return nil, err
 	}
 	return objMeta, nil
+}
+
+// DeleteMeta delete meta from metaStorage, and request delete object blocks
+func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common.Result, error) {
+	objID := req.ObjId
+	objMeta, err := a.MetaStorage.GetMeta(objID)
+	if err != nil {
+		logger.Errorf("alaya get meta by objID failed, err: %v", err)
+		return nil, err
+	}
+	pgID := objMeta.PgId
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		raft := a.getRaftNode(pgID)
+		if raft == nil {
+			return nil, errno.RaftNodeNotFound
+		}
+		// 这里是同步操作
+		err = a.getRaftNode(pgID).ProposeObjectMetaOperate(&MetaOperate{
+			Operate: MetaOperate_DELETE,
+			Meta:    objMeta,
+		})
+		if err != nil {
+			return &common.Result{
+				Status:  common.Result_FAIL,
+				Message: err.Error(),
+			}, err
+		}
+		go func() {
+			err := a.cleaner.RemoveObjectBlocks(objMeta)
+			if err != nil {
+				logger.Errorf("remove object blocks fail, objID: %v err: %v", objMeta.ObjId, err.Error())
+			}
+		}()
+		logger.Infof("Alaya delete object meta success, obj_id: %v", objMeta.ObjId)
+	}
+
+	return &common.Result{
+		Status: common.Result_OK,
+	}, nil
 }
 
 func (a *Alaya) ListMeta(_ context.Context, req *ListMetaRequest) (*ObjectMetaList, error) {
@@ -228,6 +280,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 func NewAlaya(ctx context.Context, watcher *watcher.Watcher,
 	metaStorage MetaStorage, rpcServer *messenger.RpcServer) *Alaya {
 	ctx, cancel := context.WithCancel(ctx)
+	c := cleaner.NewCleaner(ctx, watcher)
 	a := Alaya{
 		ctx:              ctx,
 		cancel:           cancel,
@@ -237,6 +290,7 @@ func NewAlaya(ctx context.Context, watcher *watcher.Watcher,
 		MetaStorage:      metaStorage,
 		state:            INIT,
 		watcher:          watcher,
+		cleaner:          c,
 		raftNodeStopChan: make(chan uint64),
 	}
 	RegisterAlayaServer(rpcServer, &a)
