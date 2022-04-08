@@ -121,6 +121,10 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
 	objID := req.ObjId
 	objMeta, err := a.MetaStorage.GetMeta(objID)
+	if err == errno.MetaNotExist {
+		logger.Warningf("alaya receive get meta request, but meta not exist, obj_id: %v", objID)
+		return nil, err
+	}
 	if err != nil {
 		logger.Errorf("alaya get metaStorage by objID failed, err: %v", err)
 		return nil, err

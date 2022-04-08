@@ -290,7 +290,7 @@ func (r *Raft) process(entry raftpb.Entry) {
 			}
 		case MetaOperate_DELETE:
 			err = r.metaStorage.Delete(metaOperate.Meta.ObjId)
-			logger.Errorf("DELETE Meta not implement")
+			logger.Infof("delete meta: %v", metaOperate.Meta.ObjId)
 		}
 		r.metaApplyChan <- *metaOperate.Meta
 	}
