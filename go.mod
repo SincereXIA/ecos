@@ -4,6 +4,9 @@ go 1.16
 
 require (
 	github.com/SUMStudio/grocksdb v1.6.47
+	github.com/aws/aws-sdk-go-v2 v1.16.2
+	github.com/aws/aws-sdk-go-v2/config v1.15.3
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.26.4
 	github.com/deckarep/golang-set v1.8.0
 	github.com/elliotchance/orderedmap v1.4.0
 	github.com/gin-gonic/gin v1.7.7
