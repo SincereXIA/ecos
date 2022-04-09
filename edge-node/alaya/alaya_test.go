@@ -78,8 +78,10 @@ func TestNewAlaya(t *testing.T) {
 
 	testMetaNum := 100
 
+	var metas []*object.ObjectMeta
+
 	t.Run("update objectMeta", func(t *testing.T) {
-		metas := genTestMetas(watchers, bucketInfo, testMetaNum)
+		metas = genTestMetas(watchers, bucketInfo, testMetaNum)
 		updateMetas(t, watchers, alayas, metas, bucketInfo)
 		t.Run("list all objectMeta", func(t *testing.T) {
 			var allMetas []*object.ObjectMeta
@@ -129,6 +131,35 @@ func TestNewAlaya(t *testing.T) {
 	})
 
 	assertAlayasOK(t, alayas, pipelines)
+
+	t.Run("delete object meta", func(t *testing.T) {
+		meta := metas[0]
+		_, _, key, _, err := object.SplitID(meta.ObjId)
+		if err != nil {
+			t.Errorf("object id split err: %v", err)
+		}
+		pgID := object.GenObjPgID(bucketInfo, key, 10)
+		nodeIndex := pipelines[pgID-1].RaftId[0]
+		a := alayas[nodeIndex-1]
+
+		reply, err := a.GetObjectMeta(ctx, &MetaRequest{
+			ObjId: meta.ObjId,
+		})
+		assert.NoError(t, err, "meta need to delete should exist")
+		assert.Equal(t, meta.ObjId, reply.ObjId, "meta objID not equal")
+
+		_, err = a.DeleteMeta(ctx, &DeleteMetaRequest{
+			ObjId: meta.ObjId,
+		})
+		if err != nil {
+			t.Errorf("delete object meta err: %v", err)
+		}
+
+		reply, err = a.GetObjectMeta(ctx, &MetaRequest{
+			ObjId: meta.ObjId,
+		})
+		assert.Error(t, err, "get not exist meta should return error")
+	})
 
 }
 

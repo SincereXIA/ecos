@@ -16,7 +16,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var keyCmd = &cobra.Command{
-	Use:   "key {put | get | list | describe}",
+	Use:   "key {put | get | list | delete | describe}",
 	Short: "operate object in ecos by key",
 }
 
@@ -60,6 +60,20 @@ var keyListCmd = &cobra.Command{
 		}
 	},
 	Args: cobra.RangeArgs(0, 1),
+}
+
+var KeyDeleteCmd = &cobra.Command{
+	Use:   "delete [bucketName] ecos_key",
+	Short: "delete an object in ecos, remote key: ecos_key",
+	Run: func(cmd *cobra.Command, args []string) {
+		readConfig(cmd, args)
+		if len(args) == 2 {
+			KeyDelete(args[0], args[1])
+		} else {
+			KeyDelete("default", args[0])
+		}
+	},
+	Args: cobra.RangeArgs(1, 2),
 }
 
 var keyDescribeCmd = &cobra.Command{
@@ -153,6 +167,23 @@ func KeyList(bucketName string) {
 		t.AppendRow(table.Row{fmt.Sprintf("%d", object.ObjSize), object.UpdateTime.Format("2006-01-02 15:04:05"), object.ObjId})
 	}
 	t.Render()
+}
+
+func KeyDelete(bucketName, key string) {
+	var conf config.ClientConfig
+	_ = configUtil.GetConf(&conf)
+	c := getClient()
+	volume := c.GetVolumeOperator()
+	bucket, err := volume.Get(bucketName)
+	if err != nil {
+		logger.Errorf("get bucket fail: %v", err)
+		os.Exit(1)
+	}
+	err = bucket.Remove(key)
+	if err != nil {
+		logger.Errorf("delete object: %v fail: %v", err)
+		os.Exit(1)
+	}
 }
 
 func KeyDescribe(bucketName, key string) {

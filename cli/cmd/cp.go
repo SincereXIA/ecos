@@ -12,7 +12,7 @@ var cpCmd = &cobra.Command{
 		readConfig(cmd, args)
 		if strings.HasPrefix(args[1], EcosUrlPrefix) {
 			args[1] = strings.TrimPrefix(args[1], EcosUrlPrefix)
-			bucketName := strings.Split(args[1], EcosUrlPrefix)[0]
+			bucketName := strings.Split(args[1], "/")[0]
 			key := strings.Split(args[1], "/")[1]
 			KeyPut(bucketName, key, args[0])
 		} else if strings.HasPrefix(args[0], EcosUrlPrefix) {

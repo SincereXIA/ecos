@@ -20,6 +20,14 @@ func (cp *ClusterPipelines) GetBlockPG(pgID uint64) []uint64 {
 	return cp.BlockPipelines[pgID-1].RaftId
 }
 
+func (cp *ClusterPipelines) GetMetaPipeline(pgID uint64) *Pipeline {
+	return cp.MetaPipelines[pgID-1]
+}
+
+func (cp *ClusterPipelines) GetBlockPipeline(pgID uint64) *Pipeline {
+	return cp.BlockPipelines[pgID-1]
+}
+
 func NewClusterPipelines(info *infos.ClusterInfo) (*ClusterPipelines, error) {
 	metaPipelines := GenMetaPipelines(*info)
 	blockPipelines := GenBlockPipelines(*info)

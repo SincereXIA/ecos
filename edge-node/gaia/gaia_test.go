@@ -56,19 +56,49 @@ func TestNewGaia(t *testing.T) {
 	watcher.WaitAllTestWatcherOK(watchers)
 
 	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
+
+	// Test upload blocks
+	blockInfoMap := sync.Map{}
 	wait := sync.WaitGroup{}
 	for i := 0; i < 10; i++ {
 		p := pipelines[i]
 		wait.Add(1)
-		go func(p *pipeline.Pipeline) {
-			uploadBlockTest(t, p, watchers, basePaths)
+		go func(p *pipeline.Pipeline, pgID uint64) {
+			blockInfo := uploadBlockTest(t, p, pgID+1, watchers, basePaths)
+			blockInfoMap.Store(blockInfo.BlockId, blockInfo)
 			wait.Done()
-		}(p)
+		}(p, uint64(i))
 	}
 	wait.Wait()
+
+	// Test delete blocks
+	blockInfoMap.Range(func(key, value interface{}) bool {
+		blockInfo := value.(*object.BlockInfo)
+		p := pipelines[blockInfo.PgId-1] // pipeline id start from 1
+		err := deleteBlock(p, watchers, blockInfo)
+		if err != nil {
+			t.Errorf("delete block error: %v", err)
+		}
+		assertFilesEmpty(t, blockInfo.BlockId, basePaths)
+		return true
+	})
+
+	// Test delete not exist block
+	t.Run("delete not exist block", func(t *testing.T) {
+		p := pipelines[0]
+		blockInfo := &object.BlockInfo{
+			BlockId: uuid.New().String(),
+			PgId:    1,
+		}
+		err := deleteBlock(p, watchers, blockInfo)
+		if err == nil {
+			t.Errorf("delete block should be error")
+		}
+	})
 }
 
-func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, watchers []*watcher.Watcher, basePaths []string) {
+func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, pgID uint64,
+	watchers []*watcher.Watcher, basePaths []string) *object.BlockInfo {
 	id := p.RaftId[0]
 	info := watchers[id-1].GetSelfInfo()
 	term := watchers[id-1].GetCurrentClusterInfo().Term
@@ -90,7 +120,7 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, watchers []*watcher.Wat
 		BlockId:   uuid.New().String(),
 		BlockSize: uint64(testBlockSize),
 		BlockHash: "",
-		PgId:      1,
+		PgId:      pgID,
 	}
 
 	err = stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Message{Message: &ControlMessage{
@@ -126,6 +156,32 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, watchers []*watcher.Wat
 		t.Errorf("receive close stream message fail: %v", err)
 	}
 	assertFilesOK(t, blockInfo.BlockId, blockInfo.BlockSize, p, basePaths)
+	return blockInfo
+}
+
+func deleteBlock(p *pipeline.Pipeline, watchers []*watcher.Watcher, blockInfo *object.BlockInfo) error {
+	id := p.RaftId[0]
+	info := watchers[id-1].GetSelfInfo()
+	term := watchers[id-1].GetCurrentClusterInfo().Term
+	conn, _ := messenger.GetRpcConnByNodeInfo(info)
+
+	client := NewGaiaClient(conn)
+
+	_, err := client.DeleteBlock(context.TODO(), &DeleteBlockRequest{
+		BlockId:  blockInfo.BlockId,
+		Term:     term,
+		Pipeline: p,
+	})
+	return err
+}
+
+func assertFilesEmpty(t *testing.T, blockID string, basePaths []string) {
+	for _, basePath := range basePaths {
+		blockPath := path.Join(basePath, blockID)
+		if _, err := os.Stat(blockPath); err == nil {
+			t.Errorf("block file %s should not exist", blockPath)
+		}
+	}
 }
 
 func assertFilesOK(t *testing.T, blockID string, fileSize uint64, p *pipeline.Pipeline, basePaths []string) {

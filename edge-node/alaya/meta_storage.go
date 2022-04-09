@@ -17,6 +17,7 @@ type MetaStorage interface {
 	RecordMeta(meta *object.ObjectMeta) error
 	GetMeta(objID string) (meta *object.ObjectMeta, err error)
 	List(prefix string) ([]*object.ObjectMeta, error)
+	Delete(objID string) error
 	Close()
 }
 
@@ -54,6 +55,11 @@ func (s *MemoryMetaStorage) List(prefix string) (metas []*object.ObjectMeta, err
 		return true
 	})
 	return
+}
+
+func (s *MemoryMetaStorage) Delete(objID string) error {
+	s.metaMap.Delete(objID)
+	return nil
 }
 
 func (s *MemoryMetaStorage) Close() {

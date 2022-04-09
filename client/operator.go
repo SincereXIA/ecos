@@ -16,7 +16,7 @@ import (
 
 type Operator interface {
 	Get(key string) (Operator, error)
-	Remove(key string) (Operator, error)
+	Remove(key string) error
 	State() (string, error)
 }
 
@@ -25,7 +25,7 @@ type VolumeOperator struct {
 	client   *Client
 }
 
-func (v *VolumeOperator) Remove(key string) (Operator, error) {
+func (v *VolumeOperator) Remove(key string) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -58,17 +58,7 @@ type BucketOperator struct {
 	client     *Client
 }
 
-func (b *BucketOperator) Remove(key string) (Operator, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *BucketOperator) State() (string, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *BucketOperator) Get(key string) (Operator, error) {
+func (b *BucketOperator) getAlayaClient(key string) (alaya.AlayaClient, error) {
 	pgID := object.GenObjPgID(b.bucketInfo, key, b.client.clusterInfo.MetaPgNum)
 	cp, err := pipeline.NewClusterPipelines(b.client.clusterInfo)
 	if err != nil {
@@ -85,6 +75,30 @@ func (b *BucketOperator) Get(key string) (Operator, error) {
 		return nil, err
 	}
 	alayaClient := alaya.NewAlayaClient(conn)
+	return alayaClient, nil
+}
+
+func (b *BucketOperator) Remove(key string) error {
+	alayaClient, err := b.getAlayaClient(key)
+	if err != nil {
+		return err
+	}
+	_, err = alayaClient.DeleteMeta(context.Background(), &alaya.DeleteMetaRequest{
+		ObjId: object.GenObjectId(b.bucketInfo, key),
+	})
+	return err
+}
+
+func (b *BucketOperator) State() (string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *BucketOperator) Get(key string) (Operator, error) {
+	alayaClient, err := b.getAlayaClient(key)
+	if err != nil {
+		return nil, err
+	}
 	reply, err := alayaClient.GetObjectMeta(context.Background(), &alaya.MetaRequest{
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
@@ -92,7 +106,6 @@ func (b *BucketOperator) Get(key string) (Operator, error) {
 		return nil, err
 	}
 	return &ObjectOperator{meta: reply}, nil
-
 }
 
 type ObjectOperator struct {
@@ -103,7 +116,7 @@ func (o *ObjectOperator) Get(key string) (Operator, error) {
 	panic("implement me")
 }
 
-func (o *ObjectOperator) Remove(key string) (Operator, error) {
+func (o *ObjectOperator) Remove(key string) error {
 	panic("implement me")
 }
 
