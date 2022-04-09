@@ -25,6 +25,7 @@ func Execute() {
 	keyCmd.AddCommand(keyPutCmd)
 	keyCmd.AddCommand(keyGetCmd)
 	keyCmd.AddCommand(keyListCmd)
+	keyCmd.AddCommand(KeyDeleteCmd)
 	keyCmd.AddCommand(keyDescribeCmd)
 
 	rootCmd.AddCommand(cpCmd)

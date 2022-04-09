@@ -289,8 +289,10 @@ func (r *Raft) process(entry raftpb.Entry) {
 				logger.Warningf("alaya record object meta err: %v", err)
 			}
 		case MetaOperate_DELETE:
-			err = r.metaStorage.Delete(metaOperate.Meta.ObjId)
 			logger.Infof("delete meta: %v", metaOperate.Meta.ObjId)
+			err = r.metaStorage.Delete(metaOperate.Meta.ObjId)
+		default:
+			logger.Errorf("unsupported alaya meta operate")
 		}
 		r.metaApplyChan <- *metaOperate.Meta
 	}
