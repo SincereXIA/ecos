@@ -138,6 +138,7 @@ func (g *Gaia) DeleteBlock(_ context.Context, req *DeleteBlockRequest) (*common.
 		logger.Errorf("delete block failed, err: %v", err)
 		return nil, err
 	}
+	logger.Infof("delete block: %v success", req.BlockId)
 	return &common.Result{Status: common.Result_OK}, nil
 }
 

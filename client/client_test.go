@@ -66,6 +66,17 @@ func TestClient(t *testing.T) {
 		assert.NoError(t, err, "Failed to list objects")
 		assert.Equal(t, objectNum, len(meta), "object count not match")
 	})
+
+	t.Run("delete object", func(t *testing.T) {
+		operator := client.GetVolumeOperator()
+		bucket, err := operator.Get("default")
+		assert.NoError(t, err, "Failed to get bucket")
+		err = bucket.Remove("test0")
+		assert.NoError(t, err, "Failed to remove object")
+		_, err = bucket.Get("test0")
+		assert.Error(t, err, "get removed object should fail")
+		time.Sleep(time.Second)
+	})
 }
 
 func genTestData(size int) []byte {
