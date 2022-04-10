@@ -7,6 +7,7 @@ import (
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/utils/logger"
+	"github.com/golang/mock/gomock"
 	"path"
 	"strconv"
 	"testing"
@@ -17,12 +18,14 @@ func RunTestEdgeNodeCluster(t *testing.T, ctx context.Context, mock bool,
 	basePath string, num int) ([]*watcher.Watcher, []*messenger.RpcServer) {
 	var watchers []*watcher.Watcher
 	var rpcServers []*messenger.RpcServer
+	var alayas []alaya.Alayaer
 	if mock {
 		watchers, rpcServers, _, _ = watcher.GenMockWatcherCluster(t, ctx, basePath, num)
+		alayas = GenMockAlayaCluster(t, ctx, basePath, watchers, rpcServers)
 	} else {
 		watchers, rpcServers, _ = watcher.GenTestWatcherCluster(ctx, basePath, num)
+		alayas = GenAlayaCluster(ctx, basePath, watchers, rpcServers)
 	}
-	alayas := GenAlayaCluster(ctx, basePath, watchers, rpcServers)
 	_ = GenGaiaCluster(ctx, basePath, watchers, rpcServers)
 
 	for i := 0; i < num; i++ {
@@ -39,6 +42,7 @@ func RunTestEdgeNodeCluster(t *testing.T, ctx context.Context, mock bool,
 	for _, a := range alayas {
 		go a.Run()
 	}
+	watcher.WaitAllTestWatcherOK(watchers)
 	waiteAllAlayaOK(alayas)
 	return watchers, rpcServers
 }
@@ -51,6 +55,20 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 		//metaStorage := alaya.NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
 		metaStorage := alaya.NewMemoryMetaStorage()
 		a := alaya.NewAlaya(ctx, watchers[i], metaStorage, rpcServers[i])
+		alayas = append(alayas, a)
+	}
+	return alayas
+}
+
+func GenMockAlayaCluster(t *testing.T, _ context.Context, basePath string,
+	watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []alaya.Alayaer {
+	var alayas []alaya.Alayaer
+	nodeNum := len(watchers)
+	metaStorage := alaya.NewMemoryMetaStorage()
+	for i := 0; i < nodeNum; i++ {
+		ctrl := gomock.NewController(t)
+		a := alaya.NewMockAlayaer(ctrl)
+		alaya.InitMock(a, rpcServers[i], metaStorage)
 		alayas = append(alayas, a)
 	}
 	return alayas
