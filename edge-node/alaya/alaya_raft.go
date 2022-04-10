@@ -4,7 +4,6 @@ import (
 	"context"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
-	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
@@ -35,7 +34,7 @@ type Raft struct {
 	stopChan chan uint64
 
 	metaStorage   MetaStorage
-	metaApplyChan chan object.ObjectMeta
+	metaApplyChan chan *MetaOperate
 
 	pipeline *pipeline.Pipeline
 	// rwMutex protect pipeline
@@ -73,7 +72,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 		pipeline:       nowPipe,
 		stopChan:       stopChan,
 		confChangeChan: make(chan raftpb.ConfChange, 100), // TODO: not ok
-		metaApplyChan:  make(chan object.ObjectMeta, 100),
+		metaApplyChan:  make(chan *MetaOperate, 100),
 	}
 
 	var peers []raft.Peer
@@ -294,7 +293,7 @@ func (r *Raft) process(entry raftpb.Entry) {
 		default:
 			logger.Errorf("unsupported alaya meta operate")
 		}
-		r.metaApplyChan <- *metaOperate.Meta
+		r.metaApplyChan <- &metaOperate
 	}
 }
 
@@ -310,7 +309,7 @@ func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
 	// TODO (zhang): Time out
 	for {
 		m := <-r.metaApplyChan
-		if m.ObjId != operate.Meta.ObjId {
+		if operate.Operate != m.Operate || m.Meta.ObjId != operate.Meta.ObjId {
 			r.metaApplyChan <- m
 		} else {
 			return nil

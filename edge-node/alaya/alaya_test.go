@@ -11,6 +11,7 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path"
@@ -19,17 +20,29 @@ import (
 	"time"
 )
 
-func TestNewAlaya(t *testing.T) {
+func TestAlaya(t *testing.T) {
+	t.Run("Real Alaya", func(t *testing.T) {
+		testAlaya(t, false)
+	})
+	t.Run("Mock Alaya", func(t *testing.T) {
+		testAlaya(t, true)
+	})
+}
+
+func testAlaya(t *testing.T, mock bool) {
 	basePath := "./ecos-data/"
 	_ = common.InitAndClearPath(basePath)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	//infoStorage := infos.NewStableNodeInfoStorage(nodeInfoDir)
 
 	nodeNum := 9
-
+	var alayas []Alayaer
 	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
-
-	alayas := GenAlayaCluster(ctx, basePath, watchers, rpcServers)
+	if mock {
+		alayas = GenMockAlayaCluster(t, ctx, basePath, watchers, rpcServers)
+	} else {
+		alayas = GenAlayaCluster(ctx, basePath, watchers, rpcServers)
+	}
 
 	for _, rpc := range rpcServers {
 		go func(r *messenger.RpcServer) {
@@ -48,25 +61,19 @@ func TestNewAlaya(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
+		cancel()
 		for i := 0; i < nodeNum; i++ { // for each node
-			alaya := alayas[i]
-			alaya.Stop()
 			server := rpcServers[i]
 			server.Stop()
 		}
-
 		_ = os.RemoveAll(basePath)
 	})
 
 	t.Log("Alayas init done, start run")
+	watcher.WaitAllTestWatcherOK(watchers)
 	waiteAllAlayaOK(alayas)
 	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 	assertAlayasOK(t, alayas, pipelines)
-
-	for i := 0; i < nodeNum; i++ { // for each node
-		a := alayas[i]
-		a.PrintPipelineInfo()
-	}
 
 	bucketInfo := infos.GenBucketInfo("root", "default", "root")
 	_, err := watchers[0].GetMoon().ProposeInfo(ctx, &moon.ProposeInfoRequest{
@@ -101,15 +108,20 @@ func TestNewAlaya(t *testing.T) {
 		})
 	})
 
+	var newWatchers []*watcher.Watcher
+	var newRpcs []*messenger.RpcServer
+	var newAlayas []Alayaer
 	t.Run("add new nodes", func(t *testing.T) {
-		var newWatchers []*watcher.Watcher
-		var newRpcs []*messenger.RpcServer
 		for i := 0; i < 3; i++ {
 			newWatcher, newRpc := watcher.GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(nodeNum+i+1)), sunAddr)
 			newWatchers = append(newWatchers, newWatcher)
 			newRpcs = append(newRpcs, newRpc)
 		}
-		newAlayas := GenAlayaCluster(ctx, path.Join(basePath, "new"), newWatchers, newRpcs)
+		if mock {
+			newAlayas = GenMockAlayaCluster(t, ctx, path.Join(basePath, "new"), newWatchers, newRpcs)
+		} else {
+			newAlayas = GenAlayaCluster(ctx, path.Join(basePath, "new"), newWatchers, newRpcs)
+		}
 		for _, rpc := range newRpcs {
 			go func(r *messenger.RpcServer) {
 				err := r.Run()
@@ -129,8 +141,13 @@ func TestNewAlaya(t *testing.T) {
 		waiteAllAlayaOK(alayas)
 		pipelines = pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 	})
-
 	assertAlayasOK(t, alayas, pipelines)
+
+	t.Cleanup(func() {
+		for _, rpc := range newRpcs {
+			rpc.Stop()
+		}
+	})
 
 	t.Run("delete object meta", func(t *testing.T) {
 		meta := metas[0]
@@ -183,7 +200,7 @@ func genTestMetas(watchers []*watcher.Watcher,
 }
 
 func updateMetas(t *testing.T, watchers []*watcher.Watcher,
-	alayas []*Alaya, metas []*object.ObjectMeta, bucketInfo *infos.BucketInfo) {
+	alayas []Alayaer, metas []*object.ObjectMeta, bucketInfo *infos.BucketInfo) {
 	p := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 	for _, meta := range metas {
 		_, _, key, _, err := object.SplitID(meta.ObjId)
@@ -198,8 +215,8 @@ func updateMetas(t *testing.T, watchers []*watcher.Watcher,
 	}
 }
 
-func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []*Alaya {
-	var alayas []*Alaya
+func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []Alayaer {
+	var alayas []Alayaer
 	nodeNum := len(watchers)
 	for i := 0; i < nodeNum; i++ {
 		// TODO (qiutb): apply stable meta storage
@@ -211,32 +228,56 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	return alayas
 }
 
-func assertAlayasOK(t *testing.T, alayas []*Alaya, pipelines []*pipeline.Pipeline) {
+func GenMockAlayaCluster(t *testing.T, ctx context.Context, basePath string,
+	watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []Alayaer {
+	var alayas []Alayaer
+	nodeNum := len(watchers)
+	metaStorage := NewMemoryMetaStorage()
+	for i := 0; i < nodeNum; i++ {
+		ctrl := gomock.NewController(t)
+		alaya := NewMockAlayaer(ctrl)
+
+		InitMock(alaya, rpcServers[i], metaStorage)
+		alayas = append(alayas, alaya)
+	}
+	return alayas
+}
+
+func assertAlayasOK(t *testing.T, alayas []Alayaer, pipelines []*pipeline.Pipeline) {
 	// 判断 每个 pg 第一个 节点是否为 leader
 	for _, p := range pipelines {
 		leaderID := p.RaftId[0]
 		pgID := p.PgId
 		a := alayas[leaderID-1]
-		assert.Equal(t, leaderID, a.getRaftNode(pgID).raft.Status().Lead)
+		switch x := a.(type) {
+		case *Alaya:
+			assert.Equal(t, leaderID, x.getRaftNode(pgID).raft.Status().Lead)
+		}
 	}
 	// 判断 每个 alaya 的每个 raft node 是否都成功加入 PG
 	for _, a := range alayas {
-		a.PGRaftNode.Range(func(key, value interface{}) bool {
-			raftNode := value.(*Raft)
-			assert.NotZero(t, raftNode.raft.Status().Lead)
-			return true
-		})
+		switch x := a.(type) {
+		case *Alaya:
+			x.PGRaftNode.Range(func(key, value interface{}) bool {
+				raftNode := value.(*Raft)
+				assert.NotZero(t, raftNode.raft.Status().Lead)
+				return true
+			})
+		}
 	}
 }
 
-func waiteAllAlayaOK(alayas []*Alaya) {
+func waiteAllAlayaOK(alayas []Alayaer) {
 	timer := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timer:
 			logger.Warningf("Alayas not OK after time out")
-			for _, alaya := range alayas {
-				alaya.PrintPipelineInfo()
+			for _, a := range alayas {
+				switch x := a.(type) {
+				case *Alaya:
+					x.PrintPipelineInfo()
+				}
 			}
 			return
 		default:
