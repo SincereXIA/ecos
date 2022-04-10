@@ -7,6 +7,7 @@ import (
 	"ecos/edge-node/moon"
 	edgeNodeTest "ecos/edge-node/test"
 	"ecos/utils/common"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -73,27 +74,12 @@ func TestGateway(t *testing.T) {
 	// Test List Bucket
 	{
 		// Wrong Bucket Name
-		listObjectsOutput, err := client.ListObjects(context.TODO(), &s3.ListObjectsInput{
-			Bucket: aws.String("bucket"),
-		})
-		assert.Error(t, err)
-		listObjectsV2Output, err := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-			Bucket: aws.String("bucket"),
-		})
-		assert.Error(t, err)
-
+		wrongBucket := "wrongBucket"
+		testListObjects(t, client, wrongBucket, true, 0)
+		testListObjectsV2(t, client, wrongBucket, true, 0)
 		// Right Bucket Name
-		listObjectsOutput, err = client.ListObjects(context.TODO(), &s3.ListObjectsInput{
-			Bucket: aws.String("default"),
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, 0, len(listObjectsOutput.Contents))
-
-		listObjectsV2Output, err = client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-			Bucket: aws.String("default"),
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, 0, len(listObjectsV2Output.Contents))
+		testListObjects(t, client, "default", false, 0)
+		testListObjectsV2(t, client, "default", false, 0)
 	}
 
 	test10MBBuffer := make([]byte, 1024*1024*10)
@@ -101,119 +87,177 @@ func TestGateway(t *testing.T) {
 
 	// Test PUT Object
 	{
-		putObjectOutput, err := client.PutObject(context.TODO(), &s3.PutObjectInput{
-			Bucket: aws.String("default"),
-			Key:    aws.String("testPutObject.obj"),
-			Body:   reader,
-		})
-		assert.NoError(t, err)
-		t.Logf("PutObject: %#v", putObjectOutput)
+		// Normal Data
+		testPutObject(t, client, "default", "testPUTObject.obj", reader)
+		// Blank Data
+		testPutObject(t, client, "default", "testPUTEmptyObject.obj", nil)
 	}
 
 	// Test POST Object
 	{
 		_, _ = reader.Seek(0, io.SeekStart)
-		body := &bytes.Buffer{}
-		writer := multipart.NewWriter(body)
-		part, err := writer.CreateFormFile("file", "testPostObject.obj")
-		assert.NoError(t, err)
-		_, err = io.Copy(part, reader)
-		assert.NoError(t, err)
-		assert.NoError(t, writer.WriteField("key", "testPostObject.obj"))
-		assert.NoError(t, writer.Close())
-		postObjectOutput, err := http.Post("http://localhost:3266/default", writer.FormDataContentType(), body)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusOK, postObjectOutput.StatusCode)
+		// Normal Data
+		testPostObject(t, client, "default", "testPOSTObject.obj", reader)
+		// Blank Data
+		testPostObject(t, client, "default", "testPOSTEmptyObject.obj", nil)
 	}
 
 	// Test HEAD Object
 	{
-		headObjectOutput, err := client.HeadObject(context.TODO(), &s3.HeadObjectInput{
-			Bucket: aws.String("default"),
-			Key:    aws.String("testPutObject.obj"),
-		})
-		assert.NoError(t, err)
-		t.Logf("HeadObject: %#v", headObjectOutput)
+		testHeadObject(t, client, "default", "testPUTObject.obj", false)
+		testHeadObject(t, client, "default", "testPOSTObject.obj", false)
 	}
 
 	// Test GET Object
 	{
-		getObjectOutput, err := client.GetObject(context.TODO(), &s3.GetObjectInput{
-			Bucket: aws.String("default"),
-			Key:    aws.String("testPutObject.obj"),
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, int64(1024*1024*10), getObjectOutput.ContentLength)
-		download, err := io.ReadAll(getObjectOutput.Body)
-		assert.NoError(t, err)
-		assert.Equal(t, test10MBBuffer, download)
-
-		getObjectOutput, err = client.GetObject(context.TODO(), &s3.GetObjectInput{
-			Bucket: aws.String("default"),
-			Key:    aws.String("testPostObject.obj"),
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, int64(1024*1024*10), getObjectOutput.ContentLength)
-		download, err = io.ReadAll(getObjectOutput.Body)
-		assert.NoError(t, err)
-		assert.Equal(t, test10MBBuffer, download)
+		testGetObject(t, client, "default", "testPUTObject.obj", false)
+		testGetObject(t, client, "default", "testPOSTObject.obj", false)
 	}
 
 	// Test ListObject again
 	{
-		listObjectsOutput, err := client.ListObjects(context.TODO(), &s3.ListObjectsInput{
-			Bucket: aws.String("default"),
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, 2, len(listObjectsOutput.Contents))
-
-		listObjectsV2Output, err := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-			Bucket: aws.String("default"),
-		})
-		assert.NoError(t, err)
-		assert.Equal(t, 2, len(listObjectsV2Output.Contents))
+		testListObjects(t, client, "default", false, 4)
+		testListObjectsV2(t, client, "default", false, 4)
 	}
 
 	// Upload another object
 	{
 		_, _ = reader.Seek(0, io.SeekStart)
-		putObjectOutput, err := client.PutObject(context.TODO(), &s3.PutObjectInput{
-			Bucket: aws.String("default"),
-			Key:    aws.String("testPutObject2.obj"),
-			Body:   reader,
-		})
-		assert.NoError(t, err)
-		t.Logf("PutObject: %#v", putObjectOutput)
+		testPutObject(t, client, "default", "testPUTObject2.obj", reader)
 	}
 
 	time.Sleep(time.Second)
 
 	// Test DELETE Object
 	{
-		deleteObjectOutput, err := client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-			Bucket: aws.String("default"),
-			Key:    aws.String("testPutObject2.obj"),
-		})
-		assert.NoError(t, err)
-		t.Logf("DeleteObject: %#v", deleteObjectOutput)
+		// Normal Delete
+		testDeleteObject(t, client, "default", "testPUTObject2.obj", false)
+		testListObjects(t, client, "default", false, 3)
+		// Delete non-exist object
+		testDeleteObject(t, client, "default", "testPUTObject2.obj", true)
+		testListObjects(t, client, "default", false, 3)
 	}
 
 	// Test DeleteObjects
 	{
-		deleteObjectsOutput, err := client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{
-			Bucket: aws.String("default"),
-			Delete: &types.Delete{
-				Objects: []types.ObjectIdentifier{
-					{
-						Key: aws.String("testPutObject.obj"),
-					},
-					{
-						Key: aws.String("testPostObject.obj"),
-					},
-				},
-			},
-		})
-		assert.NoError(t, err)
-		t.Logf("DeleteObjects: %#v", deleteObjectsOutput)
+		// Normal Delete
+		testDeleteObjects(t, client, "default", []string{"testPUTObject.obj", "testPOSTObject.obj", "testPUTEmptyObject.obj", "testPOSTEmptyObject.obj"}, false)
+		testListObjects(t, client, "default", false, 0)
+		// Delete non-exist objects
+		testDeleteObjects(t, client, "default", []string{"testPUTObject.obj", "testPOSTObject.obj", "testPUTEmptyObject.obj", "testPOSTEmptyObject.obj"}, true)
+		testListObjects(t, client, "default", false, 0)
 	}
+}
+
+func testListObjects(t *testing.T, client *s3.Client, bucketName string, wantErr bool, wantLength int) {
+	listObjectsOutput, err := client.ListObjects(context.TODO(), &s3.ListObjectsInput{
+		Bucket: aws.String(bucketName),
+	})
+	if wantErr {
+		assert.Error(t, err)
+		return
+	}
+	assert.NoError(t, err)
+	assert.Equal(t, wantLength, len(listObjectsOutput.Contents))
+	t.Logf("ListObjects: %#v", listObjectsOutput)
+}
+
+func testListObjectsV2(t *testing.T, client *s3.Client, bucketName string, wantErr bool, wantLength int) {
+	listObjectsV2Output, err := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	})
+	if wantErr {
+		assert.Error(t, err)
+		return
+	}
+	assert.NoError(t, err)
+	assert.Equal(t, wantLength, len(listObjectsV2Output.Contents))
+	t.Logf("ListObjects: %#v", listObjectsV2Output)
+}
+
+func testPutObject(t *testing.T, client *s3.Client, bucketName string, key string, data io.Reader) {
+	putObjectOutput, err := client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+		Body:   data,
+	})
+	assert.NoError(t, err)
+	t.Logf("PutObject: %#v", putObjectOutput)
+}
+
+func testPostObject(t *testing.T, _ *s3.Client, bucketName string, key string, data io.Reader) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", key)
+	assert.NoError(t, err)
+	if data != nil {
+		_, err = io.Copy(part, data)
+		assert.NoError(t, err)
+	}
+	assert.NoError(t, writer.WriteField("key", key))
+	assert.NoError(t, writer.Close())
+	postObjectOutput, err := http.Post(fmt.Sprintf("http://localhost:3266/%s", bucketName),
+		writer.FormDataContentType(), body)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, postObjectOutput.StatusCode)
+}
+
+func testHeadObject(t *testing.T, client *s3.Client, bucketName string, key string, wantErr bool) {
+	headObjectOutput, err := client.HeadObject(context.TODO(), &s3.HeadObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if wantErr {
+		assert.Error(t, err)
+		return
+	}
+	assert.NoError(t, err)
+	t.Logf("HeadObject: %#v", headObjectOutput)
+}
+
+func testGetObject(t *testing.T, client *s3.Client, bucketName string, key string, wantErr bool) {
+	getObjectOutput, err := client.GetObject(context.TODO(), &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if wantErr {
+		assert.Error(t, err)
+		return
+	}
+	assert.NoError(t, err)
+	t.Logf("GetObject: %#v", getObjectOutput)
+}
+
+func testDeleteObject(t *testing.T, client *s3.Client, bucketName string, key string, wantErr bool) {
+	deleteObjectOutput, err := client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if wantErr {
+		assert.Error(t, err)
+		return
+	}
+	assert.NoError(t, err)
+	t.Logf("DeleteObject: %#v", deleteObjectOutput)
+}
+
+func testDeleteObjects(t *testing.T, client *s3.Client, bucketName string, keys []string, wantErr bool) {
+	objs := make([]types.ObjectIdentifier, len(keys))
+	for i, key := range keys {
+		objs[i] = types.ObjectIdentifier{
+			Key: aws.String(key),
+		}
+	}
+	deleteObjectsOutput, err := client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{
+		Bucket: aws.String(bucketName),
+		Delete: &types.Delete{
+			Objects: objs,
+		},
+	})
+	if wantErr {
+		assert.Error(t, err)
+		return
+	}
+	assert.NoError(t, err)
+	t.Logf("DeleteObjects: %#v", deleteObjectsOutput)
 }

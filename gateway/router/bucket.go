@@ -3,6 +3,8 @@ package router
 import (
 	"ecos/edge-node/object"
 	"github.com/gin-gonic/gin"
+	"net/http"
+	"time"
 )
 
 // TODO: Create Bucket
@@ -39,9 +41,15 @@ func listObjects(c *gin.Context) {
 		return
 	}
 	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":    http.StatusNotFound,
+			"message": "Bucket name is empty",
+		})
+	}
 	listObjectsResult, err := Client.ListObjects(c, bucketName)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -52,27 +60,33 @@ func listObjects(c *gin.Context) {
 	for _, meta := range listObjectsResult {
 		_, _, key, _, err := object.SplitID(meta.ObjId)
 		if err != nil {
-			c.JSON(400, gin.H{
+			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
 			return
 		}
 		result.Contents = append(result.Contents, Content{
 			Key:          key,
-			LastModified: meta.UpdateTime.Format("2000-01-01T00:00:00.000Z"),
+			LastModified: meta.UpdateTime.Format(time.RFC3339Nano),
 			ETag:         meta.ObjHash,
 			Size:         meta.ObjSize,
 		})
 	}
-	c.XML(200, result)
+	c.XML(http.StatusOK, result)
 }
 
 // listObjectsV2 lists objects
 func listObjectsV2(c *gin.Context) {
 	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "bucketName is empty",
+		})
+		return
+	}
 	listObjectsResult, err := Client.ListObjects(c, bucketName)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -83,19 +97,19 @@ func listObjectsV2(c *gin.Context) {
 	for _, meta := range listObjectsResult {
 		_, _, key, _, err := object.SplitID(meta.ObjId)
 		if err != nil {
-			c.JSON(400, gin.H{
+			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
 			return
 		}
 		result.Contents = append(result.Contents, Content{
 			Key:          key,
-			LastModified: meta.UpdateTime.Format("2000-01-01T00:00:00.000Z"),
+			LastModified: meta.UpdateTime.Format(time.RFC3339Nano),
 			ETag:         meta.ObjHash,
 			Size:         meta.ObjSize,
 		})
 	}
-	c.XML(200, result)
+	c.XML(http.StatusOK, result)
 }
 
 // bucketLevelPostHandler handles bucket level requests

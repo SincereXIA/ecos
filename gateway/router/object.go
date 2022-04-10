@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"github.com/gin-gonic/gin"
 	"io"
+	"net/http"
 	"strconv"
 	"time"
 )
@@ -13,64 +14,68 @@ import (
 func putObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(400, gin.H{"error": "bucketName is required"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(400, gin.H{"error": "key is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
 		return
 	}
-	if c.Request.Body == nil || c.Request.ContentLength == 0 {
-		c.JSON(400, gin.H{"error": "Request body is missing"})
-		return
-	}
+	//if c.Request.Body == nil || c.Request.ContentLength == 0 {
+	//	c.JSON(http.StatusBadRequest, gin.H{"error": "Request body is missing"})
+	//	return
+	//}
 	body := c.Request.Body
 	writer := Client.GetIOFactory(bucketName).GetEcosWriter(key)
 	_, err := io.Copy(&writer, body)
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 	err = writer.Close()
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
-	c.Status(200)
+	c.Status(http.StatusOK)
 }
 
 // postObject creates a new object by post form
 func postObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		return
+	}
 	mForm, err := c.MultipartForm()
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 	key := mForm.Value["key"][0]
 	if key == "" {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "key is empty",
 		})
 		return
 	}
 	file := mForm.File["file"][0]
 	if file == nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "file is empty",
 		})
 		return
 	}
 	content, err := file.Open()
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -78,29 +83,37 @@ func postObject(c *gin.Context) {
 	writer := Client.GetIOFactory(bucketName).GetEcosWriter(key)
 	_, err = io.Copy(&writer, content)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 	err = writer.Close()
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
-	c.Status(200)
+	c.Status(http.StatusOK)
 }
 
 // headObject gets an object meta
 func headObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		return
+	}
 	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		return
+	}
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -108,14 +121,14 @@ func headObject(c *gin.Context) {
 	// Get Object Operator
 	op, err = op.Get(key)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 	info, err := op.Info()
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -125,17 +138,25 @@ func headObject(c *gin.Context) {
 	c.Header("ETag", meta.ObjHash)
 	c.Header("Last-Modified", meta.UpdateTime.Format(time.RFC850))
 	c.Header("Server", "Ecos")
-	c.Status(200)
+	c.Status(http.StatusOK)
 }
 
 // getObject gets an object
 func getObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		return
+	}
 	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		return
+	}
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -143,31 +164,39 @@ func getObject(c *gin.Context) {
 	// Get Object Operator
 	op, err = op.Get(key)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 	info, err := op.Info()
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 	meta := info.(*object.ObjectMeta)
 	reader := Client.GetIOFactory(bucketName).GetEcosReader(key)
-	c.DataFromReader(200, int64(meta.ObjSize), "application/octet-stream", reader, nil)
+	c.DataFromReader(http.StatusOK, int64(meta.ObjSize), "application/octet-stream", reader, nil)
 }
 
 // deleteObject deletes an object
 func deleteObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		return
+	}
 	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		return
+	}
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -175,14 +204,14 @@ func deleteObject(c *gin.Context) {
 	// Delete Object from Bucket Operator
 	err = op.Remove(key)
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 	c.Header("Content-Length", "0")
 	c.Header("Server", "Ecos")
-	c.Status(204)
+	c.Status(http.StatusNoContent)
 }
 
 type ObjectIdentifier struct {
@@ -217,11 +246,15 @@ type DeleteResult struct {
 // deleteObjects deletes multiple objects
 func deleteObjects(c *gin.Context) {
 	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		return
+	}
 	body := c.Request.Body
 	var deleteRequest Delete
 	err := xml.NewDecoder(body).Decode(&deleteRequest)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -229,7 +262,7 @@ func deleteObjects(c *gin.Context) {
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -251,5 +284,5 @@ func deleteObjects(c *gin.Context) {
 		}
 	}
 	c.Header("Server", "Ecos")
-	c.XML(200, deleteResult)
+	c.XML(http.StatusOK, deleteResult)
 }

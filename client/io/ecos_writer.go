@@ -106,6 +106,9 @@ func (w *EcosWriter) getUploadStream(b *Block) (*UploadClient, error) {
 //
 // curBlock shall be nil after calling this.
 func (w *EcosWriter) commitCurBlock() {
+	if w.curBlock == nil {
+		return
+	}
 	// TODO: Upload And Retries?
 	go func(i int, block *Block) {
 		err := block.Close()
