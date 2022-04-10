@@ -32,7 +32,7 @@ func TestAlaya(t *testing.T) {
 func testAlaya(t *testing.T, mock bool) {
 	basePath := "./ecos-data/"
 	_ = common.InitAndClearPath(basePath)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	//infoStorage := infos.NewStableNodeInfoStorage(nodeInfoDir)
 
 	nodeNum := 9
@@ -61,13 +61,11 @@ func testAlaya(t *testing.T, mock bool) {
 	}
 
 	t.Cleanup(func() {
+		cancel()
 		for i := 0; i < nodeNum; i++ { // for each node
-			alaya := alayas[i]
-			alaya.Stop()
 			server := rpcServers[i]
 			server.Stop()
 		}
-
 		_ = os.RemoveAll(basePath)
 	})
 
@@ -110,10 +108,10 @@ func testAlaya(t *testing.T, mock bool) {
 		})
 	})
 
+	var newWatchers []*watcher.Watcher
+	var newRpcs []*messenger.RpcServer
+	var newAlayas []Alayaer
 	t.Run("add new nodes", func(t *testing.T) {
-		var newWatchers []*watcher.Watcher
-		var newRpcs []*messenger.RpcServer
-		var newAlayas []Alayaer
 		for i := 0; i < 3; i++ {
 			newWatcher, newRpc := watcher.GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(nodeNum+i+1)), sunAddr)
 			newWatchers = append(newWatchers, newWatcher)
@@ -143,8 +141,13 @@ func testAlaya(t *testing.T, mock bool) {
 		waiteAllAlayaOK(alayas)
 		pipelines = pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 	})
-
 	assertAlayasOK(t, alayas, pipelines)
+
+	t.Cleanup(func() {
+		for _, rpc := range newRpcs {
+			rpc.Stop()
+		}
+	})
 
 	t.Run("delete object meta", func(t *testing.T) {
 		meta := metas[0]
