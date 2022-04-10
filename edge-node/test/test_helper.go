@@ -43,8 +43,8 @@ func RunTestEdgeNodeCluster(t *testing.T, ctx context.Context, mock bool,
 	return watchers, rpcServers
 }
 
-func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []*alaya.Alaya {
-	var alayas []*alaya.Alaya
+func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []alaya.Alayaer {
+	var alayas []alaya.Alayaer
 	nodeNum := len(watchers)
 	for i := 0; i < nodeNum; i++ {
 		// TODO (qiutb): implement rocksdb MetaStorage
@@ -67,14 +67,17 @@ func GenGaiaCluster(ctx context.Context, basePath string, watchers []*watcher.Wa
 	return gaias
 }
 
-func waiteAllAlayaOK(alayas []*alaya.Alaya) {
+func waiteAllAlayaOK(alayas []alaya.Alayaer) {
 	timer := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timer:
 			logger.Warningf("Alayas not OK after time out")
 			for _, a := range alayas {
-				a.PrintPipelineInfo()
+				switch x := a.(type) {
+				case *alaya.Alaya:
+					x.PrintPipelineInfo()
+				}
 			}
 			return
 		default:

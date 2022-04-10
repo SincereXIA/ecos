@@ -17,6 +17,13 @@ import (
 	"time"
 )
 
+type Alayaer interface {
+	AlayaServer
+	Run()
+	Stop()
+	IsAllPipelinesOK() bool
+}
+
 // Alaya process record & inquire object Mata request
 // 阿赖耶处理对象元数据的存储和查询请求
 // 一切众生阿赖耶识，本来而有圆满清净，出过于世同于涅槃
@@ -176,9 +183,9 @@ func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common
 
 func (a *Alaya) ListMeta(_ context.Context, req *ListMetaRequest) (*ObjectMetaList, error) {
 	metas, _ := a.MetaStorage.List(req.Prefix)
-	for _, meta := range metas {
-		meta.Term = a.watcher.GetCurrentTerm()
-	}
+	//for _, meta := range metas {
+	//	meta.Term = a.watcher.GetCurrentTerm()
+	//}
 	return &ObjectMetaList{
 		Metas: metas,
 	}, nil
@@ -282,7 +289,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 }
 
 func NewAlaya(ctx context.Context, watcher *watcher.Watcher,
-	metaStorage MetaStorage, rpcServer *messenger.RpcServer) *Alaya {
+	metaStorage MetaStorage, rpcServer *messenger.RpcServer) Alayaer {
 	ctx, cancel := context.WithCancel(ctx)
 	c := cleaner.NewCleaner(ctx, watcher)
 	a := Alaya{
