@@ -28,6 +28,9 @@ func Execute() {
 	keyCmd.AddCommand(KeyDeleteCmd)
 	keyCmd.AddCommand(keyDescribeCmd)
 
+	rootCmd.AddCommand(bucketCmd)
+	bucketCmd.AddCommand(bucketCreateCmd)
+
 	rootCmd.AddCommand(cpCmd)
 	rootCmd.AddCommand(lsCmd)
 
