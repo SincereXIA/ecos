@@ -37,8 +37,7 @@ func Execute() {
 	}
 }
 
-func readConfig(cmd *cobra.Command, _ []string) {
-	confPath := cmd.Flag("config").Value.String()
+func readConfig(confPath string) {
 	conf := config.DefaultConfig
 	configUtil.Register(&conf, confPath)
 	configUtil.ReadAll()
@@ -56,4 +55,8 @@ func init() {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.PersistentFlags().StringP("config", "c", "./client.json",
 		"config file path")
+	p, err := rootCmd.PersistentFlags().GetString("config")
+	if err == nil {
+		readConfig(p)
+	}
 }

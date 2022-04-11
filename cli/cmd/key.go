@@ -24,7 +24,6 @@ var keyPutCmd = &cobra.Command{
 	Use:   "put [bucketName] ecos_key local_path",
 	Short: "put a local file as an object in ecos, remote key: ecos_key, local file path: local_path",
 	Run: func(cmd *cobra.Command, args []string) {
-		readConfig(cmd, args)
 		if len(args) == 3 {
 			KeyPut(args[0], args[1], args[2])
 		} else {
@@ -38,7 +37,6 @@ var keyGetCmd = &cobra.Command{
 	Use:   "get [bucketName] ecos_key local_path",
 	Short: "get an remote object in ecos, remote key: ecos_key, local file path: local_path",
 	Run: func(cmd *cobra.Command, args []string) {
-		readConfig(cmd, args)
 		if len(args) == 3 {
 			KeyGet(args[0], args[1], args[2])
 		} else {
@@ -52,7 +50,6 @@ var keyListCmd = &cobra.Command{
 	Use:   "list bucket_name",
 	Short: "list objects in ecos bucket",
 	Run: func(cmd *cobra.Command, args []string) {
-		readConfig(cmd, args)
 		if len(args) == 1 {
 			KeyList(args[0])
 		} else {
@@ -66,7 +63,6 @@ var KeyDeleteCmd = &cobra.Command{
 	Use:   "delete [bucketName] ecos_key",
 	Short: "delete an object in ecos, remote key: ecos_key",
 	Run: func(cmd *cobra.Command, args []string) {
-		readConfig(cmd, args)
 		if len(args) == 2 {
 			KeyDelete(args[0], args[1])
 		} else {
@@ -80,7 +76,6 @@ var keyDescribeCmd = &cobra.Command{
 	Use:   "describe [bucketName] ecos_key",
 	Short: "describe an object in ecos, remote key: ecos_key",
 	Run: func(cmd *cobra.Command, args []string) {
-		readConfig(cmd, args)
 		if len(args) == 2 {
 			KeyDescribe(args[0], args[1])
 		} else {
