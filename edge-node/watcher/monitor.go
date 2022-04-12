@@ -86,7 +86,7 @@ func (m *NodeMonitor) pushToPrometheus() {
 
 	prometheusClient := prometheusmetrics.NewPrometheusProvider(
 		metrics.DefaultRegistry, m.watcher.config.ClusterName,
-		"edge-node"+strconv.FormatUint(m.watcher.GetSelfInfo().RaftId, 10),
+		"edge-node",
 		prometheus.DefaultRegisterer, 1*time.Second)
 	go prometheusClient.UpdatePrometheusMetrics()
 
@@ -97,7 +97,8 @@ func (m *NodeMonitor) pushToPrometheus() {
 		default:
 		}
 		err := push.New("http://gateway.prometheus.sums.top", "monitor").
-			Gatherer(prometheus.DefaultGatherer).Grouping("ecos", "monitor").Push()
+			Gatherer(prometheus.DefaultGatherer).Grouping("node",
+			strconv.FormatUint(m.watcher.GetSelfInfo().RaftId, 10)).Push()
 		if err != nil {
 			logger.Warningf("push to prometheus failed: %s", err)
 		}
