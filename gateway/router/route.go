@@ -27,7 +27,7 @@ func NewRouter(cfg Config) *gin.Engine {
 	// Bucket Routes
 	bucketRouter := router.Group("/:bucketName")
 	{
-		// bucketRouter.PUT("/", createBucket)
+		bucketRouter.PUT("", createBucket)
 		// bucketRouter.DELETE("/", deleteBucket)
 		bucketRouter.GET("", listObjects) // listObjects and listObjectsV2
 		// bucketRouter.HEAD("/", headBucket)

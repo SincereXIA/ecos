@@ -1,7 +1,10 @@
 package router
 
 import (
+	"ecos/client/credentials"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
+	"encoding/xml"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"time"
@@ -11,6 +14,40 @@ import (
 //   DeleteBucket
 //	 ShowBucketStat
 //   ListMultipartUploads
+
+type CreateBucketConfiguration struct {
+	LocationConstraint string `xml:"locationConstraint"`
+}
+
+// createBucket creates a new bucket
+func createBucket(c *gin.Context) {
+	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bucketName is required"})
+		return
+	}
+	if c.Request.ContentLength > 0 {
+		var createBucketConfiguration CreateBucketConfiguration
+		err := xml.NewDecoder(c.Request.Body).Decode(&createBucketConfiguration)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	volOp := Client.GetVolumeOperator()
+	credential := credentials.Credential{
+		AccessKey: "",
+		SecretKey: "",
+	}
+	bucketInfo := infos.GenBucketInfo(credential.GetUserID(), bucketName, credential.GetUserID())
+	err := volOp.CreateBucket(bucketInfo)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Header("Location", "/"+bucketName)
+	c.Status(http.StatusOK)
+}
 
 type Content struct {
 	Key          string `xml:"Key"`
