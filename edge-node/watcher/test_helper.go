@@ -42,6 +42,7 @@ func GenTestMockWatcher(t *testing.T, ctx context.Context,
 	watcherConfig := DefaultConfig
 	watcherConfig.SunAddr = sunAddr
 	watcherConfig.SelfNodeInfo = *nodeInfo
+	watcherConfig.NodeInfoCommitInterval = time.Millisecond * 100
 
 	return mockCtrl, NewWatcher(ctx, &watcherConfig, nodeRpc, testMoon, register), nodeRpc
 }
@@ -58,7 +59,10 @@ func GenMockWatcherCluster(t *testing.T, ctx context.Context, _ string, num int)
 	builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
 	register := builder.GetStorageRegister()
 	sunAddr := "127.0.0.1:" + strconv.FormatUint(sunPort, 10)
-	time.Sleep(1 * time.Second)
+
+	for len(sunRpc.GetServiceInfo()) == 0 {
+		time.Sleep(time.Millisecond * 10)
+	}
 
 	var watchers []*Watcher
 	var rpcServers []*messenger.RpcServer

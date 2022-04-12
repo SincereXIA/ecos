@@ -4,7 +4,6 @@ import (
 	"context"
 	"ecos/client/config"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
 	edgeNodeTest "ecos/edge-node/test"
 	"ecos/utils/common"
 	"github.com/stretchr/testify/assert"
@@ -27,20 +26,6 @@ func TestClient(t *testing.T) {
 	_ = common.InitAndClearPath(basePath)
 	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, true, basePath, 9)
 
-	// Add a test bucket first
-	bucketName := "default"
-	bucketInfo := infos.GenBucketInfo("root", bucketName, "root")
-
-	_, err := watchers[0].GetMoon().ProposeInfo(ctx, &moon.ProposeInfoRequest{
-		Head:     nil,
-		Operate:  moon.ProposeInfoRequest_ADD,
-		Id:       bucketInfo.GetID(),
-		BaseInfo: bucketInfo.BaseInfo(),
-	})
-	if err != nil {
-		t.Errorf("Failed to add bucket: %v", err)
-	}
-
 	conf := config.DefaultConfig
 	conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
 	conf.NodePort = watchers[0].GetSelfInfo().RpcPort
@@ -49,6 +34,12 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create client: %v", err)
 	}
+
+	// Add a test bucket first
+	bucketName := "default"
+	bucketInfo := infos.GenBucketInfo("root", bucketName, "root")
+	err = client.GetVolumeOperator().CreateBucket(bucketInfo)
+	assert.NoError(t, err, "Failed to create default bucket")
 
 	factory := client.GetIOFactory(bucketName)
 	objectSize := 1024 * 1024 * 10 //10M

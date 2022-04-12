@@ -90,7 +90,7 @@ func (client *Client) GetIOFactory(bucketName string) *io.EcosIOFactory {
 	return io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
 }
 
-func (client *Client) GetVolumeOperator() Operator {
+func (client *Client) GetVolumeOperator() *VolumeOperator {
 	return &VolumeOperator{
 		volumeID: client.config.Credential.GetUserID(),
 		client:   client,

@@ -11,6 +11,7 @@ import (
 	"ecos/messenger"
 	"encoding/json"
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"strconv"
 )
 
@@ -53,6 +54,21 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 	}, nil
 }
 
+func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
+	nodeInfo := v.client.clusterInfo.NodesInfo[0]
+	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+	if err != nil {
+		return err
+	}
+	moonClient := moon.NewMoonClient(conn)
+	_, err = moonClient.ProposeInfo(context.Background(), &moon.ProposeInfoRequest{
+		Operate:  moon.ProposeInfoRequest_ADD,
+		Id:       bucketInfo.GetID(),
+		BaseInfo: bucketInfo.BaseInfo(),
+	})
+	return err
+}
+
 type BucketOperator struct {
 	bucketInfo *infos.BucketInfo
 	client     *Client
@@ -90,8 +106,7 @@ func (b *BucketOperator) Remove(key string) error {
 }
 
 func (b *BucketOperator) State() (string, error) {
-	//TODO implement me
-	panic("implement me")
+	return protoToJson(b.bucketInfo)
 }
 
 func (b *BucketOperator) Get(key string) (Operator, error) {
@@ -121,9 +136,13 @@ func (o *ObjectOperator) Remove(key string) error {
 }
 
 func (o *ObjectOperator) State() (string, error) {
+	return protoToJson(o.meta)
+}
+
+func protoToJson(pb proto.Message) (string, error) {
 	// convert proto to json
 	marshaller := jsonpb.Marshaler{}
-	jsonData, err := marshaller.MarshalToString(o.meta)
+	jsonData, err := marshaller.MarshalToString(pb)
 	if err != nil {
 		return "marshal data error", err
 	}
