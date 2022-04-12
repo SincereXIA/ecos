@@ -10,11 +10,10 @@ import (
 	"github.com/golang/mock/gomock"
 	"path"
 	"strconv"
-	"testing"
 	"time"
 )
 
-func RunTestEdgeNodeCluster(t *testing.T, ctx context.Context, mock bool,
+func RunTestEdgeNodeCluster(t gomock.TestReporter, ctx context.Context, mock bool,
 	basePath string, num int) ([]*watcher.Watcher, []*messenger.RpcServer) {
 	var watchers []*watcher.Watcher
 	var rpcServers []*messenger.RpcServer
@@ -60,7 +59,7 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	return alayas
 }
 
-func GenMockAlayaCluster(t *testing.T, _ context.Context, basePath string,
+func GenMockAlayaCluster(t gomock.TestReporter, _ context.Context, basePath string,
 	watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []alaya.Alayaer {
 	var alayas []alaya.Alayaer
 	nodeNum := len(watchers)

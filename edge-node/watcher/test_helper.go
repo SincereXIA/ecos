@@ -10,7 +10,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"path"
 	"strconv"
-	"testing"
 	"time"
 )
 
@@ -30,7 +29,7 @@ func GenTestWatcher(ctx context.Context, basePath string, sunAddr string) (*Watc
 	return NewWatcher(ctx, &watcherConfig, nodeRpc, m, register), nodeRpc
 }
 
-func GenTestMockWatcher(t *testing.T, ctx context.Context,
+func GenTestMockWatcher(t gomock.TestReporter, ctx context.Context,
 	register *infos.StorageRegister, sunAddr string, isLeader bool) (*gomock.Controller, *Watcher, *messenger.RpcServer) {
 	port, nodeRpc := messenger.NewRandomPortRpcServer()
 	nodeInfo := infos.NewSelfInfo(0, "127.0.0.1", port)
@@ -47,7 +46,7 @@ func GenTestMockWatcher(t *testing.T, ctx context.Context,
 	return mockCtrl, NewWatcher(ctx, &watcherConfig, nodeRpc, testMoon, register), nodeRpc
 }
 
-func GenMockWatcherCluster(t *testing.T, ctx context.Context, _ string, num int) ([]*Watcher, []*messenger.RpcServer, string, []*gomock.Controller) {
+func GenMockWatcherCluster(t gomock.TestReporter, ctx context.Context, _ string, num int) ([]*Watcher, []*messenger.RpcServer, string, []*gomock.Controller) {
 	sunPort, sunRpc := messenger.NewRandomPortRpcServer()
 	sun.NewSun(sunRpc)
 	go func() {

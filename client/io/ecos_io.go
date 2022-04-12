@@ -25,6 +25,7 @@ type EcosIOFactory struct {
 	objPipes    []*pipeline.Pipeline
 	blockPipes  []*pipeline.Pipeline
 	bucketInfo  *infos.BucketInfo
+	chunkPool   *common.Pool
 }
 
 // NewEcosIOFactory Constructor for EcosIOFactory
@@ -55,6 +56,10 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 		objPipes:    pipeline.GenPipelines(*clusterInfo, objPgNum, groupNum),
 		blockPipes:  pipeline.GenPipelines(*clusterInfo, blockPgNum, groupNum),
 	}
+	maxChunk := uint(ret.config.UploadBuffer / ret.config.Object.ChunkSize)
+	chunkPool, _ := common.NewPool(ret.newLocalChunk, maxChunk, int(maxChunk))
+	ret.chunkPool = chunkPool
+
 	info, err := ret.infoAgent.Get(infos.InfoType_BUCKET_INFO, infos.GetBucketID(volumeID, bucketName))
 	if err != nil {
 		logger.Errorf("get bucket info fail: %v", err)
@@ -73,8 +78,6 @@ func (f *EcosIOFactory) newLocalChunk() (io.Closer, error) {
 
 // GetEcosWriter provide a EcosWriter for object associated with key
 func (f *EcosIOFactory) GetEcosWriter(key string) EcosWriter {
-	maxChunk := uint(f.config.UploadBuffer / f.config.Object.ChunkSize)
-	chunkPool, _ := common.NewPool(f.newLocalChunk, maxChunk, int(maxChunk))
 	return EcosWriter{
 		infoAgent:      f.infoAgent,
 		clusterInfo:    f.clusterInfo,
@@ -82,7 +85,7 @@ func (f *EcosIOFactory) GetEcosWriter(key string) EcosWriter {
 		key:            key,
 		config:         f.config,
 		Status:         READING,
-		chunks:         chunkPool,
+		chunks:         f.chunkPool,
 		blocks:         map[int]*Block{},
 		blockPipes:     f.blockPipes,
 		objHash:        sha256.New(),
