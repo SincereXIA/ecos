@@ -156,9 +156,14 @@ deploy-job:      # This job runs in the deploy stage.
 
 benchmark-job:
   stage: benchmark
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: on_success
+      allow_failure: true
+    - if: $CI_COMMIT_BRANCH != "main" && $CI_PIPELINE_SOURCE != 'merge_request_event'
+      when: manual
+      allow_failure: true
   needs: [unit-test-job]
-  only:
-    - main
   script:
     - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct GOCACHE=$(pwd)/.go_cache/
     - go mod tidy
