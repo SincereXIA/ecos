@@ -220,10 +220,6 @@ func (w *Watcher) AskSky() (leaderInfo *infos.NodeInfo, err error) {
 		return nil, err
 	}
 
-	defer func(conn *grpc.ClientConn) {
-		_ = conn.Close()
-	}(conn)
-
 	c := sun.NewSunClient(conn)
 	result, err := c.MoonRegister(context.Background(), w.selfNodeInfo)
 	if err != nil {
