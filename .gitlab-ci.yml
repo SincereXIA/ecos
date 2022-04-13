@@ -170,9 +170,9 @@ benchmark-job:
     - echo "Running benchmark..."
     - cd client
     - "go test '-bench=BenchmarkClient/put_object' -benchmem -run=none \
-       -cpuprofile=cpu_put.pprof -memprofile=mem_put.pprof -benchtime=2s"
+       -cpuprofile=cpu_put.pprof -memprofile=mem_put.pprof -benchtime=10s"
     - "go test '-bench=BenchmarkClient/get_object' -benchmem -run=none \
-       -cpuprofile=cpu_get.pprof -memprofile=mem_get.pprof -benchtime=2s"
+       -cpuprofile=cpu_get.pprof -memprofile=mem_get.pprof -benchtime=10s"
     - cd ..
     - go test ./...  -bench=.  -benchmem -run=none  -benchtime=1s
   artifacts:
