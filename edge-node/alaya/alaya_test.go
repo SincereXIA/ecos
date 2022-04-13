@@ -38,8 +38,9 @@ func testAlaya(t *testing.T, mock bool) {
 	nodeNum := 9
 	var alayas []Alayaer
 	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
+	mockMetaStorage := NewMemoryMetaStorage()
 	if mock {
-		alayas = GenMockAlayaCluster(t, ctx, basePath, watchers, rpcServers)
+		alayas = GenMockAlayaCluster(t, ctx, basePath, mockMetaStorage, watchers, rpcServers)
 	} else {
 		alayas = GenAlayaCluster(ctx, basePath, watchers, rpcServers)
 	}
@@ -118,7 +119,7 @@ func testAlaya(t *testing.T, mock bool) {
 			newRpcs = append(newRpcs, newRpc)
 		}
 		if mock {
-			newAlayas = GenMockAlayaCluster(t, ctx, path.Join(basePath, "new"), newWatchers, newRpcs)
+			newAlayas = GenMockAlayaCluster(t, ctx, path.Join(basePath, "new"), mockMetaStorage, newWatchers, newRpcs)
 		} else {
 			newAlayas = GenAlayaCluster(ctx, path.Join(basePath, "new"), newWatchers, newRpcs)
 		}
@@ -228,16 +229,15 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	return alayas
 }
 
-func GenMockAlayaCluster(t *testing.T, ctx context.Context, basePath string,
+func GenMockAlayaCluster(t *testing.T, ctx context.Context, basePath string, storage MetaStorage,
 	watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []Alayaer {
 	var alayas []Alayaer
 	nodeNum := len(watchers)
-	metaStorage := NewMemoryMetaStorage()
 	for i := 0; i < nodeNum; i++ {
 		ctrl := gomock.NewController(t)
 		alaya := NewMockAlayaer(ctrl)
 
-		InitMock(alaya, rpcServers[i], metaStorage)
+		InitMock(alaya, rpcServers[i], storage)
 		alayas = append(alayas, alaya)
 	}
 	return alayas
