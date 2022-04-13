@@ -168,12 +168,13 @@ benchmark-job:
     - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct GOCACHE=$(pwd)/.go_cache/
     - go mod tidy
     - echo "Running benchmark..."
-    - go test ./...  -bench=.  -benchmem -run=none  -benchtime=1s
     - cd client
     - "go test '-bench=BenchmarkClient/put_object' -benchmem -run=none \
        -cpuprofile=cpu_put.pprof -memprofile=mem_put.pprof -benchtime=2s"
     - "go test '-bench=BenchmarkClient/get_object' -benchmem -run=none \
        -cpuprofile=cpu_get.pprof -memprofile=mem_get.pprof -benchtime=2s"
+    - cd ..
+    - go test ./...  -bench=.  -benchmem -run=none  -benchtime=1s
   artifacts:
     paths:
       - client/cpu_put.pprof
