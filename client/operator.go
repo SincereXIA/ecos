@@ -53,11 +53,13 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 		InfoType: infos.InfoType_BUCKET_INFO,
 		InfoId:   infos.GenBucketID(v.volumeID, key),
 	})
-
+	if err != nil {
+		return nil, err
+	}
 	return &BucketOperator{
 		bucketInfo: info.BaseInfo.GetBucketInfo(),
 		client:     v.client,
-	}, nil
+	}, err
 }
 
 func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {

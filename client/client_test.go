@@ -149,6 +149,9 @@ func BenchmarkClient(b *testing.B) {
 					b.StartTimer()
 					writer := factory.GetEcosWriter("test" + strconv.Itoa(n))
 					size, err := writer.Write(data)
+					if err != nil {
+						b.Errorf("Failed to write data: %v", err)
+					}
 					err = writer.Close()
 					if err != nil {
 						b.Errorf("Failed to write data: %v", err)
@@ -182,7 +185,6 @@ func BenchmarkClient(b *testing.B) {
 					reader := factory.GetEcosReader("test0")
 					data := make([]byte, objectSize)
 					_, err := reader.Read(data)
-					//data, err := ioutil.ReadAll(reader)
 					if err != nil && err != io.EOF {
 						b.Errorf("Failed to read data: %v", err)
 					}

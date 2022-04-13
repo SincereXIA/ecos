@@ -278,9 +278,7 @@ func deleteObjects(c *gin.Context) {
 				Message: err.Error(),
 			})
 		} else {
-			deleteResult.Deleted = append(deleteResult.Deleted, DeletedObject{
-				Key: obj.Key,
-			})
+			deleteResult.Deleted = append(deleteResult.Deleted, DeletedObject(obj))
 		}
 	}
 	c.Header("Server", "Ecos")
