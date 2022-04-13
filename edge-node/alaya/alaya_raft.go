@@ -13,7 +13,6 @@ import (
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
-	"google.golang.org/grpc"
 	"strconv"
 	"sync"
 	"time"
@@ -254,13 +253,6 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 			logger.Warningf("faild to connect: %v", err)
 			continue
 		}
-		// TODO: 缓存 rpc 连接后这里不用关闭
-		defer func(conn *grpc.ClientConn) {
-			err = conn.Close()
-			if err != nil {
-				logger.Warningf("close grpc conn err: %v", err)
-			}
-		}(conn)
 		c := NewAlayaClient(conn)
 		_, err = c.SendRaftMessage(r.ctx, &PGRaftMessage{
 			PgId:    r.pgID,

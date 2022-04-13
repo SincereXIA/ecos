@@ -217,11 +217,6 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		if err != nil {
 			logger.Warningf("could not send raft message: %v", err)
 		}
-
-		err = conn.Close()
-		if err != nil {
-			logger.Errorf("close grpc conn err: %v", err)
-		}
 	}
 }
 

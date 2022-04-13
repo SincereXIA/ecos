@@ -8,7 +8,9 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+	lru "github.com/hashicorp/golang-lru"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"strconv"
@@ -83,9 +85,24 @@ func (server *RpcServer) Stop() {
 	server.Server.Stop()
 }
 
+var lruPool *lru.Cache
+
 func GetRpcConn(addr string, port uint64) (*grpc.ClientConn, error) {
-	strPort := strconv.FormatUint(port, 10)
-	conn, err := grpc.Dial(addr+":"+strPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	addrWithPort := genAddrWithPort(addr, port)
+	if value, ok := lruPool.Get(addrWithPort); ok {
+		conn := value.(*grpc.ClientConn)
+		if conn.GetState() == connectivity.Shutdown {
+			logger.Warningf("GetRpcConn: %v is shutdown, recreate it", addrWithPort)
+		} else {
+			return value.(*grpc.ClientConn), nil
+		}
+	}
+	conn, err := grpc.Dial(addrWithPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		logger.Errorf("GetRpcConn error: %v", err)
+		return nil, err
+	}
+	lruPool.Add(addrWithPort, conn)
 	return conn, err
 }
 
@@ -93,4 +110,21 @@ func GetRpcConnByNodeInfo(info *infos.NodeInfo) (*grpc.ClientConn, error) {
 	addr := info.IpAddr
 	port := info.RpcPort
 	return GetRpcConn(addr, port)
+}
+
+func genAddrWithPort(addr string, port uint64) string {
+	return addr + ":" + strconv.FormatUint(port, 10)
+}
+
+func init() {
+	var err error
+	lruPool, err = lru.NewWithEvict(64, func(key interface{}, value interface{}) {
+		switch conn := value.(type) {
+		case *grpc.ClientConn:
+			_ = conn.Close()
+		}
+	})
+	if err != nil {
+		logger.Fatalf("init rpc conn lruPool error: %v", err)
+	}
 }
