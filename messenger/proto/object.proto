@@ -16,18 +16,28 @@ message MetaData {
 
 message ObjectMeta {
   string obj_id = 1;
-  uint64  obj_size = 2;
-  Timestamp update_time = 3;
-  string obj_hash = 4;
-  uint64 pg_id = 5;
-  repeated BlockInfo blocks = 6;
-  uint64 term = 7;
-  MetaData meta_data = 8;
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_OK = 1;
+    STATUS_BROKEN = 2;
+    STATUS_UPDATING = 3;
+    STATUS_DELETED = 4;
+  }
+  Status status = 2;
+
+  uint64  obj_size = 3;
+  Timestamp update_time = 4;
+  string obj_hash = 5;
+  uint64 pg_id = 6;
+  repeated BlockInfo blocks = 7;
+  uint64 term = 8;
+  MetaData meta_data = 9;
 }
 
 message BlockInfo {
   string block_id = 1;
-  uint64 BlockSize = 2;
-  string block_hash = 3;
-  uint64 pg_id = 4;
+  int32 part_id = 2;
+  uint64 block_size = 3;
+  string block_hash = 4;
+  uint64 pg_id = 5;
 }

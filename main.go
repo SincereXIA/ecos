@@ -1,8 +1,8 @@
 package main
 
-import "ecos/gateway"
+import "ecos/gateway/router"
 
 func main() {
-	router := gateway.NewRouter()
-	_ = router.Run(":3267")
+	r := router.NewRouter(router.DefaultConfig)
+	_ = r.Run(":3267")
 }

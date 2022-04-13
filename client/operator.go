@@ -19,6 +19,7 @@ type Operator interface {
 	Get(key string) (Operator, error)
 	Remove(key string) error
 	State() (string, error)
+	Info() (interface{}, error)
 }
 
 type VolumeOperator struct {
@@ -36,6 +37,11 @@ func (v *VolumeOperator) State() (string, error) {
 	panic("implement me")
 }
 
+func (v *VolumeOperator) Info() (interface{}, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (v *VolumeOperator) Get(key string) (Operator, error) {
 	nodeInfo := v.client.clusterInfo.NodesInfo[0]
 	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
@@ -47,11 +53,13 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 		InfoType: infos.InfoType_BUCKET_INFO,
 		InfoId:   infos.GenBucketID(v.volumeID, key),
 	})
-
+	if err != nil {
+		return nil, err
+	}
 	return &BucketOperator{
 		bucketInfo: info.BaseInfo.GetBucketInfo(),
 		client:     v.client,
-	}, nil
+	}, err
 }
 
 func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
@@ -109,6 +117,10 @@ func (b *BucketOperator) State() (string, error) {
 	return protoToJson(b.bucketInfo)
 }
 
+func (b *BucketOperator) Info() (interface{}, error) {
+	return b.bucketInfo, nil
+}
+
 func (b *BucketOperator) Get(key string) (Operator, error) {
 	alayaClient, err := b.getAlayaClient(key)
 	if err != nil {
@@ -152,4 +164,8 @@ func protoToJson(pb proto.Message) (string, error) {
 		return "indent data error", err
 	}
 	return pretty.String(), nil
+}
+
+func (o *ObjectOperator) Info() (interface{}, error) {
+	return o.meta, nil
 }

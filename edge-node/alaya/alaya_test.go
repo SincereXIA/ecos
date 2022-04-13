@@ -173,7 +173,7 @@ func testAlaya(t *testing.T, mock bool) {
 			t.Errorf("delete object meta err: %v", err)
 		}
 
-		reply, err = a.GetObjectMeta(ctx, &MetaRequest{
+		_, err = a.GetObjectMeta(ctx, &MetaRequest{
 			ObjId: meta.ObjId,
 		})
 		assert.Error(t, err, "get not exist meta should return error")

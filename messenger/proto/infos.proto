@@ -81,6 +81,14 @@ message BucketConfig {
   bool block_hash_enable = 3;
   bool object_hash_enable = 4;
   bool history_version_enable = 5;
+  enum HashType {
+    OFF = 0;
+    SHA256 = 1;
+    MURMUR3_128 = 2;
+    MURMUR3_32 = 3;
+  }
+  HashType block_hash_type = 6;
+  HashType object_hash_type = 7;
 }
 
 message ClusterInfo{
@@ -111,10 +119,4 @@ message NodeInfo {
   string ip_addr = 3;
   uint64 rpc_port = 4;
   uint64 capacity = 5;
-}
-
-message Information {
-    InfoType info_type = 1;
-    string id = 2;
-    BaseInfo info = 3;
 }
