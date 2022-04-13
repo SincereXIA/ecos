@@ -48,7 +48,7 @@ type Alaya struct {
 
 	state State
 
-	pipelines []*pipeline.Pipeline
+	clusterPipelines *pipeline.ClusterPipelines
 }
 
 type State int
@@ -232,22 +232,26 @@ func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	a.state = UPDATING
-	oldPipelines := a.pipelines
+	oldPipelines := a.clusterPipelines
 	if clusterInfo == nil || len(clusterInfo.NodesInfo) == 0 {
 		logger.Warningf("Empty clusterInfo when alaya apply new clusterInfo")
 		return
 	}
 	logger.Infof("Alaya: %v receive new cluster info, term: %v, node num: %v", a.selfInfo.RaftId,
 		clusterInfo.Term, len(clusterInfo.NodesInfo))
-	p := pipeline.GenPipelines(*clusterInfo, 10, 3)
+	p, err := pipeline.NewClusterPipelines(clusterInfo)
+	if err != nil {
+		logger.Errorf("Alaya: %v create new cluster pipelines failed, err: %v", a.selfInfo.RaftId, err)
+		return
+	}
 	a.ApplyNewPipelines(p, oldPipelines)
 	a.state = RUNNING
 }
 
 // ApplyNewPipelines use new pipelines info to change raft nodes in Alaya
 // pipelines must in order (from 1 to n)
-func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines []*pipeline.Pipeline) {
-	a.pipelines = pipelines
+func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipelines *pipeline.ClusterPipelines) {
+	a.clusterPipelines = pipelines
 
 	// Add raft node new in pipelines
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
@@ -258,13 +262,13 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 			return true
 		}
 		// if this node is leader, add new pipelines node first
-		p := pipelines[pgID-1]
-		raftNode.ProposeNewPipeline(p, oldPipelines[pgID-1])
+		p := pipelines.MetaPipelines[pgID-1]
+		raftNode.ProposeNewPipeline(p, oldPipelines.MetaPipelines[pgID-1])
 		return true
 	})
 
 	// start run raft node new in pipelines
-	for _, p := range pipelines {
+	for _, p := range pipelines.MetaPipelines {
 		if -1 == arrays.Contains(p.RaftId, a.selfInfo.RaftId) { // pass when node not in pipeline
 			continue
 		}
@@ -275,7 +279,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines []*pipeline.Pipeline, oldPipelines [
 		// Add new raft node
 		var raft *Raft
 		if oldPipelines != nil {
-			raft = a.makeAlayaRaftInPipeline(p, oldPipelines[pgID-1])
+			raft = a.makeAlayaRaftInPipeline(p, oldPipelines.MetaPipelines[pgID-1])
 		} else {
 			raft = a.makeAlayaRaftInPipeline(p, nil)
 		}
@@ -339,8 +343,8 @@ func (a *Alaya) PrintPipelineInfo() {
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
-		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v", a.selfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
-
+		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v",
+			a.selfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
 		return true
 	})
 }
@@ -352,7 +356,8 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 	defer a.mutex.Unlock()
 	ok := true
 	length := 0
-	if len(a.pipelines) == 0 || a.state != RUNNING {
+	if len(a.clusterPipelines.MetaPipelines) == 0 || a.state != RUNNING ||
+		a.clusterPipelines.Term != a.watcher.GetCurrentTerm() {
 		return false
 	}
 	a.PGRaftNode.Range(func(key, value interface{}) bool {

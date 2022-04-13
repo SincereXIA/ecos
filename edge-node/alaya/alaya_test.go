@@ -284,9 +284,7 @@ func waiteAllAlayaOK(alayas []Alayaer) {
 		}
 		ok := true
 		for _, alaya := range alayas {
-			// TODO: 这里判断是否就绪并不准确，
 			if !alaya.IsAllPipelinesOK() {
-				//logger.Warningf("Alaya %v not ok", id+1)
 				ok = false
 				break
 			}
