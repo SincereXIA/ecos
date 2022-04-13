@@ -13,6 +13,8 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"github.com/minio/sha256-simd"
+	"github.com/twmb/murmur3"
+	"hash"
 	"io"
 )
 
@@ -34,11 +36,11 @@ type Block struct {
 	chunks []*localChunk
 
 	// These infos are for BlockInfo
-	key         string
-	clusterInfo *infos.ClusterInfo
-	blockCount  int
-	needHash    bool
-	blockPipes  []*pipeline.Pipeline
+	key           string
+	clusterInfo   *infos.ClusterInfo
+	blockCount    int
+	blockHashType infos.BucketConfig_HashType
+	blockPipes    []*pipeline.Pipeline
 
 	// These are for Upload and Release
 	infoAgent   *agent.InfoAgent
@@ -108,15 +110,23 @@ func (b *Block) genBlockHash() error {
 	if b.status != UPLOADING {
 		return errno.IllegalStatus
 	}
-	if !b.needHash {
+	if b.blockHashType == infos.BucketConfig_OFF {
 		b.BlockHash = ""
 		return nil
 	}
-	sha256h := sha256.New()
-	for _, chunk := range b.chunks {
-		sha256h.Write(chunk.data)
+	var h hash.Hash
+	switch b.blockHashType {
+	case infos.BucketConfig_SHA256:
+		h = sha256.New()
+	case infos.BucketConfig_MURMUR3_128:
+		h = murmur3.New128()
+	case infos.BucketConfig_MURMUR3_32:
+		h = murmur3.New32()
 	}
-	b.BlockHash = hex.EncodeToString(sha256h.Sum(nil))
+	for _, chunk := range b.chunks {
+		h.Write(chunk.data)
+	}
+	b.BlockHash = hex.EncodeToString(h.Sum(nil))
 	return nil
 }
 
@@ -136,7 +146,7 @@ func (b *Block) updateBlockInfo() error {
 	if err != nil {
 		return err
 	}
-	if b.needHash {
+	if b.blockHashType != infos.BucketConfig_OFF {
 		b.BlockInfo.BlockId = b.BlockInfo.BlockHash
 	} else {
 		b.BlockInfo.BlockId = GenBlockId()

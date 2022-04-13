@@ -4,6 +4,7 @@ import (
 	"ecos/client/credentials"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
+	"ecos/utils/errno"
 	"encoding/xml"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -23,7 +24,7 @@ type CreateBucketConfiguration struct {
 func createBucket(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "bucketName is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingBucket.Error()})
 		return
 	}
 	if c.Request.ContentLength > 0 {
@@ -81,7 +82,7 @@ func listObjects(c *gin.Context) {
 	if bucketName == "" {
 		c.JSON(http.StatusNotFound, gin.H{
 			"code":    http.StatusNotFound,
-			"message": "Bucket name is empty",
+			"message": errno.MissingBucket.Error(),
 		})
 	}
 	listObjectsResult, err := Client.ListObjects(c, bucketName)
@@ -117,7 +118,7 @@ func listObjectsV2(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "bucketName is empty",
+			"error": errno.MissingBucket.Error(),
 		})
 		return
 	}

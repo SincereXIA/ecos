@@ -2,6 +2,7 @@ package router
 
 import (
 	"ecos/edge-node/object"
+	"ecos/utils/errno"
 	"encoding/xml"
 	"github.com/gin-gonic/gin"
 	"io"
@@ -14,12 +15,12 @@ import (
 func putObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
 		return
 	}
 	//if c.Request.Body == nil || c.Request.ContentLength == 0 {
@@ -49,7 +50,7 @@ func putObject(c *gin.Context) {
 func postObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
 		return
 	}
 	mForm, err := c.MultipartForm()
@@ -62,14 +63,14 @@ func postObject(c *gin.Context) {
 	key := mForm.Value["key"][0]
 	if key == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "key is empty",
+			"error": errno.MissingKey.Error(),
 		})
 		return
 	}
 	file := mForm.File["file"][0]
 	if file == nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "file is empty",
+			"error": errno.EmptyField.Error(),
 		})
 		return
 	}
@@ -102,12 +103,12 @@ func postObject(c *gin.Context) {
 func headObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
 		return
 	}
 	// Get Bucket Operator
@@ -145,12 +146,12 @@ func headObject(c *gin.Context) {
 func getObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
 		return
 	}
 	// Get Bucket Operator
@@ -185,12 +186,12 @@ func getObject(c *gin.Context) {
 func deleteObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
 		return
 	}
 	// Get Bucket Operator
@@ -247,7 +248,7 @@ type DeleteResult struct {
 func deleteObjects(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "bucketName is required"})
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
 		return
 	}
 	body := c.Request.Body

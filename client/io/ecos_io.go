@@ -10,7 +10,11 @@ import (
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/utils/common"
+	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"github.com/google/uuid"
+	"github.com/twmb/murmur3"
+	"hash"
 	"io"
 	"sync"
 )
@@ -27,7 +31,9 @@ type EcosIOFactory struct {
 	blockPipes  []*pipeline.Pipeline
 	bucketInfo  *infos.BucketInfo
 	chunkPool   *common.Pool
-	blockPool   *sync.Pool
+
+	// for multipart upload
+	multipartJobs sync.Map
 }
 
 // NewEcosIOFactory Constructor for EcosIOFactory
@@ -57,7 +63,6 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 		config:      config,
 		objPipes:    pipeline.GenPipelines(*clusterInfo, objPgNum, groupNum),
 		blockPipes:  pipeline.GenPipelines(*clusterInfo, blockPgNum, groupNum),
-		blockPool:   &sync.Pool{},
 	}
 	maxChunk := uint(ret.config.UploadBuffer / ret.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(ret.newLocalChunk, maxChunk, int(maxChunk))
@@ -69,9 +74,6 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 		return nil
 	}
 	ret.bucketInfo = info.BaseInfo().GetBucketInfo()
-	ret.blockPool.New = func() interface{} {
-		return make([]byte, 0, ret.bucketInfo.Config.BlockSize)
-	}
 	return ret
 }
 
@@ -84,6 +86,17 @@ func (f *EcosIOFactory) newLocalChunk() (io.Closer, error) {
 
 // GetEcosWriter provide a EcosWriter for object associated with key
 func (f *EcosIOFactory) GetEcosWriter(key string) EcosWriter {
+	var objHash hash.Hash
+	switch f.bucketInfo.Config.ObjectHashType {
+	case infos.BucketConfig_SHA256:
+		objHash = sha256.New()
+	case infos.BucketConfig_MURMUR3_128:
+		objHash = murmur3.New128()
+	case infos.BucketConfig_MURMUR3_32:
+		objHash = murmur3.New32()
+	default:
+		objHash = nil
+	}
 	return EcosWriter{
 		infoAgent:      f.infoAgent,
 		clusterInfo:    f.clusterInfo,
@@ -94,10 +107,30 @@ func (f *EcosIOFactory) GetEcosWriter(key string) EcosWriter {
 		chunks:         f.chunkPool,
 		blocks:         map[int]*Block{},
 		blockPipes:     f.blockPipes,
-		objHash:        sha256.New(),
+		objHash:        objHash,
 		objPipes:       f.objPipes,
 		finishedBlocks: make(chan *Block),
 	}
+}
+
+// CreateMultipartUploadJob Create a multipart upload job
+//
+// This function will return a jobID, which can be used to upload parts
+func (f *EcosIOFactory) CreateMultipartUploadJob(key string) string {
+	ret := f.GetEcosWriter(key)
+	ret.partObject = true
+	uploadId := uuid.New().String()
+	f.multipartJobs.Store(uploadId, &ret)
+	return uploadId
+}
+
+// GetMultipartUploadWriter Get the writer for a multipart upload with a jobID
+func (f *EcosIOFactory) GetMultipartUploadWriter(jobID string) (*EcosWriter, error) {
+	ret, ok := f.multipartJobs.Load(jobID)
+	if !ok {
+		return nil, errno.JobNotExist
+	}
+	return ret.(*EcosWriter), nil
 }
 
 // GetEcosReader provide a EcosWriter for object associated with key
@@ -112,6 +145,5 @@ func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 		meta:          nil,
 		objPipes:      f.objPipes,
 		config:        f.config,
-		blockPool:     f.blockPool,
 	}
 }

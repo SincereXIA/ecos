@@ -12,6 +12,7 @@ import (
 	"ecos/utils/timestamp"
 	"encoding/hex"
 	"hash"
+	"io"
 	"strconv"
 )
 
@@ -49,6 +50,10 @@ type EcosWriter struct {
 	writeSize uint64
 	objHash   hash.Hash
 	objPipes  []*pipeline.Pipeline
+
+	// for multipart upload
+	partObject bool
+	partIDs    []int
 }
 
 // getCurBlock ensures to return with a Block can put new Chunk in
@@ -59,33 +64,14 @@ func (w *EcosWriter) getCurBlock() *Block {
 		w.commitCurBlock()
 	}
 	if w.curBlock == nil {
-		newBlock := &Block{
-			BlockInfo:   object.BlockInfo{},
-			status:      0,
-			chunks:      nil,
-			key:         w.key,
-			infoAgent:   w.infoAgent,
-			clusterInfo: w.clusterInfo,
-			blockCount:  w.blockCount,
-			needHash:    w.bucketInfo.Config.BlockHashEnable,
-			blockPipes:  w.blockPipes,
-			uploadCount: 0,
-			delFunc: func(self *Block) {
-				// Release Chunks
-				for _, chunk := range self.chunks {
-					chunk.freeSize = w.config.Object.ChunkSize
-					w.chunks.Release(chunk)
-				}
-				self.chunks = nil
-				w.finishedBlocks <- self
-			},
-		}
+		newBlock := w.getNewBlock()
 		w.blockCount++
 		w.curBlock = newBlock
 	}
 	return w.curBlock
 }
 
+// getUploadStream returns a new upload stream
 func (w *EcosWriter) getUploadStream(b *Block) (*UploadClient, error) {
 	idString := strconv.FormatUint(b.blockPipes[b.BlockInfo.PgId-1].RaftId[0], 10)
 	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
@@ -110,34 +96,7 @@ func (w *EcosWriter) commitCurBlock() {
 		return
 	}
 	// TODO: Upload And Retries?
-	go func(i int, block *Block) {
-		err := block.Close()
-		client, err := w.getUploadStream(block)
-		if err != nil {
-			logger.Errorf("Failed to get upload stream: %v", err)
-			return
-		}
-		// TODO (xiong): if upload is failed, now writer never can be close or writer won't know, we should fix it.
-		defer block.delFunc(block)
-		if client.cancel != nil {
-			defer client.cancel()
-		}
-		err = block.Upload(client.stream)
-		if err != nil {
-			block.status = FAILED
-			return
-		} else {
-			_, err = client.GetUploadResult()
-			if err != nil {
-				block.status = FAILED
-				return
-			}
-			block.status = FINISHED
-		}
-		if err != nil {
-			logger.Warningf("Err while Closing Block %v: %v", i, err)
-		}
-	}(w.blockCount, w.curBlock)
+	go w.uploadBlock(w.blockCount, w.curBlock)
 	w.blocks[w.blockCount] = w.curBlock
 	w.curBlock = nil
 }
@@ -173,6 +132,9 @@ func (w *EcosWriter) commitCurChunk() {
 // IllegalStatus: Write called on a closed EcosWriter
 // IncompatibleSize: Written Size NOT corresponded with param
 func (w *EcosWriter) Write(p []byte) (int, error) {
+	if w.partObject {
+		return 0, errno.MethodNotAllowed
+	}
 	if w.Status != READING {
 		return 0, errno.IllegalStatus
 	}
@@ -193,7 +155,7 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 	}
 	// Update ObjectMeta of EcosWriter.meta.ObjHash
 	w.writeSize += uint64(offset)
-	if w.bucketInfo.Config.ObjectHashEnable {
+	if w.bucketInfo.Config.ObjectHashType != infos.BucketConfig_OFF {
 		w.objHash.Write(p[:offset])
 	}
 	if offset != lenP {
@@ -208,12 +170,15 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 		ObjId:      object.GenObjectId(w.bucketInfo, objectKey),
 		ObjSize:    w.writeSize,
 		UpdateTime: timestamp.Now(),
-		//TODO: check if need hash
-		ObjHash:  hex.EncodeToString(w.objHash.Sum(nil)),
-		PgId:     pgID,
-		Blocks:   nil,
-		Term:     w.clusterInfo.Term,
-		MetaData: nil,
+		PgId:       pgID,
+		Blocks:     nil,
+		Term:       w.clusterInfo.Term,
+		MetaData:   nil,
+	}
+	if w.bucketInfo.Config.ObjectHashType != infos.BucketConfig_OFF {
+		meta.ObjHash = hex.EncodeToString(w.objHash.Sum(nil))
+	} else {
+		meta.ObjHash = ""
 	}
 	// w.meta.Blocks is set here. The map and Block.Close ensures the Block Status
 	logger.Debugf("commit blocks num: %v", len(w.blocks))
@@ -268,9 +233,191 @@ func (w *EcosWriter) Close() error {
 	return nil
 }
 
+/////////////////////////////////////////////////////////////////
+//            EcosWriter Support for MultiPartUpload           //
+/////////////////////////////////////////////////////////////////
+
+// genPartialHash will generate partial hash from EcosWriter.blocks
+// Will be used in EcosWriter.genPartialMeta
+func (w *EcosWriter) genPartialHash() string {
+	if w.bucketInfo.Config.ObjectHashType == infos.BucketConfig_OFF {
+		return ""
+	}
+	w.objHash.Reset()
+	for _, partID := range w.partIDs {
+		block := w.blocks[partID]
+		w.objHash.Write([]byte(block.BlockInfo.BlockHash))
+	}
+	return hex.EncodeToString(w.objHash.Sum(nil))
+}
+
+// genPartialMeta will generate partial ObjectMeta for partial upload.
+func (w *EcosWriter) genPartialMeta(objectKey string) *object.ObjectMeta {
+	pgID := object.GenObjPgID(w.bucketInfo, objectKey, 10)
+	blocks := make([]*object.BlockInfo, len(w.partIDs))
+	for _, partID := range w.partIDs {
+		block := w.blocks[partID]
+		blocks = append(blocks, &block.BlockInfo)
+	}
+	meta := &object.ObjectMeta{
+		ObjId:      object.GenObjectId(w.bucketInfo, w.key),
+		ObjSize:    w.writeSize,
+		UpdateTime: timestamp.Now(),
+		PgId:       pgID,
+		Blocks:     blocks,
+		Term:       w.clusterInfo.Term,
+		MetaData:   nil,
+	}
+	meta.ObjHash = w.genPartialHash()
+	// w.meta.Blocks is set here. The map and Block.Close ensures the Block Status
+	logger.Debugf("commit blocks num: %v", len(blocks))
+	return meta
+}
+
+// CommitPartialMeta will set EcosWriter collect info of Block s and generate ObjectMeta.
+func (w *EcosWriter) CommitPartialMeta() error {
+	if !w.partObject {
+		return errno.MethodNotAllowed
+	}
+	meta := w.genPartialMeta(w.key)
+	metaServerNode := w.getObjNodeByPg(meta.PgId)
+	metaClient, err := NewMetaClient(metaServerNode, w.config)
+	if err != nil {
+		logger.Errorf("Update Multipart Object Failed: %v", err)
+		return err
+	}
+	result, err := metaClient.SubmitMeta(meta)
+	if err != nil {
+		logger.Errorf("Update Multipart Object Failed: %v with Error %v", result, err)
+		return err
+	}
+	logger.Infof("Update Multipart Object for %v: success", w.key)
+	return nil
+}
+
+// WritePart will write data to EcosWriter.blocks[partID]
+func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
+	if !w.partObject {
+		return "", errno.MethodNotAllowed
+	}
+	if w.Status != READING {
+		return "", errno.RepeatedClose
+	}
+	if partID < 1 || partID > 10000 {
+		return "", errno.InvalidArgument
+	}
+	w.blocks[partID] = w.getNewBlock()
+	w.blocks[partID].BlockInfo.PartId = int32(partID)
+	w.blocks[partID].delFunc = func(self *Block) {
+		self.chunks = nil
+		w.finishedBlocks <- self
+	}
+	blockSize := uint64(0)
+	for {
+		var chunkData = make([]byte, 0, w.config.Object.ChunkSize)
+		readSize, err := reader.Read(chunkData)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			// TODO: Abort
+			return "", err
+		}
+		blockSize += uint64(readSize)
+		chunk := &localChunk{
+			freeSize: 0,
+			data:     chunkData[:readSize],
+		}
+		w.blocks[partID].chunks = append(w.blocks[partID].chunks, chunk)
+	}
+	w.blocks[partID].BlockInfo.BlockSize = blockSize
+	w.blocks[partID].status = UPLOADING
+	err := w.blocks[partID].updateBlockInfo()
+	if err != nil {
+		return "", err
+	}
+	go w.uploadBlock(partID, w.blocks[partID])
+	return w.blocks[partID].BlockId, nil
+}
+
+// CloseMultiPart will close EcosWriter for multi-part upload.
+func (w *EcosWriter) CloseMultiPart() error {
+	if !w.partObject {
+		return errno.MethodNotAllowed
+	}
+	if w.Status != READING {
+		return errno.RepeatedClose
+	}
+	w.Status = UPLOADING
+	for i := 0; i < w.blockCount; i++ {
+		block := <-w.finishedBlocks
+		logger.Debugf("block closed: %v", block.BlockId)
+	}
+	err := w.CommitPartialMeta()
+	if err != nil {
+		return err
+	}
+	w.Status = FINISHED
+	return nil
+}
+
 func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {
 	logger.Infof("META PG: %v, NODE: %v", pgID, w.objPipes[pgID-1].RaftId)
 	idString := strconv.FormatUint(w.objPipes[pgID-1].RaftId[0], 10)
 	nodeInfo, _ := w.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
 	return nodeInfo.BaseInfo().GetNodeInfo()
+}
+
+// getNewBlock will get a new Block with blank BlockInfo.
+func (w *EcosWriter) getNewBlock() *Block {
+	return &Block{
+		BlockInfo:   object.BlockInfo{},
+		status:      READING,
+		chunks:      nil,
+		key:         w.key,
+		infoAgent:   w.infoAgent,
+		clusterInfo: w.clusterInfo,
+		blockCount:  w.blockCount,
+		blockPipes:  w.blockPipes,
+		uploadCount: 0,
+		delFunc: func(self *Block) {
+			// Release Chunks
+			for _, chunk := range self.chunks {
+				chunk.freeSize = w.config.Object.ChunkSize
+				w.chunks.Release(chunk)
+			}
+			self.chunks = nil
+			w.finishedBlocks <- self
+		},
+	}
+}
+
+// uploadBlock will upload a Block to Object Storage.
+func (w *EcosWriter) uploadBlock(i int, block *Block) {
+	err := block.Close()
+	client, err := w.getUploadStream(block)
+	if err != nil {
+		logger.Errorf("Failed to get upload stream: %v", err)
+		return
+	}
+	// TODO (xiong): if upload is failed, now writer never can be close or writer won't know, we should fix it.
+	defer block.delFunc(block)
+	if client.cancel != nil {
+		defer client.cancel()
+	}
+	err = block.Upload(client.stream)
+	if err != nil {
+		block.status = FAILED
+		return
+	} else {
+		_, err = client.GetUploadResult()
+		if err != nil {
+			block.status = FAILED
+			return
+		}
+		block.status = FINISHED
+	}
+	if err != nil {
+		logger.Warningf("Err while Closing Block %v: %v", i, err)
+	}
 }

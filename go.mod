@@ -33,6 +33,8 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.4.0
 	github.com/stretchr/testify v1.7.1
+	github.com/twmb/murmur3 v1.1.6
+	github.com/ugorji/go v1.2.7 // indirect
 	github.com/wxnacy/wgo v1.0.4
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2
 	go.etcd.io/etcd/pkg/v3 v3.5.2
