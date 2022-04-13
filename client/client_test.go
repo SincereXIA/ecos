@@ -195,6 +195,7 @@ func BenchmarkClient(b *testing.B) {
 					reader := factory.GetEcosReader("test0")
 					data := make([]byte, objectSize)
 					_, err := reader.Read(data)
+					//data, _ = io.ReadAll(reader)
 					if err != nil && err != io.EOF {
 						b.Errorf("Failed to read data: %v", err)
 					}

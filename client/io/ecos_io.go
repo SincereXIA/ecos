@@ -12,6 +12,7 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"io"
+	"sync"
 )
 
 // EcosIOFactory Generates EcosWriter with ClientConfig
@@ -26,6 +27,7 @@ type EcosIOFactory struct {
 	blockPipes  []*pipeline.Pipeline
 	bucketInfo  *infos.BucketInfo
 	chunkPool   *common.Pool
+	blockPool   *sync.Pool
 }
 
 // NewEcosIOFactory Constructor for EcosIOFactory
@@ -55,6 +57,7 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 		config:      config,
 		objPipes:    pipeline.GenPipelines(*clusterInfo, objPgNum, groupNum),
 		blockPipes:  pipeline.GenPipelines(*clusterInfo, blockPgNum, groupNum),
+		blockPool:   &sync.Pool{},
 	}
 	maxChunk := uint(ret.config.UploadBuffer / ret.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(ret.newLocalChunk, maxChunk, int(maxChunk))
@@ -66,6 +69,9 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 		return nil
 	}
 	ret.bucketInfo = info.BaseInfo().GetBucketInfo()
+	ret.blockPool.New = func() interface{} {
+		return make([]byte, 0, ret.bucketInfo.Config.BlockSize)
+	}
 	return ret
 }
 
@@ -106,5 +112,6 @@ func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 		meta:          nil,
 		objPipes:      f.objPipes,
 		config:        f.config,
+		blockPool:     f.blockPool,
 	}
 }
