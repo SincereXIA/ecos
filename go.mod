@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/SUMStudio/grocksdb v1.6.47
 	github.com/deckarep/golang-set v1.8.0
+	github.com/elliotchance/orderedmap v1.4.0
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-playground/validator/v10 v10.10.1 // indirect
 	github.com/gogo/protobuf v1.3.2
@@ -13,6 +14,7 @@ require (
 	github.com/google/go-cmp v0.5.7
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jedib0t/go-pretty/v6 v6.3.0
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
@@ -25,7 +27,6 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.4.0
 	github.com/stretchr/testify v1.7.1
-	github.com/ugorji/go v1.2.7 // indirect
 	github.com/wxnacy/wgo v1.0.4
 	go.etcd.io/etcd/raft/v3 v3.5.2
 	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29 // indirect

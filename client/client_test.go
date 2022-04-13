@@ -7,6 +7,7 @@ import (
 	edgeNodeTest "ecos/edge-node/test"
 	"ecos/utils/common"
 	"ecos/utils/logger"
+	"github.com/elliotchance/orderedmap"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"io"
@@ -127,16 +128,19 @@ func BenchmarkClient(b *testing.B) {
 	}
 
 	factory := client.GetIOFactory(bucketName)
-	sizeMap := map[string]int{
-		"10K":  1024 * 10,
-		"1M":   1024 * 1024,
-		"10M":  1024 * 1024 * 10,
-		"100M": 1024 * 1024 * 100,
-	}
+	sizeMap := orderedmap.NewOrderedMap()
+	sizeMap.Set("10K", 10*1024)
+	sizeMap.Set("1M", 1024*1024)
+	sizeMap.Set("10M", 10*1024*1024)
+	sizeMap.Set("100M", 100*1024*1024)
 
 	b.Run("put object", func(b *testing.B) {
-		for key, objectSize := range sizeMap {
-			b.Run(key, func(b *testing.B) {
+		keys := sizeMap.Keys()
+		for _, key := range keys {
+			size := key.(string)
+			value, _ := sizeMap.Get(size)
+			objectSize := value.(int)
+			b.Run(size, func(b *testing.B) {
 				//gen test data
 				b.ResetTimer()
 				for n := 0; n < b.N; n++ {
@@ -159,8 +163,12 @@ func BenchmarkClient(b *testing.B) {
 	})
 
 	b.Run("get object", func(b *testing.B) {
-		for key, objectSize := range sizeMap {
-			b.Run(key, func(b *testing.B) {
+		keys := sizeMap.Keys()
+		for _, key := range keys {
+			size := key.(string)
+			value, _ := sizeMap.Get(size)
+			objectSize := value.(int)
+			b.Run(size, func(b *testing.B) {
 				data := genTestData(objectSize)
 				writer := factory.GetEcosWriter("test" + strconv.Itoa(0))
 				_, _ = writer.Write(data)

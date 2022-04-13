@@ -160,6 +160,8 @@ benchmark-job:
   only:
     - main
   script:
+    - go env -w GOMODCACHE=$(pwd)/.mod_cache/ GOPROXY=https://goproxy.cn,direct GOCACHE=$(pwd)/.go_cache/
+    - go mod tidy
     - echo "Running benchmark..."
     - go test ./...  -bench=.  -benchmem -run=none  -benchtime=1s
     - cd client
