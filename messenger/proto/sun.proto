@@ -1,8 +1,7 @@
 syntax = "proto3";
 package messenger;
 
-import "node_info.proto";
-import "cluster_info.proto";
+import "infos.proto";
 import "common.proto";
 
 option go_package = "ecos/cloud/sun";

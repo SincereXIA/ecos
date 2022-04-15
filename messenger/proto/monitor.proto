@@ -1,0 +1,40 @@
+syntax = "proto3";
+package messenger;
+
+import "common.proto";
+import "timestamp.proto";
+
+option go_package = "ecos/edge-node/monitor";
+
+service Monitor {
+  rpc Report(NodeStateReport) returns (Result) {}
+  rpc Get(StateRequest) returns (NodeStateReport) {}
+}
+
+message NodeStateReport {
+  uint64 node_id = 1;
+  string node_uuid = 2;
+  Timestamp timestamp = 3;
+  enum State {
+    UNKNOWN = 0;
+    ONLINE = 1;
+    OFFLINE = 2;
+  }
+  State state = 4;
+  NodeStatus status = 5;
+}
+
+message NodeStatus {
+  uint64 disk_available = 1;
+  uint64 disk_total = 2;
+  uint64 network_speed = 3;
+  double cpu_percent = 4;
+  uint64 memory_usage = 5;
+  uint64 memory_total = 6;
+  uint64 block_count = 7;
+  uint64 meta_count = 8;
+  uint64 goroutine_count = 9;
+  uint64 meta_pipeline_count = 10;
+}
+
+message StateRequest {}
