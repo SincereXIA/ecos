@@ -25,6 +25,7 @@ const (
 	UPLOADING
 	FAILED
 	FINISHED
+	ABORTED
 )
 
 type Block struct {

@@ -233,6 +233,25 @@ func (w *EcosWriter) Close() error {
 	return nil
 }
 
+// Abort will change EcosWriter.Status: READING -> ABORTED
+//
+// Abort should close EcosWriter from subsequent writing to EcosWriter
+// and REMOVE blocks that had benn already uploaded
+//
+// Call Abort with a closed EcosWriter will produce errno.RepeatedAbort
+func (w *EcosWriter) Abort() error {
+	if w.Status != READING {
+		return errno.RepeatedClose
+	}
+	w.Status = ABORTED
+	for i := 0; i < w.blockCount; i++ {
+		block := <-w.finishedBlocks
+		logger.Debugf("block aborted: %v", block.BlockId)
+		// TODO: Delete block from block server
+	}
+	return nil
+}
+
 /////////////////////////////////////////////////////////////////
 //            EcosWriter Support for MultiPartUpload           //
 /////////////////////////////////////////////////////////////////
@@ -295,6 +314,25 @@ func (w *EcosWriter) CommitPartialMeta() error {
 	return nil
 }
 
+// addPartID will ordinal insert partID to EcosWriter.partIDs
+//
+// Returns:
+// 		true:  if partID NOT in EcosWriter.partIDs
+// 		false: if partID IS  in EcosWriter.partIDs
+func (w *EcosWriter) addPartID(partID int) bool {
+	for i, id := range w.partIDs {
+		if id == partID {
+			return false
+		}
+		if id < partID {
+			w.partIDs = append(w.partIDs[:i], append([]int{partID}, w.partIDs[i:]...)...)
+			return true
+		}
+	}
+	w.partIDs = append(w.partIDs, partID)
+	return true
+}
+
 // WritePart will write data to EcosWriter.blocks[partID]
 func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
 	if !w.partObject {
@@ -305,6 +343,12 @@ func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
 	}
 	if partID < 1 || partID > 10000 {
 		return "", errno.InvalidArgument
+	}
+	// TODO: Delete duplicate part
+	noDuplicate := w.addPartID(partID)
+	if !noDuplicate {
+		victim := w.blocks[partID]
+		logger.Tracef("Delete duplicate part %v", victim.PartId)
 	}
 	w.blocks[partID] = w.getNewBlock()
 	w.blocks[partID].BlockInfo.PartId = int32(partID)
@@ -358,6 +402,20 @@ func (w *EcosWriter) CloseMultiPart() error {
 		return err
 	}
 	w.Status = FINISHED
+	return nil
+}
+
+// AbortMultiPart will abort EcosWriter for multipart upload.
+func (w *EcosWriter) AbortMultiPart() error {
+	if !w.partObject {
+		return errno.MethodNotAllowed
+	}
+	if w.Status != READING {
+		return errno.RepeatedClose
+	}
+	w.Status = ABORTED
+	w.blocks = nil
+	w.partIDs = nil
 	return nil
 }
 
