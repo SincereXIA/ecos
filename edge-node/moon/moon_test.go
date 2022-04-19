@@ -10,6 +10,7 @@ import (
 	"ecos/utils/timestamp"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"path"
 	"strconv"
 	"testing"
@@ -71,7 +72,7 @@ func testMoon(t *testing.T, mock bool) {
 			moons[i].Stop()
 			rpcServers[i].Stop()
 		}
-		// _ = os.RemoveAll(basePath)
+		_ = os.RemoveAll(basePath)
 	})
 
 	var leader int
@@ -127,28 +128,6 @@ func testMoon(t *testing.T, mock bool) {
 
 	time.Sleep(10 * time.Second)
 
-	//t.Run("test node crash", func(t *testing.T) {
-	//	totalNodes := len(moons)
-	//
-	//	rand.Seed(time.Now().UnixNano())
-	//	crashIndex := rand.Intn(totalNodes)
-	//
-	//	moons[crashIndex].Stop()
-	//	// rpcServers[crashIndex].Stop()
-	//	time.Sleep(time.Second * 5)
-	//	moons[crashIndex].Run()
-	//	// rpcServers[crashIndex].Run()
-	//	leader = waitMoonsOK(moons)
-	//
-	//	switch m := moons[leader-1].(type) {
-	//	case *Moon:
-	//		logger.Infof("leader: %v", leader)
-	//		m.raft.Status().Progress[uint64(crashIndex+1)].State.String()
-	//		logger.Infof("%v", m.raft.Status())
-	//	}
-	//
-	//})
-
 }
 
 func waitMoonsOK(moons []InfoController) int {
@@ -202,9 +181,7 @@ func createMoons(ctx context.Context, num int, basePath string) ([]InfoControlle
 		// builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
 		builder := infos.NewStorageRegisterBuilder(infos.NewRocksDBInfoStorageFactory(basePath + strconv.FormatInt(int64(i), 10)))
 		register := builder.GetStorageRegister()
-		getSnapshot := func() ([]byte, error) { return register.GetSnapshot() }
-		moons = append(moons, NewMoon(ctx, nodeInfos[i], moonConfigs[i], getSnapshot, rpcServers[i],
-			register))
+		moons = append(moons, NewMoon(ctx, nodeInfos[i], moonConfigs[i], rpcServers[i], register))
 	}
 	return moons, rpcServers, nil
 }

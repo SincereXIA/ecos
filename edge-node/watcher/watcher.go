@@ -56,25 +56,38 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	w.addNodeMutex.Lock()
 	defer w.addNodeMutex.Unlock()
 
-	request := &moon.ProposeInfoRequest{
-		Head: &common.Head{
-			Timestamp: timestamp.Now(),
-			Term:      w.GetCurrentTerm(),
-		},
-		Operate:  moon.ProposeInfoRequest_ADD,
-		Id:       strconv.FormatUint(info.RaftId, 10),
-		BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: info}},
+	flag := true
+
+	currentPeerInfos := w.getCurrentPeerInfo()
+	for _, peerInfo := range currentPeerInfos {
+		if peerInfo.RaftId == info.RaftId {
+			flag = false
+			break
+		}
 	}
-	_, err := w.moon.ProposeInfo(w.ctx, request)
-	if err != nil {
-		// TODO
-		return nil, err
+
+	if flag {
+		request := &moon.ProposeInfoRequest{
+			Head: &common.Head{
+				Timestamp: timestamp.Now(),
+				Term:      w.GetCurrentTerm(),
+			},
+			Operate:  moon.ProposeInfoRequest_ADD,
+			Id:       strconv.FormatUint(info.RaftId, 10),
+			BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: info}},
+		}
+		_, err := w.moon.ProposeInfo(w.ctx, request)
+		if err != nil {
+			// TODO
+			return nil, err
+		}
+		err = w.moon.ProposeConfChangeAddNode(w.ctx, info)
+		if err != nil {
+			// TODO
+			return nil, err
+		}
 	}
-	err = w.moon.ProposeConfChangeAddNode(w.ctx, info)
-	if err != nil {
-		// TODO
-		return nil, err
-	}
+
 	return &AddNodeReply{
 		Result: &common.Result{
 			Status: common.Result_OK,

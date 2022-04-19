@@ -40,6 +40,7 @@ type Moon struct {
 	communicationC <-chan []raftpb.Message
 	commitC        <-chan *commit
 	errorC         <-chan error
+	nodeReady      bool
 
 	id       uint64 //raft节点的id
 	raft     *raftNode
@@ -51,12 +52,10 @@ type Moon struct {
 	infoStorage *infos.Storage
 	leaderID    uint64 // 注册时的 leader 信息
 
-	getSnapshot         func() ([]byte, error)
-	recoverFromSnapshot func([]byte) error
-
 	infoStorageRegister   *infos.StorageRegister
 	appliedRequestChan    chan *ProposeInfoRequest
 	appliedConfChangeChan chan raftpb.ConfChange
+	appliedConfErrorChan  chan error
 
 	snapshotter *snap.Snapshotter
 
@@ -134,7 +133,7 @@ func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
 			}
 			if snapshot != nil {
 				logger.Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
-				if err := m.recoverFromSnapshot(snapshot.Data); err != nil {
+				if err := m.infoStorageRegister.RecoverFromSnapshot(snapshot.Data); err != nil {
 					logger.Errorf("failed to recover from snapshot: %v", err)
 				}
 			}
@@ -142,7 +141,6 @@ func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
 		}
 
 		for _, rawData := range commit.data {
-			// TODO: handle the data
 			var msg ProposeInfoRequest
 			data := []byte(rawData)
 			err := msg.Unmarshal(data)
@@ -165,7 +163,7 @@ func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
 			}
 			m.appliedRequestChan <- &msg
 		}
-		close(commit.applyDoneC) // TODO:why ?
+		close(commit.applyDoneC) // TODO:
 	}
 	if err, ok := <-errorC; ok {
 		logger.Fatalf("commit stream error: %v", err)
@@ -210,16 +208,31 @@ func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.Nod
 	}
 
 	// TODO: add time out
-	<-m.appliedConfChangeChan
+	for {
+		select {
+		case <-m.appliedConfErrorChan:
+			// TODO:
+			return nil
+		case <-m.appliedConfChangeChan:
+			// TODO:
+			return nil
+		}
+	}
 	return nil
 }
 
 func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raftpb.Message, error) {
+
+	if m.raft == nil {
+		return nil, errors.New("moon" + strconv.FormatUint(m.id, 10) + ": raft is not ready")
+	}
+
 	m.raft.raftChan <- *message
+
 	return &raftpb.Message{}, nil
 }
 
-func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, getSnapshot func() ([]byte, error), recoverFromSnapshot func([]byte) error, rpcServer *messenger.RpcServer,
+func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
 	register *infos.StorageRegister) *Moon {
 
 	proposeC := make(chan string) // TODO: close
@@ -229,6 +242,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, getS
 	ctx, cancel := context.WithCancel(ctx)
 
 	m := &Moon{
+
 		proposeC:       proposeC,
 		confChangeC:    confChangeC,
 		communicationC: communicationC,
@@ -245,9 +259,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, getS
 		infoStorageRegister:   register,
 		appliedRequestChan:    make(chan *ProposeInfoRequest, 100),
 		appliedConfChangeChan: make(chan raftpb.ConfChange, 100),
-
-		getSnapshot:         getSnapshot,
-		recoverFromSnapshot: recoverFromSnapshot,
+		appliedConfErrorChan:  make(chan error),
 	}
 	leaderInfo := config.ClusterInfo.LeaderInfo
 	if leaderInfo != nil {
@@ -267,6 +279,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, getS
 }
 
 func (m *Moon) sendByRpc(messages []raftpb.Message) {
+
 	for _, message := range messages {
 		logger.Tracef("%d send to %v, type %v", m.id, message, message.Type)
 
@@ -291,6 +304,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		c := NewMoonClient(conn)
 		_, err = c.SendRaftMessage(m.ctx, &message)
 		if err != nil {
+			m.appliedConfErrorChan <- err
 			logger.Warningf("could not send raft message: %v", err)
 		}
 	}
@@ -303,7 +317,6 @@ func (m *Moon) IsLeader() bool {
 func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-
 	m.status = StatusRegistering
 	m.SelfInfo = selfInfo
 	if leaderInfo != nil {
@@ -320,9 +333,15 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 	m.infoMap[m.SelfInfo.RaftId] = m.SelfInfo
 
 	logger.Tracef("leaderInfo: %v", leaderInfo)
+
+	join := false
+
 	if leaderInfo != nil { // 集群中现在已经有成员，peers 只需要填写 leader
 		peers = []raft.Peer{
 			{ID: leaderInfo.RaftId},
+		}
+		if peersInfo != nil {
+			join = true
 		}
 	} else {
 		for _, nodeInfo := range m.infoMap {
@@ -330,6 +349,24 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 		}
 	}
 
+	//if peersInfo != nil && leaderInfo != nil {
+	//	join = true
+	//}
+	//
+	//for _, nodeInfo := range m.infoMap {
+	//	peers = append(peers, raft.Peer{ID: nodeInfo.RaftId})
+	//}
+
+	proposeC, confChangeC, communicationC, commitC, errorC, nodeReadyC, snapshotterReady, raftNode := newRaftNode(int(m.id), peers, join, m.config.RaftStoragePath, m.infoStorageRegister.GetSnapshot)
+	m.proposeC = proposeC
+	m.confChangeC = confChangeC
+	m.communicationC = communicationC
+	m.raft = raftNode
+	m.commitC = commitC
+	m.errorC = errorC
+	m.nodeReady = <-nodeReadyC
+	m.snapshotter = <-snapshotterReady
+	return
 }
 
 func (m *Moon) Run() {
@@ -340,13 +377,14 @@ func (m *Moon) Run() {
 
 	// read commits from raft into storage until error
 	go m.readCommits(m.commitC, m.errorC)
+
 	for {
 		select {
 		case <-m.ctx.Done():
 			m.cleanup()
 			return
-		case msg := <-m.communicationC:
-			go m.sendByRpc(msg)
+		case msgs := <-m.communicationC:
+			go m.sendByRpc(msgs)
 		}
 	}
 }
@@ -361,6 +399,13 @@ func (m *Moon) cleanup() {
 }
 
 func (m *Moon) reportSelfInfo() {
+
+	for {
+		if m.nodeReady == true {
+			break
+		}
+	}
+
 	for m.raft.node.Status().Lead == 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -383,9 +428,16 @@ func (m *Moon) reportSelfInfo() {
 }
 
 func (m *Moon) GetLeaderID() uint64 {
+	for {
+		if m.nodeReady == true {
+			break
+		}
+	}
+
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
-	if m.raft == nil {
+
+	if m.raft.node == nil {
 		return 0
 	}
 	return m.raft.node.Status().Lead

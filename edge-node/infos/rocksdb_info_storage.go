@@ -124,7 +124,7 @@ func (factory *RocksDBInfoStorageFactory) GetSnapshot() ([]byte, error) {
 
 func (factory *RocksDBInfoStorageFactory) RecoverFromSnapshot(snapshot []byte) error {
 	// save snapshot to disk
-	os.Remove(path.Join(factory.basePath, "snapshot.zip"))
+	os.Remove(path.Join(factory.basePath, "snapshot.zip")) // remove local snapshot
 	file, _ := os.Open(path.Join(factory.basePath, "snapshot.zip"))
 	_, err := io.ReadFull(file, snapshot)
 	if err != nil {
@@ -192,7 +192,7 @@ func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	}
 	cfNames, err := gorocksdb.ListColumnFamilies(database.Opts, basePath)
 	if err != nil {
-		logger.Errorf("List column families failed, err: %v", err)
+		logger.Infof("List column families failed, err: %v", err)
 	}
 	if len(cfNames) == 0 {
 		cfNames = append(cfNames, "default")

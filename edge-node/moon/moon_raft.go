@@ -3,7 +3,6 @@ package moon
 import (
 	"context"
 	"ecos/utils/logger"
-	"fmt"
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
@@ -13,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"log"
 	"os"
+	"path"
 	"time"
 )
 
@@ -28,12 +28,13 @@ type raftNode struct {
 	commitC        chan<- *commit           // entries committed to log (server)
 	errorC         chan<- error             // errors from raft session
 	raftChan       chan raftpb.Message      // raft messages
+	nodeReadyC     chan<- bool              // signals when raft node is ready
 
-	id          int      // client ID for raft session
-	peers       []string // raft peer URLs
-	join        bool     // node is joining an existing cluster
-	waldir      string   // path to WAL directory
-	snapdir     string   // path to snapshot directory
+	id          int // client ID for raft session
+	peers       []raft.Peer
+	join        bool   // node is joining an existing cluster
+	waldir      string // path to WAL directory
+	snapdir     string // path to snapshot directory
 	getSnapshot func() ([]byte, error)
 
 	confState     raftpb.ConfState
@@ -50,28 +51,37 @@ type raftNode struct {
 
 	snapCount uint64
 
-	stopc  chan struct{} // signals proposal channel closed
+	stopc chan struct{} // signals proposal channel closed
+
 	logger *zap.Logger
 }
 
-var defaultSnapshotCount uint64 = 10000
+var defaultSnapshotCount uint64 = 100 // set 10 for test
 
-func newRaftNode(id int, peers []string, join bool, getSnapshot func() ([]byte, error), proposeC <-chan string,
-	confChangeC <-chan raftpb.ConfChange) (<-chan *commit, <-chan error, <-chan *snap.Snapshotter, *raftNode) {
+func newRaftNode(id int, peers []raft.Peer, join bool, basePath string, getSnapshot func() ([]byte, error)) (chan<- string,
+	chan<- raftpb.ConfChange, <-chan []raftpb.Message, <-chan *commit, <-chan error, <-chan bool, <-chan *snap.Snapshotter, *raftNode) {
 
+	proposeC := make(chan string)
+	confChangeC := make(chan raftpb.ConfChange)
+	communicationC := make(chan []raftpb.Message)
 	commitC := make(chan *commit)
 	errorC := make(chan error)
+	nodeReadyC := make(chan bool)
+	raftChan := make(chan raftpb.Message)
+	var rc = &raftNode{
+		proposeC:       proposeC,
+		confChangeC:    confChangeC,
+		communicationC: communicationC,
+		commitC:        commitC,
+		errorC:         errorC,
+		nodeReadyC:     nodeReadyC,
+		raftChan:       raftChan,
 
-	rc := &raftNode{
-		proposeC:    proposeC,
-		confChangeC: confChangeC,
-		commitC:     commitC,
-		errorC:      errorC,
 		id:          id,
 		peers:       peers,
 		join:        join,
-		waldir:      fmt.Sprintf("moon-raft-%d", id),
-		snapdir:     fmt.Sprintf("moon-raft-%d-snap", id),
+		waldir:      path.Join(basePath, "raft"),
+		snapdir:     path.Join(basePath, "snap"),
 		getSnapshot: getSnapshot,
 		snapCount:   defaultSnapshotCount,
 		stopc:       make(chan struct{}),
@@ -82,7 +92,7 @@ func newRaftNode(id int, peers []string, join bool, getSnapshot func() ([]byte, 
 		// rest of structure populated after WAL replay
 	}
 	go rc.startRaft()
-	return commitC, errorC, rc.snapshotterReady, rc
+	return proposeC, confChangeC, communicationC, commitC, errorC, nodeReadyC, rc.snapshotterReady, rc
 }
 
 func (rc *raftNode) saveSnap(snap raftpb.Snapshot) error {
@@ -188,7 +198,7 @@ func (rc *raftNode) loadSnapshot() *raftpb.Snapshot {
 // openWAL returns a WAL ready for reading.
 func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 	if !wal.Exist(rc.waldir) {
-		if err := os.Mkdir(rc.waldir, 0750); err != nil {
+		if err := os.MkdirAll(rc.waldir, 0750); err != nil {
 			logger.Fatalf("Raft %v cannot create dir for wal (%v)", rc.id, err)
 		}
 
@@ -219,7 +229,7 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	w := rc.openWAL(snapshot)
 	_, st, ents, err := w.ReadAll()
 	if err != nil {
-		log.Fatalf("raftexample: failed to read WAL (%v)", err)
+		logger.Fatalf("failed to read WAL (%v)", err)
 	}
 	rc.raftStorage = raft.NewMemoryStorage()
 	if snapshot != nil {
@@ -235,8 +245,8 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 
 func (rc *raftNode) startRaft() {
 	if !fileutil.Exist(rc.snapdir) {
-		if err := os.Mkdir(rc.snapdir, 0750); err != nil {
-			log.Fatalf("raftexample: cannot create dir for snapshot (%v)", err)
+		if err := os.MkdirAll(rc.snapdir, 0750); err != nil {
+			logger.Fatalf("Cannot create dir for snapshot (%v)", err)
 		}
 	}
 	rc.snapshotter = snap.New(zap.NewExample(), rc.snapdir)
@@ -247,10 +257,6 @@ func (rc *raftNode) startRaft() {
 	// signal replay has finished
 	rc.snapshotterReady <- rc.snapshotter
 
-	rpeers := make([]raft.Peer, len(rc.peers))
-	for i := range rpeers {
-		rpeers[i] = raft.Peer{ID: uint64(i + 1)}
-	}
 	c := &raft.Config{
 		ID:                        uint64(rc.id),
 		ElectionTick:              10,
@@ -264,8 +270,10 @@ func (rc *raftNode) startRaft() {
 	if oldwal || rc.join {
 		rc.node = raft.RestartNode(c)
 	} else {
-		rc.node = raft.StartNode(c, rpeers)
+		rc.node = raft.StartNode(c, rc.peers)
 	}
+
+	rc.nodeReadyC <- true
 
 	go rc.serveChannels()
 }
@@ -295,7 +303,7 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	rc.appliedIndex = snapshotToSave.Metadata.Index
 }
 
-var snapshotCatchUpEntriesN uint64 = 10000
+var snapshotCatchUpEntriesN uint64 = 100 // set 10 for test
 
 func (rc *raftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
 	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
@@ -311,7 +319,7 @@ func (rc *raftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
 		}
 	}
 
-	logger.Infof("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
+	logger.Infof("%v start snapshot [applied index: %d | last snapshot index: %d]", rc.id, rc.appliedIndex, rc.snapshotIndex)
 	data, err := rc.getSnapshot()
 	if err != nil {
 		logger.Fatalf("Get snapshot failed, %v", err)
@@ -404,8 +412,11 @@ func (rc *raftNode) serveChannels() {
 			rc.node.Advance()
 
 		case m := <-rc.raftChan:
-			rc.node.Step(context.TODO(), m)
-
+			err := rc.node.Step(context.TODO(), m)
+			if err != nil {
+				logger.Errorf("failed to process raft message %v", err)
+				return
+			}
 		case <-rc.stopc:
 			rc.stop()
 			return

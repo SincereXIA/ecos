@@ -18,13 +18,11 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/golang-lru v0.5.4
-	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jedib0t/go-pretty/v6 v6.3.0
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/minio/sha256-simd v1.0.0
 	github.com/mitchellh/copystructure v1.2.0
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b
 	github.com/sincerexia/gocrush v0.0.0-20220213012034-a24f00a6eb8e

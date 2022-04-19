@@ -13,12 +13,17 @@ import (
 	"time"
 )
 
-func GenTestWatcher(ctx context.Context, basePath string, sunAddr string) (*Watcher, *messenger.RpcServer) {
+func GenTestWatcher(ctx context.Context, basePath string, sunAddr string, mock bool) (*Watcher, *messenger.RpcServer) {
 	moonConfig := moon.DefaultConfig
 	moonConfig.RaftStoragePath = path.Join(basePath, "moon")
 	port, nodeRpc := messenger.NewRandomPortRpcServer()
 	nodeInfo := infos.NewSelfInfo(0, "127.0.0.1", port)
-	builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
+	var builder *infos.StorageRegisterBuilder
+	if mock {
+		builder = infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
+	} else {
+		builder = infos.NewStorageRegisterBuilder(infos.NewRocksDBInfoStorageFactory(basePath))
+	}
 	register := builder.GetStorageRegister()
 	m := moon.NewMoon(ctx, nodeInfo, &moonConfig, nodeRpc, register)
 
@@ -80,7 +85,7 @@ func GenMockWatcherCluster(t gomock.TestReporter, ctx context.Context, _ string,
 	return watchers, rpcServers, sunAddr, controllers
 }
 
-func GenTestWatcherCluster(ctx context.Context, basePath string, num int) ([]*Watcher, []*messenger.RpcServer, string) {
+func GenTestWatcherCluster(ctx context.Context, basePath string, num int, mock bool) ([]*Watcher, []*messenger.RpcServer, string) {
 	sunPort, sunRpc := messenger.NewRandomPortRpcServer()
 	sun.NewSun(sunRpc)
 	go func() {
@@ -95,7 +100,7 @@ func GenTestWatcherCluster(ctx context.Context, basePath string, num int) ([]*Wa
 	var watchers []*Watcher
 	var rpcServers []*messenger.RpcServer
 	for i := 0; i < num; i++ {
-		watcher, rpc := GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(i)), sunAddr)
+		watcher, rpc := GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(i)), sunAddr, mock)
 		watchers = append(watchers, watcher)
 		rpcServers = append(rpcServers, rpc)
 	}
