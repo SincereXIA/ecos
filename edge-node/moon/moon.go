@@ -222,7 +222,8 @@ func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.Nod
 }
 
 func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raftpb.Message, error) {
-
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.raft == nil {
 		return nil, errors.New("moon" + strconv.FormatUint(m.id, 10) + ": raft is not ready")
 	}
@@ -370,7 +371,10 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 }
 
 func (m *Moon) Run() {
-	if m.raft == nil {
+	m.mutex.Lock()
+	raft := m.raft
+	m.mutex.Unlock()
+	if raft == nil {
 		m.Set(m.SelfInfo, nil, m.config.ClusterInfo.NodesInfo)
 	}
 	go m.reportSelfInfo()
@@ -429,13 +433,13 @@ func (m *Moon) reportSelfInfo() {
 
 func (m *Moon) GetLeaderID() uint64 {
 	for {
-		if m.nodeReady == true {
+		m.mutex.Lock()
+		nodeReady := m.nodeReady
+		m.mutex.Unlock()
+		if nodeReady == true {
 			break
 		}
 	}
-
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
 
 	if m.raft.node == nil {
 		return 0
