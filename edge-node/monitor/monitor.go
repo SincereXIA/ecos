@@ -20,6 +20,7 @@ import (
 type Monitor interface {
 	MonitorServer
 	Run()
+	GetAllReports() []*NodeStatusReport
 }
 
 type NodeMonitor struct {
@@ -28,18 +29,27 @@ type NodeMonitor struct {
 	cancel context.CancelFunc
 	timer  *time.Ticker
 
-	nodeStateMap sync.Map
-	selfStatus   *NodeStatus
-	watcher      *watcher.Watcher
+	nodeStatusMap sync.Map
+	selfStatus    *NodeStatus
+	watcher       *watcher.Watcher
 }
 
-func (m *NodeMonitor) Report(_ context.Context, report *NodeStateReport) (*common.Result, error) {
+func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*common.Result, error) {
 	if !m.watcher.GetMoon().IsLeader() {
 		// only leader can be runReport
 		return nil, errors.New("not leader")
 	}
-	m.nodeStateMap.Store(report.NodeId, report)
+	m.nodeStatusMap.Store(report.NodeId, report)
 	return &common.Result{}, nil
+}
+
+func (m *NodeMonitor) GetAllReports() []*NodeStatusReport {
+	var nodeStatusList []*NodeStatusReport
+	m.nodeStatusMap.Range(func(key, value interface{}) bool {
+		nodeStatusList = append(nodeStatusList, value.(*NodeStatusReport))
+		return true
+	})
+	return nodeStatusList
 }
 
 func (m *NodeMonitor) genSelfState() *NodeStatus {
@@ -88,12 +98,12 @@ func (m *NodeMonitor) runReport(nodeStatusChan <-chan *NodeStatus) {
 			leaderInfo, err := m.watcher.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO,
 				strconv.FormatUint(leaderID, 10))
 			if err != nil {
-				logger.Errorf("get leader info failed: %v", err)
+				logger.Warningf("get leader info: %v failed: %v", leaderID, err)
 				continue
 			}
 			conn, _ := messenger.GetRpcConnByNodeInfo(leaderInfo.BaseInfo().GetNodeInfo())
 			client := NewMonitorClient(conn)
-			_, err = client.Report(m.ctx, &NodeStateReport{
+			_, err = client.Report(m.ctx, &NodeStatusReport{
 				NodeId:    m.watcher.GetSelfInfo().RaftId,
 				NodeUuid:  m.watcher.GetSelfInfo().Uuid,
 				Timestamp: nil,
@@ -114,11 +124,11 @@ func (m *NodeMonitor) Run() {
 func NewMonitor(ctx context.Context, w *watcher.Watcher, rpcServer *messenger.RpcServer) Monitor {
 	ctx, cancel := context.WithCancel(ctx)
 	monitor := &NodeMonitor{
-		ctx:          ctx,
-		cancel:       cancel,
-		nodeStateMap: sync.Map{},
-		selfStatus:   &NodeStatus{},
-		watcher:      w,
+		ctx:           ctx,
+		cancel:        cancel,
+		nodeStatusMap: sync.Map{},
+		selfStatus:    &NodeStatus{},
+		watcher:       w,
 	}
 	RegisterMonitorServer(rpcServer, monitor)
 	return monitor

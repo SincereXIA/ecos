@@ -19,8 +19,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MonitorClient interface {
-	Report(ctx context.Context, in *NodeStateReport, opts ...grpc.CallOption) (*common.Result, error)
-	Get(ctx context.Context, in *StateRequest, opts ...grpc.CallOption) (*NodeStateReport, error)
+	Report(ctx context.Context, in *NodeStatusReport, opts ...grpc.CallOption) (*common.Result, error)
+	Get(ctx context.Context, in *StateRequest, opts ...grpc.CallOption) (*NodeStatusReport, error)
 }
 
 type monitorClient struct {
@@ -31,7 +31,7 @@ func NewMonitorClient(cc grpc.ClientConnInterface) MonitorClient {
 	return &monitorClient{cc}
 }
 
-func (c *monitorClient) Report(ctx context.Context, in *NodeStateReport, opts ...grpc.CallOption) (*common.Result, error) {
+func (c *monitorClient) Report(ctx context.Context, in *NodeStatusReport, opts ...grpc.CallOption) (*common.Result, error) {
 	out := new(common.Result)
 	err := c.cc.Invoke(ctx, "/messenger.Monitor/Report", in, out, opts...)
 	if err != nil {
@@ -40,8 +40,8 @@ func (c *monitorClient) Report(ctx context.Context, in *NodeStateReport, opts ..
 	return out, nil
 }
 
-func (c *monitorClient) Get(ctx context.Context, in *StateRequest, opts ...grpc.CallOption) (*NodeStateReport, error) {
-	out := new(NodeStateReport)
+func (c *monitorClient) Get(ctx context.Context, in *StateRequest, opts ...grpc.CallOption) (*NodeStatusReport, error) {
+	out := new(NodeStatusReport)
 	err := c.cc.Invoke(ctx, "/messenger.Monitor/Get", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -53,8 +53,8 @@ func (c *monitorClient) Get(ctx context.Context, in *StateRequest, opts ...grpc.
 // All implementations must embed UnimplementedMonitorServer
 // for forward compatibility
 type MonitorServer interface {
-	Report(context.Context, *NodeStateReport) (*common.Result, error)
-	Get(context.Context, *StateRequest) (*NodeStateReport, error)
+	Report(context.Context, *NodeStatusReport) (*common.Result, error)
+	Get(context.Context, *StateRequest) (*NodeStatusReport, error)
 	mustEmbedUnimplementedMonitorServer()
 }
 
@@ -62,10 +62,10 @@ type MonitorServer interface {
 type UnimplementedMonitorServer struct {
 }
 
-func (UnimplementedMonitorServer) Report(context.Context, *NodeStateReport) (*common.Result, error) {
+func (UnimplementedMonitorServer) Report(context.Context, *NodeStatusReport) (*common.Result, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Report not implemented")
 }
-func (UnimplementedMonitorServer) Get(context.Context, *StateRequest) (*NodeStateReport, error) {
+func (UnimplementedMonitorServer) Get(context.Context, *StateRequest) (*NodeStatusReport, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
 func (UnimplementedMonitorServer) mustEmbedUnimplementedMonitorServer() {}
@@ -82,7 +82,7 @@ func RegisterMonitorServer(s grpc.ServiceRegistrar, srv MonitorServer) {
 }
 
 func _Monitor_Report_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeStateReport)
+	in := new(NodeStatusReport)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func _Monitor_Report_Handler(srv interface{}, ctx context.Context, dec func(inte
 		FullMethod: "/messenger.Monitor/Report",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MonitorServer).Report(ctx, req.(*NodeStateReport))
+		return srv.(MonitorServer).Report(ctx, req.(*NodeStatusReport))
 	}
 	return interceptor(ctx, in, info, handler)
 }

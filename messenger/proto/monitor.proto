@@ -7,11 +7,11 @@ import "timestamp.proto";
 option go_package = "ecos/edge-node/monitor";
 
 service Monitor {
-  rpc Report(NodeStateReport) returns (Result) {}
-  rpc Get(StateRequest) returns (NodeStateReport) {}
+  rpc Report(NodeStatusReport) returns (Result) {}
+  rpc Get(StateRequest) returns (NodeStatusReport) {}
 }
 
-message NodeStateReport {
+message NodeStatusReport {
   uint64 node_id = 1;
   string node_uuid = 2;
   Timestamp timestamp = 3;

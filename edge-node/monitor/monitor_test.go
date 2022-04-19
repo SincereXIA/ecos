@@ -4,7 +4,9 @@ import (
 	"context"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 func TestMonitor(t *testing.T) {
@@ -25,6 +27,23 @@ func TestMonitor(t *testing.T) {
 	watcher.RunAllTestWatcher(watchers)
 	watcher.WaitAllTestWatcherOK(watchers)
 
+	leader := -1
+	for i, w := range watchers {
+		if w.GetMoon().IsLeader() {
+			leader = i
+			break
+		}
+	}
+	assert.Greater(t, leader, -1)
+
+	for status := monitors[leader].GetAllReports(); len(status) != len(watchers); {
+		time.Sleep(time.Second)
+	}
+
+	status := monitors[leader].GetAllReports()
+	for _, s := range status {
+		t.Logf("%v", s)
+	}
 }
 
 func genTestMonitors(ctx context.Context, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []Monitor {
