@@ -21,6 +21,12 @@ type Monitor interface {
 	MonitorServer
 	Run()
 	GetAllReports() []*NodeStatusReport
+	GetEventChannel() <-chan *Event
+	Stop()
+}
+
+type Event struct {
+	Report *NodeStatusReport
 }
 
 type NodeMonitor struct {
@@ -30,8 +36,11 @@ type NodeMonitor struct {
 	timer  *time.Ticker
 
 	nodeStatusMap sync.Map
+	reportTimers  sync.Map
 	selfStatus    *NodeStatus
 	watcher       *watcher.Watcher
+
+	eventChannel chan *Event
 }
 
 func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*common.Result, error) {
@@ -39,8 +48,39 @@ func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*comm
 		// only leader can be runReport
 		return nil, errors.New("not leader")
 	}
+	if val, ok := m.reportTimers.Load(report.NodeId); ok {
+		logger.Tracef("reset timer for node %v", report.NodeId)
+		t := val.(*time.Timer)
+		if !t.Stop() {
+			<-t.C
+		}
+		t.Reset(time.Second * 3)
+	} else {
+		logger.Debugf("create timer for node %v", report.NodeId)
+		m.reportTimers.Store(report.NodeId, time.AfterFunc(time.Second*3, func() {
+			logger.Warningf("get node status timeout, nodeId: %v", report.NodeId)
+			v, _ := m.nodeStatusMap.Load(report.NodeId)
+			r := v.(*NodeStatusReport)
+			r.State = infos.NodeState_OFFLINE
+			m.nodeStatusMap.Store(report.NodeId, r)
+			if m.eventChannel != nil { // 当 channel 初始化后才发送事件
+				m.eventChannel <- &Event{
+					Report: r,
+				}
+			}
+		}))
+	}
 	m.nodeStatusMap.Store(report.NodeId, report)
 	return &common.Result{}, nil
+}
+
+func (m *NodeMonitor) GetEventChannel() <-chan *Event {
+	if m.eventChannel != nil {
+		logger.Errorf("event channel has been created")
+		return nil
+	}
+	m.eventChannel = make(chan *Event)
+	return m.eventChannel
 }
 
 func (m *NodeMonitor) GetAllReports() []*NodeStatusReport {
@@ -108,6 +148,7 @@ func (m *NodeMonitor) runReport(nodeStatusChan <-chan *NodeStatus) {
 				NodeUuid:  m.watcher.GetSelfInfo().Uuid,
 				Timestamp: nil,
 				Status:    status,
+				State:     infos.NodeState_ONLINE,
 			})
 			if err != nil {
 				logger.Errorf("runReport node status failed: %v", err)
@@ -119,6 +160,11 @@ func (m *NodeMonitor) runReport(nodeStatusChan <-chan *NodeStatus) {
 func (m *NodeMonitor) Run() {
 	m.timer = time.NewTicker(time.Second * 1)
 	m.runReport(m.getSelfStateChan())
+}
+
+func (m *NodeMonitor) Stop() {
+	m.cancel()
+	m.timer.Stop()
 }
 
 func NewMonitor(ctx context.Context, w *watcher.Watcher, rpcServer *messenger.RpcServer) Monitor {

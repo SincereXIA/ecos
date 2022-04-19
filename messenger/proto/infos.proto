@@ -113,10 +113,18 @@ message History{
   map<uint64, ClusterInfo> historyMap = 1;
 }
 
+enum NodeState{
+  UNKNOWN = 0;
+  ONLINE = 1;
+  OFFLINE = 2;
+}
+
+
 message NodeInfo {
   uint64 raft_id= 1;
   string uuid= 2;
   string ip_addr = 3;
   uint64 rpc_port = 4;
   uint64 capacity = 5;
+  NodeState state = 6;
 }

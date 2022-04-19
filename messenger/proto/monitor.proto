@@ -2,6 +2,7 @@ syntax = "proto3";
 package messenger;
 
 import "common.proto";
+import "infos.proto";
 import "timestamp.proto";
 
 option go_package = "ecos/edge-node/monitor";
@@ -15,12 +16,7 @@ message NodeStatusReport {
   uint64 node_id = 1;
   string node_uuid = 2;
   Timestamp timestamp = 3;
-  enum State {
-    UNKNOWN = 0;
-    ONLINE = 1;
-    OFFLINE = 2;
-  }
-  State state = 4;
+  NodeState state = 4;
   NodeStatus status = 5;
 }
 
