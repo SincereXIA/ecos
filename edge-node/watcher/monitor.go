@@ -1,9 +1,8 @@
-package monitor
+package watcher
 
 import (
 	"context"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/logger"
@@ -21,6 +20,7 @@ type Monitor interface {
 	MonitorServer
 	Run()
 	GetAllReports() []*NodeStatusReport
+	GetReport(nodeId uint64) *NodeStatusReport
 	GetEventChannel() <-chan *Event
 	Stop()
 }
@@ -38,7 +38,7 @@ type NodeMonitor struct {
 	nodeStatusMap sync.Map
 	reportTimers  sync.Map
 	selfStatus    *NodeStatus
-	watcher       *watcher.Watcher
+	watcher       *Watcher
 
 	eventChannel chan *Event
 }
@@ -95,6 +95,13 @@ func (m *NodeMonitor) GetAllReports() []*NodeStatusReport {
 		return true
 	})
 	return nodeStatusList
+}
+
+func (m *NodeMonitor) GetReport(nodeID uint64) *NodeStatusReport {
+	if val, ok := m.nodeStatusMap.Load(nodeID); ok {
+		return val.(*NodeStatusReport)
+	}
+	return nil
 }
 
 func (m *NodeMonitor) genSelfState() *NodeStatus {
@@ -172,7 +179,7 @@ func (m *NodeMonitor) Stop() {
 	m.timer.Stop()
 }
 
-func NewMonitor(ctx context.Context, w *watcher.Watcher, rpcServer *messenger.RpcServer) Monitor {
+func NewMonitor(ctx context.Context, w *Watcher, rpcServer *messenger.RpcServer) Monitor {
 	ctx, cancel := context.WithCancel(ctx)
 	monitor := &NodeMonitor{
 		ctx:           ctx,

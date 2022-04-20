@@ -59,4 +59,10 @@ func testWatcher(t *testing.T, mock bool) {
 			rpcServers[i].Stop()
 		}
 	})
+
+	t.Run("remove a node", func(t *testing.T) {
+		watchers[nodeNum-1].moon.Stop()
+		watchers[nodeNum-1].cancelFunc()
+		WaitAllTestWatcherOK(watchers)
+	})
 }

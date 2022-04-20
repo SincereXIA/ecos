@@ -13,3 +13,13 @@ func (m *ClusterInfo) BaseInfo() *BaseInfo {
 func (m *ClusterInfo) GetID() string {
 	return strconv.FormatUint(m.Term, 10)
 }
+
+func (m *ClusterInfo) GetHealthNode() []*NodeInfo {
+	var nodes []*NodeInfo
+	for _, node := range m.NodesInfo {
+		if node.State == NodeState_ONLINE {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes
+}

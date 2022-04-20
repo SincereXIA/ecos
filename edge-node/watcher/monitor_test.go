@@ -1,8 +1,7 @@
-package monitor
+package watcher
 
 import (
 	"context"
-	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -14,7 +13,7 @@ func TestMonitor(t *testing.T) {
 	nodeNum := 9
 	defer cancel()
 	basePath := "./ecos-data/"
-	watchers, rpcServers, _ := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
+	watchers, rpcServers, _ := GenTestWatcherCluster(ctx, basePath, nodeNum)
 	monitors := genTestMonitors(ctx, watchers, rpcServers)
 	for i, rpc := range rpcServers {
 		go func(rpc *messenger.RpcServer) {
@@ -25,8 +24,8 @@ func TestMonitor(t *testing.T) {
 		}(rpc)
 		go monitors[i].Run()
 	}
-	watcher.RunAllTestWatcher(watchers)
-	watcher.WaitAllTestWatcherOK(watchers)
+	RunAllTestWatcher(watchers)
+	WaitAllTestWatcherOK(watchers)
 
 	leader := -1
 	for i, w := range watchers {
@@ -60,7 +59,7 @@ func TestMonitor(t *testing.T) {
 	})
 }
 
-func genTestMonitors(ctx context.Context, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []Monitor {
+func genTestMonitors(ctx context.Context, watchers []*Watcher, rpcServers []*messenger.RpcServer) []Monitor {
 	monitors := make([]Monitor, len(watchers))
 	for i, w := range watchers {
 		monitors[i] = NewMonitor(ctx, w, rpcServers[i])
