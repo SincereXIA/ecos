@@ -43,6 +43,8 @@ type NodeMonitor struct {
 	eventChannel chan *Event
 }
 
+// Report is a rpc func to get the node status report.
+// it called by all node (include leader self).
 func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*common.Result, error) {
 	if !m.watcher.GetMoon().IsLeader() {
 		// only leader can be runReport
@@ -74,6 +76,8 @@ func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*comm
 	return &common.Result{}, nil
 }
 
+// GetEventChannel returns the event channel.
+// Event channel will send event when the node status changed. (like node online, offline, etc.)
 func (m *NodeMonitor) GetEventChannel() <-chan *Event {
 	if m.eventChannel != nil {
 		logger.Errorf("event channel has been created")
@@ -83,6 +87,7 @@ func (m *NodeMonitor) GetEventChannel() <-chan *Event {
 	return m.eventChannel
 }
 
+// GetAllReports returns all node status reports.
 func (m *NodeMonitor) GetAllReports() []*NodeStatusReport {
 	var nodeStatusList []*NodeStatusReport
 	m.nodeStatusMap.Range(func(key, value interface{}) bool {

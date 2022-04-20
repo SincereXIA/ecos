@@ -117,6 +117,7 @@ enum NodeState{
   UNKNOWN = 0;
   ONLINE = 1;
   OFFLINE = 2;
+  ERROR = 3;
 }
 
 
