@@ -177,7 +177,13 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 	for _, info := range nodeInfos {
 		nodeInfo := info.BaseInfo().GetNodeInfo()
 		report := w.monitor.GetReport(nodeInfo.RaftId)
-		nodeInfo.State = report.State
+		if report == nil {
+			logger.Warningf("get report: %v from monitor fail: %v", nodeInfo.RaftId, err)
+			logger.Warningf("set node: %v state OFFLINE", nodeInfo.RaftId)
+			nodeInfo.State = infos.NodeState_OFFLINE
+		} else {
+			nodeInfo.State = report.State
+		}
 		clusterNodes = append(clusterNodes, nodeInfo)
 	}
 	sort.Slice(clusterNodes, func(i, j int) bool {
@@ -277,8 +283,7 @@ func (w *Watcher) processMonitor() {
 			return
 		case <-c:
 			logger.Warningf("watcher receive monitor event")
-			clusterInfo := w.genNewClusterInfo()
-			w.proposeClusterInfo(clusterInfo)
+			w.nodeInfoChanged(nil)
 		}
 	}
 }

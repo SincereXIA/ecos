@@ -65,12 +65,16 @@ func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*comm
 			r := v.(*NodeStatusReport)
 			r.State = infos.NodeState_OFFLINE
 			m.nodeStatusMap.Store(report.NodeId, r)
-			if m.eventChannel != nil { // 当 channel 初始化后才发送事件
-				m.eventChannel <- &Event{
-					Report: r,
-				}
+			m.eventChannel <- &Event{
+				Report: r,
 			}
 		}))
+	}
+	if _, ok := m.nodeStatusMap.Load(report.NodeId); !ok {
+		// first time online
+		m.eventChannel <- &Event{
+			Report: report,
+		}
 	}
 	m.nodeStatusMap.Store(report.NodeId, report)
 	return &common.Result{}, nil
