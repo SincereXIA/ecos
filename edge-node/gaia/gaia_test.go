@@ -23,7 +23,7 @@ func TestNewGaia(t *testing.T) {
 	nodeNum := 5
 	ctx := context.Background()
 
-	watchers, rpcServers, _ := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum, false)
+	watchers, rpcServers, _ := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
 
 	for i := 0; i < 5; i++ {
 		basePaths = append(basePaths, "./ecos-data/gaia-"+strconv.Itoa(i))

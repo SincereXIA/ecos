@@ -23,6 +23,7 @@ type StorageFactory interface {
 	GetStorage(infoType InfoType) Storage
 	GetSnapshot() ([]byte, error)
 	RecoverFromSnapshot(snapshot []byte) error
+	Close()
 }
 
 // StorageRegister can auto operate information to corresponding storage.
@@ -30,6 +31,10 @@ type StorageFactory interface {
 type StorageRegister struct {
 	storageMap     map[InfoType]Storage
 	storageFactory StorageFactory
+}
+
+func (register *StorageRegister) Close() {
+	register.storageFactory.Close()
 }
 
 // Register while add an info storage into StorageRegister,

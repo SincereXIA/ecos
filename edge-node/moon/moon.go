@@ -43,9 +43,8 @@ type Moon struct {
 	ctx      context.Context //context
 	cancel   context.CancelFunc
 
-	infoMap     map[uint64]*infos.NodeInfo
-	infoStorage *infos.Storage
-	leaderID    uint64 // 注册时的 leader 信息
+	infoMap  map[uint64]*infos.NodeInfo
+	leaderID uint64 // 注册时的 leader 信息
 
 	infoStorageRegister   *infos.StorageRegister
 	appliedRequestChan    chan *ProposeInfoRequest
@@ -372,6 +371,7 @@ func (m *Moon) Stop() {
 
 func (m *Moon) cleanup() {
 	logger.Warningf("moon %d stopped, start clean up", m.SelfInfo.RaftId)
+	m.infoStorageRegister.Close()
 	m.raft.stopc <- struct{}{}
 }
 

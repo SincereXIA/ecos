@@ -27,7 +27,7 @@ func testWatcher(t *testing.T, mock bool) {
 	if mock {
 		watchers, rpcServers, _, _ = GenMockWatcherCluster(t, ctx, basePath, nodeNum)
 	} else {
-		watchers, rpcServers, _ = GenTestWatcherCluster(ctx, basePath, nodeNum, mock)
+		watchers, rpcServers, _ = GenTestWatcherCluster(ctx, basePath, nodeNum)
 	}
 
 	for i := 0; i < nodeNum; i++ {

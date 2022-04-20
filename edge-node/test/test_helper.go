@@ -22,7 +22,7 @@ func RunTestEdgeNodeCluster(t gomock.TestReporter, ctx context.Context, mock boo
 		watchers, rpcServers, _, _ = watcher.GenMockWatcherCluster(t, ctx, basePath, num)
 		alayas = GenMockAlayaCluster(t, ctx, basePath, watchers, rpcServers)
 	} else {
-		watchers, rpcServers, _ = watcher.GenTestWatcherCluster(ctx, basePath, num, mock)
+		watchers, rpcServers, _ = watcher.GenTestWatcherCluster(ctx, basePath, num)
 		alayas = GenAlayaCluster(ctx, basePath, watchers, rpcServers)
 	}
 	_ = GenGaiaCluster(ctx, basePath, watchers, rpcServers)

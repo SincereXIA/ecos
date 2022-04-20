@@ -185,6 +185,10 @@ func (factory *RocksDBInfoStorageFactory) newColumnFamily(infoType InfoType) err
 	return nil
 }
 
+func (factory *RocksDBInfoStorageFactory) Close() {
+	factory.db.Close()
+}
+
 func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	err := common.InitPath(basePath)
 	if err != nil {
@@ -204,6 +208,7 @@ func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	db, handles, err := gorocksdb.OpenDbColumnFamilies(database.Opts, basePath, cfNames, cfOpts)
 	if err != nil {
 		logger.Errorf("Open rocksdb with ColumnFamilies failed, err: %v", err)
+		return nil
 	}
 
 	handleMap := make(map[string]*gorocksdb.ColumnFamilyHandle, 0)

@@ -81,6 +81,10 @@ func (factory *MemoryInfoStorageFactory) RecoverFromSnapshot(snapshot []byte) er
 	return nil
 }
 
+func (factory *MemoryInfoStorageFactory) Close() {
+
+}
+
 func NewMemoryInfoFactory() StorageFactory {
 	return &MemoryInfoStorageFactory{}
 }
