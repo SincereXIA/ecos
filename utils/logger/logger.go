@@ -33,6 +33,7 @@ func NewRaftLogger() *logrus.Logger {
 		QuoteEmptyFields: true,
 		CallerPrettyfier: raftCallerPrettyfier,
 	})
+
 	return logger
 }
 

@@ -52,6 +52,14 @@ func (s *MemoryInfoStorage) CancelOnUpdate(name string) {
 	s.onUpdateMap.Delete(name)
 }
 
+func (s *MemoryInfoStorage) GetSnapshot() ([]byte, error) {
+	return nil, nil
+}
+
+func (s *MemoryInfoStorage) RecoverFromSnapshot(data []byte) error {
+	return nil
+}
+
 func NewMemoryInfoStorage() Storage {
 	return &MemoryInfoStorage{
 		kvStorage: sync.Map{},
@@ -63,6 +71,18 @@ type MemoryInfoStorageFactory struct {
 
 func (factory *MemoryInfoStorageFactory) GetStorage(_ InfoType) Storage {
 	return NewMemoryInfoStorage()
+}
+
+func (factory *MemoryInfoStorageFactory) GetSnapshot() ([]byte, error) {
+	return nil, nil
+}
+
+func (factory *MemoryInfoStorageFactory) RecoverFromSnapshot(snapshot []byte) error {
+	return nil
+}
+
+func (factory *MemoryInfoStorageFactory) Close() {
+
 }
 
 func NewMemoryInfoFactory() StorageFactory {

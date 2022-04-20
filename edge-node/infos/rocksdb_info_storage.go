@@ -5,6 +5,10 @@ import (
 	"ecos/utils/database"
 	"ecos/utils/logger"
 	gorocksdb "github.com/SUMStudio/grocksdb"
+	"io"
+	"io/ioutil"
+	"os"
+	"path"
 	"sync"
 )
 
@@ -14,6 +18,17 @@ type RocksDBInfoStorage struct {
 	myHandler *gorocksdb.ColumnFamilyHandle
 
 	onUpdateMap sync.Map
+
+	getSnapshot         func() ([]byte, error)
+	recoverFromSnapshot func(snapshot []byte) error
+}
+
+func (s *RocksDBInfoStorage) GetSnapshot() ([]byte, error) {
+	return s.getSnapshot()
+}
+
+func (s *RocksDBInfoStorage) RecoverFromSnapshot(snapshot []byte) error {
+	return s.recoverFromSnapshot(snapshot)
 }
 
 func (s *RocksDBInfoStorage) Update(info Information) error {
@@ -90,6 +105,45 @@ func (s *RocksDBInfoStorage) CancelOnUpdate(name string) {
 	s.onUpdateMap.Delete(name)
 }
 
+func (factory *RocksDBInfoStorageFactory) GetSnapshot() ([]byte, error) {
+	cp, err := factory.db.NewCheckpoint()
+	if err != nil {
+		logger.Infof("Create checkpoint failed, err: %v", err)
+		return nil, err
+	}
+	// TODO:just for Test, need to implement a better way
+	snapshot := make([]byte, 1<<25)
+	cp.CreateCheckpoint(path.Join(factory.basePath, "snapshot"), 0) // what is logSizeForFlush?
+	defer cp.Destroy()
+	zipPath := path.Join(factory.basePath, "snapshot.zip")
+	common.Zip(path.Join(factory.basePath, "snapshot"), zipPath)
+	file, _ := os.Open(zipPath)
+	snapshot, err = ioutil.ReadAll(file)
+	return snapshot, err
+}
+
+func (factory *RocksDBInfoStorageFactory) RecoverFromSnapshot(snapshot []byte) error {
+	// save snapshot to disk
+	os.Remove(path.Join(factory.basePath, "snapshot.zip")) // remove local snapshot
+	file, _ := os.Open(path.Join(factory.basePath, "snapshot.zip"))
+	_, err := io.ReadFull(file, snapshot)
+	if err != nil {
+		logger.Infof("Read snapshot failed, err: %v", err)
+		return err
+	}
+	file.Close()
+
+	// backup the old db
+	os.Rename(factory.basePath, factory.basePath+".bak")
+	logger.Infof("Rename %v to %v", factory.basePath, factory.basePath+".bak")
+
+	// recover from snapshot
+	zipPath := path.Join(factory.basePath, "snapshot.zip", "snapshot.zip")
+	common.UnZip(zipPath, factory.basePath)
+
+	return nil
+}
+
 func (factory *RocksDBInfoStorageFactory) NewRocksDBInfoStorage(cfName string) *RocksDBInfoStorage {
 
 	return &RocksDBInfoStorage{
@@ -97,7 +151,9 @@ func (factory *RocksDBInfoStorageFactory) NewRocksDBInfoStorage(cfName string) *
 		myCfName:  cfName,
 		myHandler: factory.cfHandleMap[cfName],
 
-		onUpdateMap: sync.Map{},
+		onUpdateMap:         sync.Map{},
+		getSnapshot:         factory.GetSnapshot,
+		recoverFromSnapshot: factory.RecoverFromSnapshot,
 	}
 
 }
@@ -129,6 +185,10 @@ func (factory *RocksDBInfoStorageFactory) newColumnFamily(infoType InfoType) err
 	return nil
 }
 
+func (factory *RocksDBInfoStorageFactory) Close() {
+	factory.db.Close()
+}
+
 func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	err := common.InitPath(basePath)
 	if err != nil {
@@ -136,7 +196,7 @@ func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	}
 	cfNames, err := gorocksdb.ListColumnFamilies(database.Opts, basePath)
 	if err != nil {
-		logger.Errorf("List column families failed, err: %v", err)
+		logger.Infof("List column families failed, err: %v", err)
 	}
 	if len(cfNames) == 0 {
 		cfNames = append(cfNames, "default")
@@ -148,6 +208,7 @@ func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	db, handles, err := gorocksdb.OpenDbColumnFamilies(database.Opts, basePath, cfNames, cfOpts)
 	if err != nil {
 		logger.Errorf("Open rocksdb with ColumnFamilies failed, err: %v", err)
+		return nil
 	}
 
 	handleMap := make(map[string]*gorocksdb.ColumnFamilyHandle, 0)
@@ -155,7 +216,6 @@ func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	for idx, cfName := range cfNames {
 		handleMap[cfName] = handles[idx]
 	}
-
 	return &RocksDBInfoStorageFactory{
 		basePath:    basePath,
 		db:          db,

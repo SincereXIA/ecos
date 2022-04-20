@@ -23,7 +23,6 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/minio/sha256-simd v1.0.0
 	github.com/mitchellh/copystructure v1.2.0
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b
 	github.com/sincerexia/gocrush v0.0.0-20220213012034-a24f00a6eb8e
@@ -31,7 +30,10 @@ require (
 	github.com/spf13/cobra v1.4.0
 	github.com/stretchr/testify v1.7.1
 	github.com/wxnacy/wgo v1.0.4
+	go.etcd.io/etcd/client/pkg/v3 v3.5.2
 	go.etcd.io/etcd/raft/v3 v3.5.2
+	go.etcd.io/etcd/server/v3 v3.5.2
+	go.uber.org/zap v1.17.0
 	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29 // indirect
 	golang.org/x/net v0.0.0-20220403103023-749bd193bc2b
 	golang.org/x/sys v0.0.0-20220406163625-3f8b81556e12

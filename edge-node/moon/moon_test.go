@@ -150,7 +150,7 @@ func waitMoonsOK(moons []InfoController) int {
 }
 
 func createMoons(ctx context.Context, num int, basePath string) ([]InfoController, []*messenger.RpcServer, error) {
-	err := common.InitAndClearPath(basePath)
+	err := common.InitPath(basePath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -176,10 +176,10 @@ func createMoons(ctx context.Context, num int, basePath string) ([]InfoControlle
 
 	for i := 0; i < num; i++ {
 		moonConfigs[i].ClusterInfo.NodesInfo = nodeInfos
-		builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
+		// builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
+		builder := infos.NewStorageRegisterBuilder(infos.NewRocksDBInfoStorageFactory(basePath + strconv.FormatInt(int64(i), 10)))
 		register := builder.GetStorageRegister()
-		moons = append(moons, NewMoon(ctx, nodeInfos[i], moonConfigs[i], rpcServers[i],
-			register))
+		moons = append(moons, NewMoon(ctx, nodeInfos[i], moonConfigs[i], rpcServers[i], register))
 	}
 	return moons, rpcServers, nil
 }
