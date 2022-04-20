@@ -126,8 +126,6 @@ func testMoon(t *testing.T, mock bool) {
 		assert.Equal(t, uint64(6), response.BaseInfo.GetClusterInfo().LeaderInfo.RaftId)
 	})
 
-	time.Sleep(10 * time.Second)
-
 }
 
 func waitMoonsOK(moons []InfoController) int {

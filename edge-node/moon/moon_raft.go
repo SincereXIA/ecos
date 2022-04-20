@@ -22,13 +22,15 @@ type commit struct {
 }
 
 type raftNode struct {
-	proposeC       <-chan string            // proposed messages (client)
-	confChangeC    <-chan raftpb.ConfChange // proposed cluster config changes
-	communicationC chan<- []raftpb.Message  // notify upper-layer applications to send messages
-	commitC        chan<- *commit           // entries committed to log (server)
-	errorC         chan<- error             // errors from raft session
-	raftChan       chan raftpb.Message      // raft messages
-	nodeReadyC     chan<- bool              // signals when raft node is ready
+	ctx    context.Context //context
+	cancel context.CancelFunc
+
+	proposeC       chan string            // proposed messages (client)
+	confChangeC    chan raftpb.ConfChange // proposed cluster config changes
+	communicationC chan []raftpb.Message  // notify upper-layer applications to send messages
+	commitC        chan *commit           // entries committed to log (server)
+	errorC         chan error             // errors from raft session
+	raftChan       chan raftpb.Message    // raft messages
 
 	id          int // client ID for raft session
 	peers       []raft.Peer
@@ -58,24 +60,20 @@ type raftNode struct {
 
 var defaultSnapshotCount uint64 = 100 // set 10 for test
 
-func newRaftNode(id int, peers []raft.Peer, join bool, basePath string, getSnapshot func() ([]byte, error)) (chan<- string,
-	chan<- raftpb.ConfChange, <-chan []raftpb.Message, <-chan *commit, <-chan error, <-chan bool, <-chan *snap.Snapshotter, *raftNode) {
+func newRaftNode(id int, ctx context.Context, peers []raft.Peer, join bool, basePath string, readyC chan bool, getSnapshot func() ([]byte, error)) (chan *snap.Snapshotter, *raftNode) {
 
-	proposeC := make(chan string)
-	confChangeC := make(chan raftpb.ConfChange)
-	communicationC := make(chan []raftpb.Message)
-	commitC := make(chan *commit)
-	errorC := make(chan error)
-	nodeReadyC := make(chan bool)
-	raftChan := make(chan raftpb.Message)
+	ctx, cancel := context.WithCancel(ctx)
+
 	var rc = &raftNode{
-		proposeC:       proposeC,
-		confChangeC:    confChangeC,
-		communicationC: communicationC,
-		commitC:        commitC,
-		errorC:         errorC,
-		nodeReadyC:     nodeReadyC,
-		raftChan:       raftChan,
+		ctx:    ctx,
+		cancel: cancel,
+
+		proposeC:       make(chan string),
+		confChangeC:    make(chan raftpb.ConfChange),
+		communicationC: make(chan []raftpb.Message),
+		commitC:        make(chan *commit),
+		errorC:         make(chan error),
+		raftChan:       make(chan raftpb.Message),
 
 		id:          id,
 		peers:       peers,
@@ -91,8 +89,9 @@ func newRaftNode(id int, peers []raft.Peer, join bool, basePath string, getSnaps
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		// rest of structure populated after WAL replay
 	}
-	go rc.startRaft()
-	return proposeC, confChangeC, communicationC, commitC, errorC, nodeReadyC, rc.snapshotterReady, rc
+	go rc.startRaft(readyC)
+
+	return rc.snapshotterReady, rc
 }
 
 func (rc *raftNode) saveSnap(snap raftpb.Snapshot) error {
@@ -243,7 +242,7 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	return w
 }
 
-func (rc *raftNode) startRaft() {
+func (rc *raftNode) startRaft(readyC chan bool) {
 	if !fileutil.Exist(rc.snapdir) {
 		if err := os.MkdirAll(rc.snapdir, 0750); err != nil {
 			logger.Fatalf("Cannot create dir for snapshot (%v)", err)
@@ -273,7 +272,7 @@ func (rc *raftNode) startRaft() {
 		rc.node = raft.StartNode(c, rc.peers)
 	}
 
-	rc.nodeReadyC <- true
+	readyC <- true
 
 	go rc.serveChannels()
 }
@@ -360,7 +359,6 @@ func (rc *raftNode) serveChannels() {
 
 	// send proposals over raft
 	go func() {
-		confChangeCount := uint64(0)
 
 		for rc.proposeC != nil && rc.confChangeC != nil {
 			select {
@@ -369,16 +367,14 @@ func (rc *raftNode) serveChannels() {
 					rc.proposeC = nil
 				} else {
 					// blocks until accepted by raft state machine
-					rc.node.Propose(context.TODO(), []byte(prop))
+					rc.node.Propose(rc.ctx, []byte(prop))
 				}
 
 			case cc, ok := <-rc.confChangeC:
 				if !ok {
 					rc.confChangeC = nil
 				} else {
-					confChangeCount++
-					cc.ID = confChangeCount
-					rc.node.ProposeConfChange(context.TODO(), cc)
+					rc.node.ProposeConfChange(rc.ctx, cc)
 				}
 			}
 		}

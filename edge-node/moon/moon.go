@@ -35,12 +35,7 @@ type Moon struct {
 	UnimplementedMoonServer
 
 	// Channels communication between Moon and Raft module
-	proposeC       chan<- string            // channel for proposing updates
-	confChangeC    chan<- raftpb.ConfChange // proposed cluster config changes
-	communicationC <-chan []raftpb.Message
-	commitC        <-chan *commit
-	errorC         <-chan error
-	nodeReady      bool
+	nodeReady bool
 
 	id       uint64 //raft节点的id
 	raft     *raftNode
@@ -92,7 +87,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 		return nil, err
 	}
 
-	m.proposeC <- string(data)
+	m.raft.proposeC <- string(data)
 
 	// wait propose apply
 	for {
@@ -201,7 +196,7 @@ func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Informat
 func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
 	data, _ := nodeInfo.Marshal()
 
-	m.confChangeC <- raftpb.ConfChange{
+	m.raft.confChangeC <- raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  nodeInfo.RaftId,
 		Context: data,
@@ -236,18 +231,9 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcServer *messenger.RpcServer,
 	register *infos.StorageRegister) *Moon {
 
-	proposeC := make(chan string) // TODO: close
-	confChangeC := make(chan raftpb.ConfChange)
-	communicationC := make(chan []raftpb.Message)
-
 	ctx, cancel := context.WithCancel(ctx)
 
 	m := &Moon{
-
-		proposeC:       proposeC,
-		confChangeC:    confChangeC,
-		communicationC: communicationC,
-
 		id:       0, // set raft id after register
 		SelfInfo: selfInfo,
 		ctx:      ctx,
@@ -349,23 +335,10 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 			peers = append(peers, raft.Peer{ID: nodeInfo.RaftId})
 		}
 	}
-
-	//if peersInfo != nil && leaderInfo != nil {
-	//	join = true
-	//}
-	//
-	//for _, nodeInfo := range m.infoMap {
-	//	peers = append(peers, raft.Peer{ID: nodeInfo.RaftId})
-	//}
-
-	proposeC, confChangeC, communicationC, commitC, errorC, nodeReadyC, snapshotterReady, raftNode := newRaftNode(int(m.id), peers, join, m.config.RaftStoragePath, m.infoStorageRegister.GetSnapshot)
-	m.proposeC = proposeC
-	m.confChangeC = confChangeC
-	m.communicationC = communicationC
+	readyC := make(chan bool)
+	snapshotterReady, raftNode := newRaftNode(int(m.id), m.ctx, peers, join, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
 	m.raft = raftNode
-	m.commitC = commitC
-	m.errorC = errorC
-	m.nodeReady = <-nodeReadyC
+	m.nodeReady = <-readyC
 	m.snapshotter = <-snapshotterReady
 	return
 }
@@ -380,14 +353,14 @@ func (m *Moon) Run() {
 	go m.reportSelfInfo()
 
 	// read commits from raft into storage until error
-	go m.readCommits(m.commitC, m.errorC)
+	go m.readCommits(m.raft.commitC, m.raft.errorC)
 
 	for {
 		select {
 		case <-m.ctx.Done():
 			m.cleanup()
 			return
-		case msgs := <-m.communicationC:
+		case msgs := <-m.raft.communicationC:
 			go m.sendByRpc(msgs)
 		}
 	}
@@ -403,17 +376,6 @@ func (m *Moon) cleanup() {
 }
 
 func (m *Moon) reportSelfInfo() {
-
-	for {
-		if m.nodeReady == true {
-			break
-		}
-	}
-
-	for m.raft.node.Status().Lead == 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
-
 	logger.Infof("%v join group success, start report self info", m.id)
 	message := &ProposeInfoRequest{
 		Head: &common.Head{
@@ -440,7 +402,6 @@ func (m *Moon) GetLeaderID() uint64 {
 			break
 		}
 	}
-
 	if m.raft.node == nil {
 		return 0
 	}

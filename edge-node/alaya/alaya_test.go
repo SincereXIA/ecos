@@ -37,7 +37,7 @@ func testAlaya(t *testing.T, mock bool) {
 
 	nodeNum := 9
 	var alayas []Alayaer
-	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum, mock)
+	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
 	mockMetaStorage := NewMemoryMetaStorage()
 	if mock {
 		alayas = GenMockAlayaCluster(t, ctx, basePath, mockMetaStorage, watchers, rpcServers)
@@ -114,7 +114,7 @@ func testAlaya(t *testing.T, mock bool) {
 	var newAlayas []Alayaer
 	t.Run("add new nodes", func(t *testing.T) {
 		for i := 0; i < 3; i++ {
-			newWatcher, newRpc := watcher.GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(nodeNum+i+1)), sunAddr, mock)
+			newWatcher, newRpc := watcher.GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(nodeNum+i+1)), sunAddr)
 			newWatchers = append(newWatchers, newWatcher)
 			newRpcs = append(newRpcs, newRpc)
 		}

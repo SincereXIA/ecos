@@ -51,6 +51,9 @@ func TestClient(t *testing.T) {
 		data := genTestData(objectSize)
 		writer := factory.GetEcosWriter("test" + strconv.Itoa(i))
 		size, err := writer.Write(data)
+		if err != nil {
+			t.Errorf("Failed to write data: %v", err)
+		}
 		err = writer.Close()
 		assert.NoError(t, err, "Failed to write data")
 		assert.Equal(t, objectSize, size, "data size not match")
