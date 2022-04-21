@@ -111,11 +111,23 @@ func RunAllTestWatcher(watchers []*Watcher) {
 
 func WaitAllTestWatcherOK(watchers []*Watcher) {
 	clusterNodeNum := len(watchers)
+	for i := 0; i < clusterNodeNum; i++ {
+		err := watchers[i].ctx.Err()
+		if err != nil {
+			clusterNodeNum -= 1
+		}
+	}
+
 	for {
 		ok := true
 		for _, w := range watchers {
-			info := w.GetCurrentClusterInfo()
-			if len(info.NodesInfo) != clusterNodeNum {
+			err := w.ctx.Err()
+			if err != nil { // 跳过
+				continue
+			}
+			clusterInfo := w.GetCurrentClusterInfo()
+			healthNode := clusterInfo.GetHealthNode()
+			if len(healthNode) != clusterNodeNum {
 				ok = false
 				break
 			}

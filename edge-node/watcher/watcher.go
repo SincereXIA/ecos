@@ -10,6 +10,7 @@ import (
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
+	"github.com/mohae/deepcopy"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"sort"
@@ -32,13 +33,14 @@ import (
 //   I pledge my life and honor to the Night’s Watch,
 //   for this night and all the nights to come.
 type Watcher struct {
+	ctx          context.Context
 	selfNodeInfo *infos.NodeInfo
 	moon         moon.InfoController
+	monitor      Monitor
 	register     *infos.StorageRegister
 	timer        *time.Timer
 	timerMutex   sync.Mutex
 	config       *Config
-	ctx          context.Context
 
 	addNodeMutex sync.Mutex
 
@@ -174,7 +176,17 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 	}
 	var clusterNodes []*infos.NodeInfo
 	for _, info := range nodeInfos {
-		clusterNodes = append(clusterNodes, info.BaseInfo().GetNodeInfo())
+		// copy before change to avoid data race
+		nodeInfo := deepcopy.Copy(info.BaseInfo().GetNodeInfo()).(*infos.NodeInfo)
+		report := w.monitor.GetReport(nodeInfo.RaftId)
+		if report == nil {
+			logger.Warningf("get report: %v from monitor fail: %v", nodeInfo.RaftId, err)
+			logger.Warningf("set node: %v state OFFLINE", nodeInfo.RaftId)
+			nodeInfo.State = infos.NodeState_OFFLINE
+		} else {
+			nodeInfo.State = report.State
+		}
+		clusterNodes = append(clusterNodes, nodeInfo)
 	}
 	sort.Slice(clusterNodes, func(i, j int) bool {
 		return clusterNodes[i].RaftId > clusterNodes[j].RaftId
@@ -248,6 +260,10 @@ func (w *Watcher) GetSelfInfo() *infos.NodeInfo {
 }
 
 func (w *Watcher) Run() {
+	// start monitor
+	go w.monitor.Run()
+	// watch monitor
+	go w.processMonitor()
 	leaderInfo, err := w.AskSky()
 	if err != nil {
 		logger.Warningf("watcher ask sky err: %v", err)
@@ -259,6 +275,19 @@ func (w *Watcher) Run() {
 	}
 	w.StartMoon()
 	logger.Infof("moon init success, NodeID: %v", w.GetSelfInfo().RaftId)
+}
+
+func (w *Watcher) processMonitor() {
+	c := w.monitor.GetEventChannel()
+	for {
+		select {
+		case <-w.ctx.Done():
+			return
+		case <-c:
+			logger.Warningf("watcher receive monitor event")
+			w.nodeInfoChanged(nil)
+		}
+	}
 }
 
 func (w *Watcher) initCluster() {
@@ -278,9 +307,61 @@ func (w *Watcher) initCluster() {
 	}
 }
 
+func (w *Watcher) proposeClusterInfo(clusterInfo *infos.ClusterInfo) {
+	request := &moon.ProposeInfoRequest{
+		Head: &common.Head{
+			Timestamp: timestamp.Now(),
+			Term:      w.GetCurrentTerm(),
+		},
+		Operate: moon.ProposeInfoRequest_ADD,
+		Id:      strconv.FormatUint(clusterInfo.Term, 10),
+		BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_ClusterInfo{
+			ClusterInfo: clusterInfo,
+		}},
+	}
+	logger.Infof("[NEW TERM] leader: %v propose new cluster info, term: %v, node num: %v",
+		w.selfNodeInfo.RaftId, request.BaseInfo.GetClusterInfo().Term,
+		len(request.BaseInfo.GetClusterInfo().NodesInfo))
+	_, err := w.moon.ProposeInfo(w.ctx, request)
+	if err != nil {
+		// TODO
+		return
+	}
+	logger.Infof("[NEW TERM] leader propose new cluster info success")
+}
+
+func (w *Watcher) nodeInfoChanged(_ infos.Information) {
+	w.timerMutex.Lock()
+	defer w.timerMutex.Unlock()
+	if !w.moon.IsLeader() {
+		return
+	}
+	if w.timer != nil && w.timer.Stop() {
+		w.timer.Reset(w.config.NodeInfoCommitInterval)
+		return
+	}
+	w.timer = time.AfterFunc(w.config.NodeInfoCommitInterval, func() {
+		clusterInfo := w.genNewClusterInfo()
+		w.proposeClusterInfo(clusterInfo)
+	})
+}
+
+func (w *Watcher) clusterInfoChanged(info infos.Information) {
+	if w.currentClusterInfo.Term == uint64(0) && w.moon.IsLeader() { // first time
+		go w.initCluster()
+	}
+	w.clusterInfoMutex.Lock()
+	defer w.clusterInfoMutex.Unlock()
+	logger.Infof("[NEW TERM] node %v get new term: %v, node num: %v",
+		w.selfNodeInfo.RaftId, info.BaseInfo().GetClusterInfo().Term,
+		len(info.BaseInfo().GetClusterInfo().NodesInfo))
+	w.currentClusterInfo = *info.BaseInfo().GetClusterInfo()
+}
+
 func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer,
 	m moon.InfoController, register *infos.StorageRegister) *Watcher {
 	watcherCtx, cancelFunc := context.WithCancel(ctx)
+
 	watcher := &Watcher{
 		moon:         m,
 		register:     register,
@@ -289,53 +370,12 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 		ctx:          watcherCtx,
 		cancelFunc:   cancelFunc,
 	}
+	monitor := NewMonitor(watcherCtx, watcher, server)
+	watcher.monitor = monitor
 	nodeInfoStorage := watcher.register.GetStorage(infos.InfoType_NODE_INFO)
 	clusterInfoStorage := watcher.register.GetStorage(infos.InfoType_CLUSTER_INFO)
-	nodeInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, func(info infos.Information) {
-		watcher.timerMutex.Lock()
-		defer watcher.timerMutex.Unlock()
-		if !watcher.moon.IsLeader() {
-			return
-		}
-		if watcher.timer != nil && watcher.timer.Stop() {
-			watcher.timer.Reset(watcher.config.NodeInfoCommitInterval)
-			return
-		}
-		watcher.timer = time.AfterFunc(watcher.config.NodeInfoCommitInterval, func() {
-			clusterInfo := watcher.genNewClusterInfo()
-			request := &moon.ProposeInfoRequest{
-				Head: &common.Head{
-					Timestamp: timestamp.Now(),
-					Term:      watcher.GetCurrentTerm(),
-				},
-				Operate: moon.ProposeInfoRequest_ADD,
-				Id:      strconv.FormatUint(clusterInfo.Term, 10),
-				BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_ClusterInfo{
-					ClusterInfo: clusterInfo,
-				}},
-			}
-			logger.Infof("[NEW TERM] leader: %v propose new cluster info, term: %v, node num: %v",
-				watcher.selfNodeInfo.RaftId, request.BaseInfo.GetClusterInfo().Term,
-				len(request.BaseInfo.GetClusterInfo().NodesInfo))
-			_, err := watcher.moon.ProposeInfo(watcher.ctx, request)
-			if err != nil {
-				// TODO
-				return
-			}
-			logger.Infof("[NEW TERM] leader propose new cluster info success")
-		})
-	})
-	clusterInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, func(info infos.Information) {
-		if watcher.currentClusterInfo.Term == uint64(0) && watcher.moon.IsLeader() { // first time
-			go watcher.initCluster()
-		}
-		watcher.clusterInfoMutex.Lock()
-		defer watcher.clusterInfoMutex.Unlock()
-		logger.Infof("[NEW TERM] node %v get new term: %v, node num: %v",
-			watcher.selfNodeInfo.RaftId, info.BaseInfo().GetClusterInfo().Term,
-			len(info.BaseInfo().GetClusterInfo().NodesInfo))
-		watcher.currentClusterInfo = *info.BaseInfo().GetClusterInfo()
-	})
+	nodeInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, watcher.nodeInfoChanged)
+	clusterInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, watcher.clusterInfoChanged)
 	RegisterWatcherServer(server, watcher)
 	return watcher
 }

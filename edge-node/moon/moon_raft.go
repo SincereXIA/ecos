@@ -149,15 +149,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) (<-chan struct{}, bool) 
 			rc.confState = *rc.node.ApplyConfChange(cc)
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
-				//if len(cc.Context) > 0 {
-				//	rc.transport.AddPeer(types.ID(cc.NodeID), []string{string(cc.Context)})
-				//}
 			case raftpb.ConfChangeRemoveNode:
-				//if cc.NodeID == uint64(rc.id) {
-				//	logger.Infof("I've been removed from the cluster! Shutting down.")
-				//	return nil, false
-				//}
-				//rc.transport.RemovePeer(types.ID(cc.NodeID))
 			}
 		}
 	}
@@ -250,7 +242,7 @@ func (rc *raftNode) startRaft(readyC chan bool) {
 	}
 	rc.snapshotter = snap.New(zap.NewExample(), rc.snapdir)
 
-	oldwal := wal.Exist(rc.waldir)
+	oldWal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
 
 	// signal replay has finished
@@ -266,7 +258,7 @@ func (rc *raftNode) startRaft(readyC chan bool) {
 		MaxUncommittedEntriesSize: 1 << 30,
 	}
 
-	if oldwal || rc.join {
+	if oldWal || rc.join {
 		rc.node = raft.RestartNode(c)
 	} else {
 		rc.node = raft.StartNode(c, rc.peers)
@@ -359,7 +351,6 @@ func (rc *raftNode) serveChannels() {
 
 	// send proposals over raft
 	go func() {
-
 		for rc.proposeC != nil && rc.confChangeC != nil {
 			select {
 			case prop, ok := <-rc.proposeC:
