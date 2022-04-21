@@ -10,6 +10,7 @@ import (
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
+	"github.com/mohae/deepcopy"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"sort"
@@ -175,7 +176,8 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 	}
 	var clusterNodes []*infos.NodeInfo
 	for _, info := range nodeInfos {
-		nodeInfo := info.BaseInfo().GetNodeInfo()
+		// copy before change to avoid data race
+		nodeInfo := deepcopy.Copy(info.BaseInfo().GetNodeInfo()).(*infos.NodeInfo)
 		report := w.monitor.GetReport(nodeInfo.RaftId)
 		if report == nil {
 			logger.Warningf("get report: %v from monitor fail: %v", nodeInfo.RaftId, err)

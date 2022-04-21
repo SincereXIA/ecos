@@ -83,11 +83,6 @@ func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*comm
 // GetEventChannel returns the event channel.
 // Event channel will send event when the node status changed. (like node online, offline, etc.)
 func (m *NodeMonitor) GetEventChannel() <-chan *Event {
-	if m.eventChannel != nil {
-		logger.Errorf("event channel has been created")
-		return nil
-	}
-	m.eventChannel = make(chan *Event)
 	return m.eventChannel
 }
 
@@ -191,6 +186,7 @@ func NewMonitor(ctx context.Context, w *Watcher, rpcServer *messenger.RpcServer)
 		nodeStatusMap: sync.Map{},
 		selfStatus:    &NodeStatus{},
 		watcher:       w,
+		eventChannel:  make(chan *Event),
 	}
 	RegisterMonitorServer(rpcServer, monitor)
 	return monitor
