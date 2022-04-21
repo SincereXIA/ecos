@@ -117,3 +117,19 @@
     - ut 里引入 aws s3 go sdk
   - 性能测试
     - 引入性能测试，防止不当功能拓展引起性能下降
+
+## 2022/4/21
+
+- 进度对接
+  - zhangjh:
+    - monitor
+  - qiutb:
+    - 快照
+    - WAL
+    - rocksdb storage
+  - xionghc:
+    - 分块上传（删除）
+    - 兼容性 （aws cli, warp, fs)
+- 后续工作
+  - alaya WAL，快照
+
