@@ -124,23 +124,25 @@ func (factory *RocksDBInfoStorageFactory) GetSnapshot() ([]byte, error) {
 
 func (factory *RocksDBInfoStorageFactory) RecoverFromSnapshot(snapshot []byte) error {
 	// save snapshot to disk
-	os.Remove(path.Join(factory.basePath, "snapshot.zip")) // remove local snapshot
-	file, _ := os.Open(path.Join(factory.basePath, "snapshot.zip"))
-	_, err := io.ReadFull(file, snapshot)
-	if err != nil {
+	snapshotPath := path.Join(factory.basePath, "snapshot.zip")
+	if common.PathExists(snapshotPath) {
+		os.Remove(path.Join(factory.basePath, "snapshot.zip")) // remove local snapshot
+	}
+
+	err := ioutil.WriteFile(snapshotPath, snapshot, 0644)
+	if err != nil && err != io.EOF {
 		logger.Infof("Read snapshot failed, err: %v", err)
 		return err
 	}
-	file.Close()
 
 	// backup the old db
-	os.Rename(factory.basePath, factory.basePath+".bak")
-	logger.Infof("Rename %v to %v", factory.basePath, factory.basePath+".bak")
+	backPath := factory.basePath + ".bak"
+	os.Rename(factory.basePath, backPath)
+	logger.Infof("Rename %v to %v", factory.basePath, backPath)
 
 	// recover from snapshot
-	zipPath := path.Join(factory.basePath, "snapshot.zip", "snapshot.zip")
+	zipPath := path.Join(backPath, "snapshot.zip")
 	common.UnZip(zipPath, factory.basePath)
-
 	return nil
 }
 

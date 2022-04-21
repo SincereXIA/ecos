@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"sync"
 	"time"
 )
 
@@ -56,11 +57,13 @@ type raftNode struct {
 	stopc chan struct{} // signals proposal channel closed
 
 	logger *zap.Logger
+
+	mutex sync.RWMutex
 }
 
-var defaultSnapshotCount uint64 = 100 // set 10 for test
+var defaultSnapshotCount uint64 = 20 // set 10 for test
 
-func newRaftNode(id int, ctx context.Context, peers []raft.Peer, join bool, basePath string, readyC chan bool, getSnapshot func() ([]byte, error)) (chan *snap.Snapshotter, *raftNode) {
+func newRaftNode(id int, ctx context.Context, mutex *sync.RWMutex, peers []raft.Peer, join bool, basePath string, readyC chan bool, getSnapshot func() ([]byte, error)) (chan *snap.Snapshotter, *raftNode) {
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -88,6 +91,8 @@ func newRaftNode(id int, ctx context.Context, peers []raft.Peer, join bool, base
 
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		// rest of structure populated after WAL replay
+
+		mutex: *mutex,
 	}
 	go rc.startRaft(readyC)
 
@@ -145,7 +150,10 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) (<-chan struct{}, bool) 
 			data = append(data, s)
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
-			cc.Unmarshal(ents[i].Data)
+			err := cc.Unmarshal(ents[i].Data)
+			if err != nil {
+				logger.Fatalf("unmarshal conf change error: %v", err)
+			}
 			rc.confState = *rc.node.ApplyConfChange(cc)
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
@@ -197,7 +205,10 @@ func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 		if err != nil {
 			logger.Infof("Raft %v create wal error (%v)", rc.id, err)
 		}
-		w.Close()
+		err = w.Close()
+		if err != nil {
+			logger.Infof("Raft %v close wal error (%v)", rc.id, err)
+		}
 	}
 
 	walsnap := walpb.Snapshot{}
@@ -224,12 +235,21 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	}
 	rc.raftStorage = raft.NewMemoryStorage()
 	if snapshot != nil {
-		rc.raftStorage.ApplySnapshot(*snapshot)
+		err := rc.raftStorage.ApplySnapshot(*snapshot)
+		if err != nil {
+			logger.Infof("%v err: %v", rc.id, err)
+		}
 	}
-	rc.raftStorage.SetHardState(st)
+	err = rc.raftStorage.SetHardState(st)
+	if err != nil {
+		logger.Fatalf("%v", err)
+	}
 
 	// append to storage so raft starts at the right place in log
-	rc.raftStorage.Append(ents)
+	err = rc.raftStorage.Append(ents)
+	if err != nil {
+		logger.Fatalf("%v", err)
+	}
 
 	return w
 }
@@ -294,9 +314,11 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	rc.appliedIndex = snapshotToSave.Metadata.Index
 }
 
-var snapshotCatchUpEntriesN uint64 = 100 // set 10 for test
+var snapshotCatchUpEntriesN uint64 = 00 // set 10 for test
 
 func (rc *raftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
+	rc.mutex.Lock()
+	defer rc.mutex.Unlock()
 	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
 		return
 	}
@@ -311,6 +333,7 @@ func (rc *raftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
 	}
 
 	logger.Infof("%v start snapshot [applied index: %d | last snapshot index: %d]", rc.id, rc.appliedIndex, rc.snapshotIndex)
+
 	data, err := rc.getSnapshot()
 	if err != nil {
 		logger.Fatalf("Get snapshot failed, %v", err)
@@ -358,14 +381,20 @@ func (rc *raftNode) serveChannels() {
 					rc.proposeC = nil
 				} else {
 					// blocks until accepted by raft state machine
-					rc.node.Propose(rc.ctx, []byte(prop))
+					err := rc.node.Propose(rc.ctx, []byte(prop))
+					if err != nil {
+						logger.Errorf("propose failed: %v", err)
+					}
 				}
 
 			case cc, ok := <-rc.confChangeC:
 				if !ok {
 					rc.confChangeC = nil
 				} else {
-					rc.node.ProposeConfChange(rc.ctx, cc)
+					err := rc.node.ProposeConfChange(rc.ctx, cc)
+					if err != nil {
+						logger.Errorf("propose conf change failed: %v", err)
+					}
 				}
 			}
 		}
@@ -381,13 +410,25 @@ func (rc *raftNode) serveChannels() {
 
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
-			rc.wal.Save(rd.HardState, rd.Entries)
+			err := rc.wal.Save(rd.HardState, rd.Entries)
+			if err != nil {
+				logger.Errorf("wal.Save failed: %v", err)
+			}
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				rc.saveSnap(rd.Snapshot)
-				rc.raftStorage.ApplySnapshot(rd.Snapshot)
+				err := rc.saveSnap(rd.Snapshot)
+				if err != nil {
+					logger.Errorf("saveSnap failed: %v", err)
+				}
+				err = rc.raftStorage.ApplySnapshot(rd.Snapshot)
+				if err != nil {
+					logger.Errorf("ApplySnapshot failed: %v", err)
+				}
 				rc.publishSnapshot(rd.Snapshot)
 			}
-			rc.raftStorage.Append(rd.Entries)
+			err = rc.raftStorage.Append(rd.Entries)
+			if err != nil {
+				logger.Errorf("raftStorage.Append failed: %v", err)
+			}
 			// rc.transport.Send(rd.Messages)
 			rc.communicationC <- rd.Messages
 			applyDoneC, ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
@@ -395,7 +436,7 @@ func (rc *raftNode) serveChannels() {
 				rc.stop()
 				return
 			}
-			rc.maybeTriggerSnapshot(applyDoneC)
+			go rc.maybeTriggerSnapshot(applyDoneC)
 			rc.node.Advance()
 
 		case m := <-rc.raftChan:

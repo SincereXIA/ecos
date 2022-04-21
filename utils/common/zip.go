@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 func Zip(src_dir string, zip_file_name string) error {
@@ -41,7 +40,7 @@ func Zip(src_dir string, zip_file_name string) error {
 
 		// 获取：文件头信息
 		header, _ := zip.FileInfoHeader(info)
-		header.Name = strings.TrimPrefix(path, src_dir+`\`)
+		// header.Name = strings.TrimPrefix(path, src_dir+`\`)
 
 		// 判断：文件是不是文件夹
 		if info.IsDir() {

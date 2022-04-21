@@ -19,7 +19,7 @@ func GenTestWatcher(ctx context.Context, basePath string, sunAddr string) (*Watc
 	port, nodeRpc := messenger.NewRandomPortRpcServer()
 	nodeInfo := infos.NewSelfInfo(0, "127.0.0.1", port)
 	var builder *infos.StorageRegisterBuilder
-	builder = infos.NewStorageRegisterBuilder(infos.NewRocksDBInfoStorageFactory(basePath))
+	builder = infos.NewStorageRegisterBuilder(infos.NewRocksDBInfoStorageFactory(path.Join(basePath, "rocksdb")))
 	register := builder.GetStorageRegister()
 	m := moon.NewMoon(ctx, nodeInfo, &moonConfig, nodeRpc, register)
 
