@@ -79,7 +79,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 			logger.Errorf("uploadBlock send chunk error: %v", err)
 			return err
 		}
-		byteCount += uint64(len(chunk.data))
+		byteCount += uint64(len(chunk.data)) - chunk.freeSize
 	}
 	if byteCount != b.BlockSize {
 		logger.Errorf("Incompatible size: Chunks: %v, Block: %v", byteCount, b.Size)
@@ -131,17 +131,10 @@ func (b *Block) genBlockHash() error {
 	return nil
 }
 
-func minSize(i int, i2 int) int {
-	if i < i2 {
-		return i
-	}
-	return i2
-}
-
 func (b *Block) updateBlockInfo() error {
 	b.BlockInfo.BlockSize = 0
 	for _, chunk := range b.chunks {
-		b.BlockInfo.BlockSize += uint64(len(chunk.data))
+		b.BlockInfo.BlockSize += uint64(len(chunk.data)) - chunk.freeSize
 	}
 	err := b.genBlockHash()
 	if err != nil {

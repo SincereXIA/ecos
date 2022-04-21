@@ -29,8 +29,6 @@ type EcosReader struct {
 	objPipes     []*pipeline.Pipeline
 	config       *config.ClientConfig
 	cachedBlocks sync.Map
-
-	blockPool *sync.Pool
 }
 
 func (r *EcosReader) genPipelines() error {
@@ -73,8 +71,7 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		logger.Warningf("blockClient responds err: %v", err)
 		return nil, err
 	}
-	//block := make([]byte, 0, r.bucketInfo.Config.BlockSize)
-	block := r.blockPool.Get().([]byte)
+	block := make([]byte, 0, r.bucketInfo.Config.BlockSize)
 	for {
 		rs, err := res.Recv()
 		if err != nil {
@@ -104,65 +101,27 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 	count, pending := int64(0), len(p)
 
 	// 预计本次需要读取几个 block
-	blockSize := int(r.bucketInfo.Config.BlockSize)
-	blockNum := (pending + r.curBlockOffset) / blockSize
-	if blockNum*blockSize < pending {
-		blockNum++ // 如果最后一个 block 仍未填满，需要读取下一个 block
-	}
+	calcBlocks, err := r.calcBlocks(pending)
 	waitGroup := sync.WaitGroup{}
 
-	isEOF := true              // 是否每一个 block 都已经读取完毕
-	offset := r.curBlockOffset // 第一个 block 需要加入上次读的偏移
-	for i := 0; i < blockNum && r.curBlockIndex+i < len(r.meta.Blocks); i++ {
-		start := i * blockSize
-		end := start + blockSize
-		if end > len(p) {
-			end = len(p)
-		}
-		blockInfo := r.meta.Blocks[r.curBlockIndex+i]
+	for _, block := range calcBlocks {
+		blockInfo := r.meta.Blocks[block.blockIndex]
 		waitGroup.Add(1)
-		go func(info *object.BlockInfo, start int, end int, offset int) {
+		go func(info *object.BlockInfo, bufferL, bufferR, blockL, blockR int) {
 			block, err := r.getBlock(info)
 			if err != nil {
 				logger.Errorf("get block failed, err: %v", err)
 				return
 			}
-			copy(p[start:end], block[offset:])
-			atomic.AddInt64(&count, int64(minSize(end-start, len(block)-offset)))
-			if end-start+offset < len(block) {
-				r.curBlockOffset = end - start + offset
-				logger.Tracef("CurBlockOffset: %d", r.curBlockOffset)
-				isEOF = false
-			} else {
-				value, ok := r.cachedBlocks.LoadAndDelete(info.BlockId) // 已经读完，释放内存
-				if ok {
-					b := value.([]byte)
-					b = b[:0] // re-slice to make block slice empty
-					r.blockPool.Put(b)
-				}
-				if offset > 0 { // 当前 block 不是从头读的，但已经读完，需要重置 offset，否则下一个 block 不会从头读
-					r.curBlockOffset = 0
-				}
-			}
+			copy(p[bufferL:bufferR], block[blockL:blockR])
+			atomic.AddInt64(&count, int64(bufferR-bufferL))
 			waitGroup.Done()
-		}(blockInfo, start, end, offset)
-		offset = 0 // 后续 block 都是从头开始读
+		}(blockInfo, block.bufferStart, block.bufferEnd, block.blockStart, block.blockEnd)
 	}
 	waitGroup.Wait()
-	logger.Tracef("read %d bytes done", count)
+	logger.Debugf("read %d bytes done", count)
 
-	if isEOF {
-		r.curBlockIndex += blockNum
-	} else {
-		r.curBlockIndex += blockNum - 1
-	}
-
-	if r.curBlockIndex > len(r.meta.Blocks) || (r.curBlockIndex == len(r.meta.Blocks) && isEOF) {
-		r.curBlockIndex = len(r.meta.Blocks) + 1
-		return int(count), io.EOF
-	}
-
-	return int(count), nil
+	return int(count), err
 }
 
 func (r *EcosReader) getObjMeta() error {
@@ -194,4 +153,54 @@ func (r *EcosReader) getHistoryClusterInfo() error {
 	}
 	r.clusterInfo = info.BaseInfo().GetClusterInfo()
 	return nil
+}
+
+type calcBlock struct {
+	blockIndex  int
+	blockStart  int
+	blockEnd    int
+	bufferStart int
+	bufferEnd   int
+}
+
+// calcBlocks 计算需要读取的 block 列表
+func (r *EcosReader) calcBlocks(expect int) ([]calcBlock, error) {
+	// 计算需要读取的 block 列表
+	var blocks []calcBlock
+	blockOffset := r.curBlockOffset
+	bufferOffset := 0
+	pending := expect
+	finish := false
+	for i := r.curBlockIndex; i < len(r.meta.Blocks) && !finish; i++ {
+		block := r.meta.Blocks[i]
+		if uint64(blockOffset+pending) >= block.BlockSize {
+			blocks = append(blocks, calcBlock{
+				blockIndex:  i,
+				blockStart:  blockOffset,
+				blockEnd:    int(block.BlockSize),
+				bufferStart: bufferOffset,
+				bufferEnd:   bufferOffset + int(block.BlockSize) - blockOffset,
+			})
+			bufferOffset += int(block.BlockSize) - blockOffset
+			blockOffset = 0
+		} else {
+			blocks = append(blocks, calcBlock{
+				blockIndex:  i,
+				blockStart:  blockOffset,
+				blockEnd:    blockOffset + pending,
+				bufferStart: bufferOffset,
+				bufferEnd:   bufferOffset + pending,
+			})
+			bufferOffset += pending
+			blockOffset += pending
+			finish = true
+		}
+		r.curBlockIndex = i
+		r.curBlockOffset = blockOffset
+		pending = expect - bufferOffset
+	}
+	if !finish {
+		return blocks, io.EOF
+	}
+	return blocks, nil
 }
