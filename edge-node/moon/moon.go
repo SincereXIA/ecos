@@ -127,10 +127,12 @@ func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
 				logger.Errorf("failed to load snapshot: %v", err)
 			}
 			if snapshot != nil {
-				logger.Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
+				logger.Infof("%d loading snapshot at term %d and index %d", m.id, snapshot.Metadata.Term, snapshot.Metadata.Index)
+				m.mutex.Lock()
 				if err := m.infoStorageRegister.RecoverFromSnapshot(snapshot.Data); err != nil {
-					logger.Errorf("failed to recover from snapshot: %v", err)
+					logger.Errorf("[%v] failed to recover from snapshot: %v", m.id, err)
 				}
+				m.mutex.Unlock()
 			}
 			continue
 		}
@@ -274,6 +276,10 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 	for _, message := range messages {
 		logger.Tracef("%d send to %v, type %v", m.id, message, message.Type)
 
+		if message.Type == raftpb.MsgSnap {
+			message.Snapshot.Metadata.ConfState = m.raft.confState
+		}
+
 		// get node info
 		var nodeInfo *infos.NodeInfo
 		var ok bool
@@ -340,7 +346,7 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 		}
 	}
 	readyC := make(chan bool)
-	snapshotterReady, raftNode := newRaftNode(int(m.id), m.ctx, peers, join, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
+	snapshotterReady, raftNode := newRaftNode(int(m.id), m.ctx, &m.mutex, peers, join, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
 	m.raft = raftNode
 	m.nodeReady = <-readyC
 	m.snapshotter = <-snapshotterReady
