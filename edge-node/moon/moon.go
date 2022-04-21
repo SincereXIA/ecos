@@ -23,6 +23,7 @@ type InfoController interface {
 
 	GetInfoDirect(infoType infos.InfoType, id string) (infos.Information, error)
 	ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error
+	NodeInfoChanged(nodeInfo *infos.NodeInfo)
 	IsLeader() bool
 	Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo)
 	GetLeaderID() uint64
@@ -215,6 +216,10 @@ func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.Nod
 	return nil
 }
 
+func (m *Moon) NodeInfoChanged(nodeInfo *infos.NodeInfo) {
+	m.infoMap[nodeInfo.RaftId] = nodeInfo
+}
+
 func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raftpb.Message, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -305,11 +310,11 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 	defer m.mutex.Unlock()
 	m.status = StatusRegistering
 	m.SelfInfo = selfInfo
-	if leaderInfo != nil {
-		m.infoMap[leaderInfo.RaftId] = leaderInfo
-	}
 	for _, nodeInfo := range peersInfo {
 		m.infoMap[nodeInfo.RaftId] = nodeInfo
+	}
+	if leaderInfo != nil { // leader info is the highest priority
+		m.infoMap[leaderInfo.RaftId] = leaderInfo
 	}
 
 	m.id = m.SelfInfo.RaftId

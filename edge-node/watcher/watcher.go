@@ -64,6 +64,7 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	for _, peerInfo := range currentPeerInfos {
 		if peerInfo.RaftId == info.RaftId {
 			flag = false
+			w.moon.NodeInfoChanged(info)
 			break
 		}
 	}
