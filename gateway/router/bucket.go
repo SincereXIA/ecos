@@ -150,16 +150,20 @@ func listObjectsV2(c *gin.Context) {
 	c.XML(http.StatusOK, result)
 }
 
-// bucketLevelPostHandler handles bucket level requests
-//
-// POST /:bucketName - POST Object
-//
-// POST /:bucketName?delete - DeleteObjects
+// bucketLevelPostHandler handles bucket level POST requests
+// POST /{bucketName} Include:
+//  PostObject:   POST /
+//  DeleteObject: POST /?delete
 func bucketLevelPostHandler(c *gin.Context) {
-	_, del := c.GetQuery("delete")
-	if del {
+	if _, del := c.GetQuery("delete"); del {
 		deleteObjects(c)
 		return
 	}
 	postObject(c)
 }
+
+// bucketLevelGetHandler handles bucket level GET requests
+// GET /{bucketName} Include:
+//  ListObjects:          GET /?delimiter=Delimiter&encoding-type=EncodingType&marker=Marker&max-keys=MaxKeys&prefix=Prefix
+//  ListObjectsV2:        GET /?list-type=2&continuation-token=ContinuationToken&delimiter=Delimiter&encoding-type=EncodingType&fetch-owner=FetchOwner&max-keys=MaxKeys&prefix=Prefix&start-after=StartAfter
+//  ListMultipartUploads: GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker

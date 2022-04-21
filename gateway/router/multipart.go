@@ -2,7 +2,9 @@ package router
 
 import (
 	"ecos/utils/errno"
+	"encoding/xml"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
@@ -59,12 +61,12 @@ func uploadPart(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
 		return
 	}
-	uploadId := c.Param("uploadId")
+	uploadId := c.Query("uploadId")
 	if uploadId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadId.Error()})
 		return
 	}
-	partID, err := parsePartID(c.Param("partId"))
+	partID, err := parsePartID(c.Query("partNumber"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidPartId.Error()})
 		return
@@ -88,5 +90,84 @@ func uploadPart(c *gin.Context) {
 	}
 	c.Header("Server", "Ecos")
 	c.Header("ETag", eTag)
+	c.Status(http.StatusOK)
+}
+
+type CompletedPart struct {
+	PartNumber int    `xml:"PartNumber"`
+	ETag       string `xml:"ETag"`
+}
+
+type CompleteMultipartUpload struct {
+	Parts []CompletedPart `xml:"Part"`
+}
+
+type CompleteMultipartUploadResult struct {
+	Location string `xml:"Location"`
+	Bucket   string `xml:"Bucket"`
+	Key      string `xml:"Key"`
+	ETag     string `xml:"ETag"`
+}
+
+// completeMultipartUpload completes a multipart upload
+func completeMultipartUpload(c *gin.Context) {
+	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		return
+	}
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		return
+	}
+	uploadId := c.Query("uploadId")
+	if uploadId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadId.Error()})
+		return
+	}
+	var completeRequest CompleteMultipartUpload
+	err := xml.NewDecoder(c.Request.Body).Decode(&completeRequest)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.EmptyField.Error()})
+		return
+	}
+	etag, err := Client.GetIOFactory(bucketName).CompleteMultipartUploadJob(uploadId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.XML(http.StatusOK, CompleteMultipartUploadResult{
+		Location: fmt.Sprintf("%s/%s", bucketName, key),
+		Bucket:   bucketName,
+		Key:      key,
+		ETag:     etag,
+	})
+	c.Header("Server", "Ecos")
+}
+
+// abortMultipartUpload aborts a multipart upload
+func abortMultipartUpload(c *gin.Context) {
+	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		return
+	}
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		return
+	}
+	uploadId := c.Query("uploadId")
+	if uploadId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadId.Error()})
+		return
+	}
+	err := Client.GetIOFactory(bucketName).AbortMultipartUploadJob(uploadId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.Header("Server", "Ecos")
 	c.Status(http.StatusOK)
 }

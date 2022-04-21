@@ -23,10 +23,6 @@ func putObject(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
 		return
 	}
-	//if c.Request.Body == nil || c.Request.ContentLength == 0 {
-	//	c.JSON(http.StatusBadRequest, gin.H{"error": "Request body is missing"})
-	//	return
-	//}
 	body := c.Request.Body
 	writer := Client.GetIOFactory(bucketName).GetEcosWriter(key)
 	_, err := io.Copy(&writer, body)
@@ -284,4 +280,67 @@ func deleteObjects(c *gin.Context) {
 	}
 	c.Header("Server", "Ecos")
 	c.XML(http.StatusOK, deleteResult)
+}
+
+// objectLevelPostHandler handles object level POST requests
+// POST /{bucketName}/{key} Include:
+//  CreateMultiPartUpload:   POST /Key+?uploads
+//  CompleteMultipartUpload: POST /Key+?uploadId=UploadId
+func objectLevelPostHandler(c *gin.Context) {
+	if _, ok := c.GetQuery("uploads"); ok {
+		createMultipartUpload(c)
+		return
+	}
+	if _, ok := c.GetQuery("uploadId"); ok {
+		completeMultipartUpload(c)
+		return
+	}
+	c.Status(http.StatusNotFound)
+}
+
+// objectLevelPutHandler handles object level PUT requests
+//
+// PUT /{bucketName}/{key} Include:
+//  PutObject:  PUT /Key+
+//  CopyObject: PUT /Key+
+//  UploadPart: PUT /Key+?uploadId=UploadId&partNumber=PartNumber
+func objectLevelPutHandler(c *gin.Context) {
+	if _, ok := c.GetQuery("uploadId"); ok {
+		uploadPart(c)
+		return
+	}
+	if c.GetHeader("x-amz-copy-source") != "" {
+		// TODO: copyObject(c)
+		return
+	}
+	putObject(c)
+}
+
+// objectLevelGetHandler handles object level GET requests
+//
+// GET /{bucketName}/{key} Include:
+//  GetObject: GET /Key+?partNumber=PartNumber&response-cache-control=ResponseCacheControl&response-content-disposition=ResponseContentDisposition&response-content-encoding=ResponseContentEncoding&response-content-language=ResponseContentLanguage&response-content-type=ResponseContentType&response-expires=ResponseExpires&versionId=VersionId
+//  ListParts: GET /Key+?max-parts=MaxParts&part-number-marker=PartNumberMarker&uploadId=UploadId
+func objectLevelGetHandler(c *gin.Context) {
+	if _, ok := c.GetQuery("uploadId"); ok {
+		// TODO: listParts(c)
+		return
+	}
+	if _, ok := c.GetQuery("partNumber"); ok {
+		// TODO: getPart(c)
+		return
+	}
+	getObject(c)
+}
+
+// objectLevelDeleteHandler handles object level DELETE requests
+//
+// DELETE /{bucketName}/{key} Include:
+//  DeleteObject:         DELETE /Key+?versionId=VersionId
+//  AbortMultipartUpload: DELETE /Key+?uploadId=UploadId
+func objectLevelDeleteHandler(c *gin.Context) {
+	if _, ok := c.GetQuery("uploadId"); ok {
+		abortMultipartUpload(c)
+	}
+	deleteObject(c)
 }

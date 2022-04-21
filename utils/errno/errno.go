@@ -93,6 +93,11 @@ const (
 	CodeInvalidUploadId
 	CodeInvalidPartId
 	CodeFileTooLarge
+
+	CodeEntityTooSmall
+	CodeInvalidPart
+	CodeInvalidPartOrder
+	CodeNoSuchUpload
 )
 
 var (
@@ -106,6 +111,11 @@ var (
 	InvalidUploadId = newErr(CodeInvalidUploadId, "invalid upload id")
 	InvalidPartId   = newErr(CodeInvalidPartId, "invalid part id")
 	FileTooLarge    = newErr(CodeFileTooLarge, "file too large")
+
+	EntityTooSmall   = newErr(CodeEntityTooSmall, "entity too small")
+	InvalidPart      = newErr(CodeInvalidPart, "invalid part")
+	InvalidPartOrder = newErr(CodeInvalidPartOrder, "invalid part order")
+	NoSuchUpload     = newErr(CodeNoSuchUpload, "no such upload")
 )
 
 const (

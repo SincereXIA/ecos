@@ -12,6 +12,7 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
 	"github.com/twmb/murmur3"
 	"hash"
@@ -128,9 +129,54 @@ func (f *EcosIOFactory) CreateMultipartUploadJob(key string) string {
 func (f *EcosIOFactory) GetMultipartUploadWriter(jobID string) (*EcosWriter, error) {
 	ret, ok := f.multipartJobs.Load(jobID)
 	if !ok {
-		return nil, errno.JobNotExist
+		return nil, errno.NoSuchUpload
 	}
 	return ret.(*EcosWriter), nil
+}
+
+// AbortMultipartUploadJob Abort a multipart upload job
+func (f *EcosIOFactory) AbortMultipartUploadJob(jobID string) error {
+	writer, err := f.GetMultipartUploadWriter(jobID)
+	if err != nil {
+		return err
+	}
+	err = writer.Abort()
+	if err != nil {
+		return err
+	}
+	f.multipartJobs.Delete(jobID)
+	return nil
+}
+
+// CompleteMultipartUploadJob Complete a multipart upload job
+func (f *EcosIOFactory) CompleteMultipartUploadJob(jobID string, parts ...types.CompletedPart) (string, error) {
+	writer, err := f.GetMultipartUploadWriter(jobID)
+	if err != nil {
+		return "", err
+	}
+	etag, err := writer.CloseMultiPart(parts...)
+	if err != nil {
+		return "", err
+	}
+	f.multipartJobs.Delete(jobID)
+	return etag, nil
+}
+
+// AbortAllMultipartUploadJob Abort all multipart upload job
+func (f *EcosIOFactory) AbortAllMultipartUploadJob() error {
+	f.multipartJobs.Range(func(key, value interface{}) bool {
+		writer, err := f.GetMultipartUploadWriter(key.(string))
+		if err != nil {
+			return true
+		}
+		err = writer.Abort()
+		if err != nil {
+			return true
+		}
+		f.multipartJobs.Delete(key.(string))
+		return true
+	})
+	return nil
 }
 
 // GetEcosReader provide a EcosWriter for object associated with key

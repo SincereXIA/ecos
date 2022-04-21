@@ -11,6 +11,7 @@ import (
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"encoding/hex"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"hash"
 	"io"
 	"strconv"
@@ -273,7 +274,7 @@ func (w *EcosWriter) genPartialHash() string {
 // genPartialMeta will generate partial ObjectMeta for partial upload.
 func (w *EcosWriter) genPartialMeta(objectKey string) *object.ObjectMeta {
 	pgID := object.GenObjPgID(w.bucketInfo, objectKey, 10)
-	blocks := make([]*object.BlockInfo, len(w.partIDs))
+	var blocks []*object.BlockInfo
 	for _, partID := range w.partIDs {
 		block := w.blocks[partID]
 		blocks = append(blocks, &block.BlockInfo)
@@ -358,8 +359,16 @@ func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
 	}
 	blockSize := uint64(0)
 	for {
-		var chunkData = make([]byte, 0, w.config.Object.ChunkSize)
+		var chunkData = make([]byte, w.config.Object.ChunkSize)
 		readSize, err := reader.Read(chunkData)
+		blockSize += uint64(readSize)
+		chunk := &localChunk{
+			freeSize: 0,
+			data:     chunkData[:readSize],
+		}
+		w.blocks[partID].chunks = append(w.blocks[partID].chunks, chunk)
+		w.writeSize += uint64(readSize)
+		w.objHash.Write(chunkData[:readSize])
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -367,12 +376,6 @@ func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
 			// TODO: Abort
 			return "", err
 		}
-		blockSize += uint64(readSize)
-		chunk := &localChunk{
-			freeSize: 0,
-			data:     chunkData[:readSize],
-		}
-		w.blocks[partID].chunks = append(w.blocks[partID].chunks, chunk)
 	}
 	w.blocks[partID].BlockInfo.BlockSize = blockSize
 	w.blocks[partID].status = UPLOADING
@@ -384,25 +387,26 @@ func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
 	return w.blocks[partID].BlockId, nil
 }
 
-// CloseMultiPart will close EcosWriter for multi-part upload.
-func (w *EcosWriter) CloseMultiPart() error {
+// CloseMultiPart will close EcosWriter for multi-part upload..
+func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error) {
 	if !w.partObject {
-		return errno.MethodNotAllowed
+		return "", errno.MethodNotAllowed
 	}
 	if w.Status != READING {
-		return errno.RepeatedClose
+		return "", errno.RepeatedClose
 	}
 	w.Status = UPLOADING
+	// TODO: Check completed parts in args
 	for i := 0; i < w.blockCount; i++ {
 		block := <-w.finishedBlocks
 		logger.Debugf("block closed: %v", block.BlockId)
 	}
 	err := w.CommitPartialMeta()
 	if err != nil {
-		return err
+		return "", err
 	}
 	w.Status = FINISHED
-	return nil
+	return hex.EncodeToString(w.objHash.Sum(nil)), nil
 }
 
 // AbortMultiPart will abort EcosWriter for multipart upload.
