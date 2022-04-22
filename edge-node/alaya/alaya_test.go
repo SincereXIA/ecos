@@ -225,8 +225,8 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	for i := 0; i < nodeNum; i++ {
 		// TODO (qiutb): apply stable meta storage
 		//metaStorage := NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
-		metaStorage := NewMemoryMetaStorage()
-		a := NewAlaya(ctx, watchers[i], metaStorage, rpcServers[i])
+		metaStorageRegister := NewMemoryMetaStorageRegister()
+		a := NewAlaya(ctx, watchers[i], metaStorageRegister, rpcServers[i])
 		alayas = append(alayas, a)
 	}
 	return alayas

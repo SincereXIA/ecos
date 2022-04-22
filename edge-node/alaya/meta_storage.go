@@ -21,6 +21,21 @@ type MetaStorage interface {
 	Close()
 }
 
+// MetaStorageRegister is a collection of MetaStorage.
+// It can look up MetaStorage by pgID.
+type MetaStorageRegister interface {
+	// NewStorage creates a new MetaStorage (if not exist).
+	// if the MetaStorage already exists, it will return the existing one.
+	NewStorage(pgID uint64) (MetaStorage, error)
+	// GetStorage returns the MetaStorage by pgID.
+	// if the MetaStorage does not exist, it will return ErrNotFound.
+	GetStorage(pgID uint64) (MetaStorage, error)
+	// GetAllStorage returns all MetaStorage created before.
+	GetAllStorage() []MetaStorage
+	// Close closes all MetaStorage.
+	Close()
+}
+
 var ( // rocksdb的设置参数
 	opts         = &gorocksdb.Options{}
 	readOptions  = &gorocksdb.ReadOptions{}
@@ -33,6 +48,43 @@ type MemoryMetaStorage struct {
 
 type StableMetaStorage struct {
 	db *gorocksdb.DB
+}
+
+type MemoryMetaStorageRegister struct {
+	pgMap sync.Map
+}
+
+func (ms *MemoryMetaStorageRegister) NewStorage(pgID uint64) (MetaStorage, error) {
+	if storage, ok := ms.pgMap.Load(pgID); ok {
+		return storage.(*MemoryMetaStorage), nil
+	}
+	ms.pgMap.Store(pgID, &MemoryMetaStorage{})
+	return ms.GetStorage(pgID)
+}
+
+func (ms *MemoryMetaStorageRegister) GetStorage(pgID uint64) (MetaStorage, error) {
+	if storage, ok := ms.pgMap.Load(pgID); ok {
+		return storage.(*MemoryMetaStorage), nil
+	}
+	return nil, errno.MetaStorageNotExist
+}
+
+func (ms *MemoryMetaStorageRegister) GetAllStorage() []MetaStorage {
+	var storages []MetaStorage
+	ms.pgMap.Range(func(key, value interface{}) bool {
+		storages = append(storages, value.(*MemoryMetaStorage))
+		return true
+	})
+	return storages
+}
+
+func (ms *MemoryMetaStorageRegister) Close() {
+	// do nothing
+	return
+}
+
+func NewMemoryMetaStorageRegister() MetaStorageRegister {
+	return &MemoryMetaStorageRegister{}
 }
 
 func (s *MemoryMetaStorage) RecordMeta(meta *object.ObjectMeta) error {

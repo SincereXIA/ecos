@@ -19,11 +19,13 @@ const (
 const (
 	CodePgNotExist int32 = AlayaError + iota
 	CodeMetaNotExist
+	CodeMetaStorageNotExist
 )
 
 var (
-	PGNotExist   = newErr(CodePgNotExist, "place group not exist")
-	MetaNotExist = newErr(CodeMetaNotExist, "meta data not exist")
+	PGNotExist          = newErr(CodePgNotExist, "place group not exist")
+	MetaNotExist        = newErr(CodeMetaNotExist, "meta data not exist")
+	MetaStorageNotExist = newErr(CodeMetaStorageNotExist, "meta data storage not exist")
 )
 
 /* MOON error */
