@@ -181,7 +181,7 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 		nodeInfo := deepcopy.Copy(info.BaseInfo().GetNodeInfo()).(*infos.NodeInfo)
 		report := w.monitor.GetReport(nodeInfo.RaftId)
 		if report == nil {
-			logger.Warningf("get report: %v from monitor fail: %v", nodeInfo.RaftId, err)
+			logger.Warningf("get report: %v from monitor fail", nodeInfo.RaftId)
 			logger.Warningf("set node: %v state OFFLINE", nodeInfo.RaftId)
 			nodeInfo.State = infos.NodeState_OFFLINE
 		} else {
@@ -337,6 +337,9 @@ func (w *Watcher) proposeClusterInfo(clusterInfo *infos.ClusterInfo) {
 func (w *Watcher) nodeInfoChanged(_ infos.Information) {
 	w.timerMutex.Lock()
 	defer w.timerMutex.Unlock()
+	if !w.moon.IsLeader() {
+		return
+	}
 	if w.timer != nil && w.timer.Stop() {
 		w.timer.Reset(w.config.NodeInfoCommitInterval)
 		return

@@ -111,15 +111,38 @@ func RunAllTestWatcher(watchers []*Watcher) {
 
 func WaitAllTestWatcherOK(watchers []*Watcher) {
 	clusterNodeNum := len(watchers)
+	timer := time.NewTimer(time.Minute)
 	for i := 0; i < clusterNodeNum; i++ {
 		err := watchers[i].ctx.Err()
 		if err != nil {
 			clusterNodeNum -= 1
+			continue
+		}
+		for {
+			select {
+			case <-timer.C:
+				logger.Errorf("WaitAllTestWatcherOK timeout")
+				return
+			default:
+			}
+			if watchers[i].moon.GetLeaderID() <= 0 {
+				logger.Debugf("WaitAllTestWatcherOK wait leader, node: %v, leader: %v",
+					watchers[i].GetSelfInfo().RaftId, watchers[i].moon.GetLeaderID())
+				time.Sleep(time.Millisecond * 300)
+			} else {
+				break
+			}
 		}
 	}
 
 	for {
 		ok := true
+		select {
+		case <-timer.C:
+			logger.Errorf("WaitAllTestWatcherOK timeout")
+			return
+		default:
+		}
 		for _, w := range watchers {
 			err := w.ctx.Err()
 			if err != nil { // 跳过
@@ -129,6 +152,7 @@ func WaitAllTestWatcherOK(watchers []*Watcher) {
 			healthNode := clusterInfo.GetHealthNode()
 			if len(healthNode) != clusterNodeNum {
 				ok = false
+				logger.Debugf("WaitAllTestWatcherOK wait health node, node: %v", w.GetSelfInfo().RaftId)
 				break
 			}
 		}

@@ -13,7 +13,7 @@ func TestMonitor(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	nodeNum := 9
 	defer cancel()
-	basePath := "./ecos-data/"
+	basePath := "./ecos-data/monitor_test"
 	watchers, rpcServers, _ := GenTestWatcherCluster(ctx, basePath, nodeNum)
 	for _, rpc := range rpcServers {
 		go func(rpc *messenger.RpcServer) {
