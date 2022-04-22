@@ -148,7 +148,7 @@ func (m *NodeMonitor) runReport(nodeStatusChan <-chan *NodeStatus) {
 			}
 			leaderInfo, err := m.watcher.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO,
 				strconv.FormatUint(leaderID, 10))
-			if err != nil {
+			if err != nil || leaderInfo.BaseInfo().GetNodeInfo() == nil { // check leader info if is nil
 				logger.Warningf("get leader info: %v failed: %v", leaderID, err)
 				continue
 			}

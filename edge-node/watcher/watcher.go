@@ -308,6 +308,9 @@ func (w *Watcher) initCluster() {
 }
 
 func (w *Watcher) proposeClusterInfo(clusterInfo *infos.ClusterInfo) {
+	if !w.moon.IsLeader() {
+		return
+	}
 	request := &moon.ProposeInfoRequest{
 		Head: &common.Head{
 			Timestamp: timestamp.Now(),
@@ -333,9 +336,6 @@ func (w *Watcher) proposeClusterInfo(clusterInfo *infos.ClusterInfo) {
 func (w *Watcher) nodeInfoChanged(_ infos.Information) {
 	w.timerMutex.Lock()
 	defer w.timerMutex.Unlock()
-	if !w.moon.IsLeader() {
-		return
-	}
 	if w.timer != nil && w.timer.Stop() {
 		w.timer.Reset(w.config.NodeInfoCommitInterval)
 		return
