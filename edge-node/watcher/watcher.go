@@ -64,6 +64,7 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	for _, peerInfo := range currentPeerInfos {
 		if peerInfo.RaftId == info.RaftId {
 			flag = false
+			w.moon.NodeInfoChanged(info)
 			break
 		}
 	}
@@ -180,7 +181,7 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 		nodeInfo := deepcopy.Copy(info.BaseInfo().GetNodeInfo()).(*infos.NodeInfo)
 		report := w.monitor.GetReport(nodeInfo.RaftId)
 		if report == nil {
-			logger.Warningf("get report: %v from monitor fail: %v", nodeInfo.RaftId, err)
+			logger.Warningf("get report: %v from monitor fail", nodeInfo.RaftId)
 			logger.Warningf("set node: %v state OFFLINE", nodeInfo.RaftId)
 			nodeInfo.State = infos.NodeState_OFFLINE
 		} else {
@@ -308,6 +309,9 @@ func (w *Watcher) initCluster() {
 }
 
 func (w *Watcher) proposeClusterInfo(clusterInfo *infos.ClusterInfo) {
+	if !w.moon.IsLeader() {
+		return
+	}
 	request := &moon.ProposeInfoRequest{
 		Head: &common.Head{
 			Timestamp: timestamp.Now(),

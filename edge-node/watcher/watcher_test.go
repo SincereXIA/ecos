@@ -18,7 +18,7 @@ func TestWatcher(t *testing.T) {
 }
 
 func testWatcher(t *testing.T, mock bool) {
-	basePath := "./ecos-data"
+	basePath := "./ecos-data/watcher-test"
 	nodeNum := 9
 	ctx := context.Background()
 	var watchers []*Watcher
@@ -58,6 +58,7 @@ func testWatcher(t *testing.T, mock bool) {
 			watchers[i].moon.Stop()
 			rpcServers[i].Stop()
 		}
+
 	})
 
 	t.Run("remove a node", func(t *testing.T) {

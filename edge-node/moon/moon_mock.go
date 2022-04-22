@@ -94,6 +94,18 @@ func (mr *MockInfoControllerMockRecorder) IsLeader() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLeader", reflect.TypeOf((*MockInfoController)(nil).IsLeader))
 }
 
+// NodeInfoChanged mocks base method.
+func (m *MockInfoController) NodeInfoChanged(nodeInfo *infos.NodeInfo) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "NodeInfoChanged", nodeInfo)
+}
+
+// NodeInfoChanged indicates an expected call of NodeInfoChanged.
+func (mr *MockInfoControllerMockRecorder) NodeInfoChanged(nodeInfo interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeInfoChanged", reflect.TypeOf((*MockInfoController)(nil).NodeInfoChanged), nodeInfo)
+}
+
 // ProposeConfChangeAddNode mocks base method.
 func (m *MockInfoController) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
 	m.ctrl.T.Helper()
