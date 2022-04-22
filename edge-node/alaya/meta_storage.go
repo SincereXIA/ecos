@@ -5,6 +5,7 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"encoding/json"
 	gorocksdb "github.com/SUMStudio/grocksdb"
 	"github.com/gogo/protobuf/proto"
 	"sync"
@@ -18,6 +19,7 @@ type MetaStorage interface {
 	GetMeta(objID string) (meta *object.ObjectMeta, err error)
 	List(prefix string) ([]*object.ObjectMeta, error)
 	Delete(objID string) error
+	CreateSnapshot() ([]byte, error)
 	Close()
 }
 
@@ -43,7 +45,7 @@ var ( // rocksdb的设置参数
 )
 
 type MemoryMetaStorage struct {
-	metaMap sync.Map
+	MetaMap sync.Map
 }
 
 type StableMetaStorage struct {
@@ -88,19 +90,19 @@ func NewMemoryMetaStorageRegister() MetaStorageRegister {
 }
 
 func (s *MemoryMetaStorage) RecordMeta(meta *object.ObjectMeta) error {
-	s.metaMap.Store(meta.ObjId, meta)
+	s.MetaMap.Store(meta.ObjId, meta)
 	return nil
 }
 
 func (s *MemoryMetaStorage) GetMeta(objID string) (meta *object.ObjectMeta, err error) {
-	if m, ok := s.metaMap.Load(objID); ok {
+	if m, ok := s.MetaMap.Load(objID); ok {
 		return m.(*object.ObjectMeta), nil
 	}
 	return nil, errno.MetaNotExist
 }
 
 func (s *MemoryMetaStorage) List(prefix string) (metas []*object.ObjectMeta, err error) {
-	s.metaMap.Range(func(key, value interface{}) bool {
+	s.MetaMap.Range(func(key, value interface{}) bool {
 		if key.(string)[:len(prefix)] == prefix {
 			metas = append(metas, value.(*object.ObjectMeta))
 		}
@@ -110,8 +112,13 @@ func (s *MemoryMetaStorage) List(prefix string) (metas []*object.ObjectMeta, err
 }
 
 func (s *MemoryMetaStorage) Delete(objID string) error {
-	s.metaMap.Delete(objID)
+	s.MetaMap.Delete(objID)
 	return nil
+}
+
+func (s *MemoryMetaStorage) CreateSnapshot() ([]byte, error) {
+	buf, err := json.Marshal(&s.MetaMap) // TODO(zhang): it is not right
+	return buf, err
 }
 
 func (s *MemoryMetaStorage) Close() {
@@ -120,7 +127,7 @@ func (s *MemoryMetaStorage) Close() {
 
 func NewMemoryMetaStorage() *MemoryMetaStorage {
 	return &MemoryMetaStorage{
-		metaMap: sync.Map{},
+		MetaMap: sync.Map{},
 	}
 }
 
