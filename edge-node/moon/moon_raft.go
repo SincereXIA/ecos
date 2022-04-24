@@ -13,7 +13,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"sync"
 	"time"
 )
 
@@ -57,13 +56,11 @@ type raftNode struct {
 	stopc chan struct{} // signals proposal channel closed
 
 	logger *zap.Logger
-
-	mutex sync.RWMutex
 }
 
-var defaultSnapshotCount uint64 = 20 // set 10 for test
+var defaultSnapshotCount uint64 = 10000 // set 10 for test
 
-func newRaftNode(id int, ctx context.Context, mutex *sync.RWMutex, peers []raft.Peer, join bool, basePath string, readyC chan bool, getSnapshot func() ([]byte, error)) (chan *snap.Snapshotter, *raftNode) {
+func newRaftNode(id int, ctx context.Context, peers []raft.Peer, join bool, basePath string, readyC chan bool, getSnapshot func() ([]byte, error)) (chan *snap.Snapshotter, *raftNode) {
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -92,7 +89,6 @@ func newRaftNode(id int, ctx context.Context, mutex *sync.RWMutex, peers []raft.
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		// rest of structure populated after WAL replay
 
-		mutex: *mutex,
 	}
 	go rc.startRaft(readyC)
 
@@ -314,11 +310,9 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	rc.appliedIndex = snapshotToSave.Metadata.Index
 }
 
-var snapshotCatchUpEntriesN uint64 = 00 // set 10 for test
+var snapshotCatchUpEntriesN uint64 = 10000 // set 10 for test
 
 func (rc *raftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
-	rc.mutex.Lock()
-	defer rc.mutex.Unlock()
 	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
 		return
 	}
@@ -436,7 +430,7 @@ func (rc *raftNode) serveChannels() {
 				rc.stop()
 				return
 			}
-			go rc.maybeTriggerSnapshot(applyDoneC)
+			rc.maybeTriggerSnapshot(applyDoneC)
 			rc.node.Advance()
 
 		case m := <-rc.raftChan:
