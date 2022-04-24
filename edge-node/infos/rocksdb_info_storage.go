@@ -4,11 +4,9 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/database"
 	"ecos/utils/logger"
+	"errors"
 	gorocksdb "github.com/SUMStudio/grocksdb"
-	"io"
-	"io/ioutil"
-	"os"
-	"path"
+	"strconv"
 	"sync"
 )
 
@@ -24,11 +22,11 @@ type RocksDBInfoStorage struct {
 }
 
 func (s *RocksDBInfoStorage) GetSnapshot() ([]byte, error) {
-	return s.getSnapshot()
+	return nil, nil
 }
 
 func (s *RocksDBInfoStorage) RecoverFromSnapshot(snapshot []byte) error {
-	return s.recoverFromSnapshot(snapshot)
+	return nil
 }
 
 func (s *RocksDBInfoStorage) Update(info Information) error {
@@ -63,6 +61,9 @@ func (s *RocksDBInfoStorage) Delete(id string) error {
 
 func (s *RocksDBInfoStorage) Get(id string) (Information, error) {
 	infoData, err := s.db.GetCF(database.ReadOpts, s.myHandler, []byte(id))
+	if infoData.Data() == nil {
+		return nil, errors.New("key " + id + " not found")
+	}
 	defer infoData.Free()
 	if err != nil {
 		logger.Errorf("Get id: %v from rocksdb failed, err: %v", err)
@@ -106,43 +107,61 @@ func (s *RocksDBInfoStorage) CancelOnUpdate(name string) {
 }
 
 func (factory *RocksDBInfoStorageFactory) GetSnapshot() ([]byte, error) {
-	cp, err := factory.db.NewCheckpoint()
+	snapContent := SnapContent{
+		Key:              make([][]byte, 0),
+		Value:            make([][]byte, 0),
+		ColumnFamilyName: make([]string, 0),
+	}
+
+	for _, name := range factory.cfNames {
+		handle := factory.cfHandleMap[name]
+
+		it := factory.db.NewIteratorCF(database.ReadOpts, handle)
+		it.SeekToFirst()
+
+		for it = it; it.Valid(); it.Next() {
+			key := make([]byte, len(it.Key().Data()))
+			copy(key, it.Key().Data())
+			value := make([]byte, len(it.Value().Data()))
+			copy(value, it.Value().Data())
+			snapContent.Key = append(snapContent.Key, key)
+			snapContent.Value = append(snapContent.Value, value)
+			snapContent.ColumnFamilyName = append(snapContent.ColumnFamilyName, name)
+			it.Key().Free()
+			it.Value().Free()
+		}
+		it.Close()
+	}
+
+	snap, err := snapContent.Marshal()
 	if err != nil {
-		logger.Infof("Create checkpoint failed, err: %v", err)
 		return nil, err
 	}
-	// TODO:just for Test, need to implement a better way
-	snapshot := make([]byte, 1<<25)
-	cp.CreateCheckpoint(path.Join(factory.basePath, "snapshot"), 0) // what is logSizeForFlush?
-	defer cp.Destroy()
-	zipPath := path.Join(factory.basePath, "snapshot.zip")
-	common.Zip(path.Join(factory.basePath, "snapshot"), zipPath)
-	file, _ := os.Open(zipPath)
-	snapshot, err = ioutil.ReadAll(file)
-	return snapshot, err
+	return snap, nil
 }
 
 func (factory *RocksDBInfoStorageFactory) RecoverFromSnapshot(snapshot []byte) error {
-	// save snapshot to disk
-	snapshotPath := path.Join(factory.basePath, "snapshot.zip")
-	if common.PathExists(snapshotPath) {
-		os.Remove(path.Join(factory.basePath, "snapshot.zip")) // remove local snapshot
-	}
-
-	err := ioutil.WriteFile(snapshotPath, snapshot, 0644)
-	if err != nil && err != io.EOF {
-		logger.Infof("Read snapshot failed, err: %v", err)
+	snapContent := SnapContent{}
+	err := snapContent.Unmarshal(snapshot)
+	if err != nil {
 		return err
 	}
-
-	// backup the old db
-	backPath := factory.basePath + ".bak"
-	os.Rename(factory.basePath, backPath)
-	logger.Infof("Rename %v to %v", factory.basePath, backPath)
-
-	// recover from snapshot
-	zipPath := path.Join(backPath, "snapshot.zip")
-	common.UnZip(zipPath, factory.basePath)
+	for i, name := range snapContent.ColumnFamilyName {
+		if factory.cfHandleMap[name] == nil {
+			handle, err := factory.db.CreateColumnFamily(database.Opts, name)
+			if err != nil {
+				logger.Errorf("New column family failed, err: %v", err)
+				return err
+			}
+			factory.cfNames = append(factory.cfNames, name)
+			factory.cfHandleMap[name] = handle
+		}
+		handle := factory.cfHandleMap[name]
+		err = factory.db.PutCF(database.WriteOpts, handle, snapContent.Key[i], snapContent.Value[i])
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -168,23 +187,29 @@ type RocksDBInfoStorageFactory struct {
 }
 
 func (factory *RocksDBInfoStorageFactory) GetStorage(infoType InfoType) Storage {
-	if factory.cfHandleMap[string(infoType)] == nil {
-		err := factory.newColumnFamily(infoType)
+	infoTypeStr := infoTypeToStr(infoType)
+	if factory.cfHandleMap[infoTypeStr] == nil {
+		err := factory.newColumnFamily(infoTypeStr)
 		if err != nil {
 			return nil
 		}
 	}
-	return factory.NewRocksDBInfoStorage(string(infoType))
+	return factory.NewRocksDBInfoStorage(infoTypeStr)
 }
 
-func (factory *RocksDBInfoStorageFactory) newColumnFamily(infoType InfoType) error {
-	handle, err := factory.db.CreateColumnFamily(database.Opts, string(infoType))
+func (factory *RocksDBInfoStorageFactory) newColumnFamily(infoType string) error {
+	handle, err := factory.db.CreateColumnFamily(database.Opts, infoType)
 	if err != nil {
 		logger.Errorf("New column family failed, err: %v", err)
 		return err
 	}
-	factory.cfHandleMap[string(infoType)] = handle
+	factory.cfNames = append(factory.cfNames, infoType)
+	factory.cfHandleMap[infoType] = handle
 	return nil
+}
+
+func infoTypeToStr(infoType InfoType) string {
+	return strconv.Itoa(int(infoType))
 }
 
 func (factory *RocksDBInfoStorageFactory) Close() {
@@ -192,10 +217,13 @@ func (factory *RocksDBInfoStorageFactory) Close() {
 }
 
 func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
-	err := common.InitPath(basePath)
-	if err != nil {
-		logger.Errorf("Set path %s failed, err: %v", basePath)
+	if !common.PathExists(basePath) {
+		err := common.InitPath(basePath)
+		if err != nil {
+			logger.Errorf("Set path %s failed, err: %v", basePath)
+		}
 	}
+
 	cfNames, err := gorocksdb.ListColumnFamilies(database.Opts, basePath)
 	if err != nil {
 		logger.Infof("List column families failed, err: %v", err)
@@ -210,7 +238,6 @@ func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	db, handles, err := gorocksdb.OpenDbColumnFamilies(database.Opts, basePath, cfNames, cfOpts)
 	if err != nil {
 		logger.Errorf("Open rocksdb with ColumnFamilies failed, err: %v", err)
-		return nil
 	}
 
 	handleMap := make(map[string]*gorocksdb.ColumnFamilyHandle, 0)

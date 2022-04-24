@@ -171,6 +171,7 @@ func createMoons(ctx context.Context, num int, basePath string) ([]InfoControlle
 			UpdateTimestamp: timestamp.Now(),
 		}
 		moonConfig.RaftStoragePath = path.Join(basePath, "raft", strconv.Itoa(i+1))
+		moonConfig.RocksdbStoragePath = path.Join(basePath, "rocksdb", strconv.Itoa(i+1))
 		moonConfigs = append(moonConfigs, &moonConfig)
 	}
 

@@ -48,6 +48,7 @@ type NodeMonitor struct {
 func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*common.Result, error) {
 	if !m.watcher.GetMoon().IsLeader() {
 		// only leader can be runReport
+		logger.Infof("node %v is not leader, can't runReport", m.watcher.GetSelfInfo().GetID())
 		return nil, errors.New("not leader")
 	}
 	if val, ok := m.reportTimers.Load(report.NodeId); ok {
@@ -146,10 +147,9 @@ func (m *NodeMonitor) runReport(nodeStatusChan <-chan *NodeStatus) {
 			if leaderID == 0 {
 				continue
 			}
-			leaderInfo, err := m.watcher.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO,
-				strconv.FormatUint(leaderID, 10))
-			if err != nil || leaderInfo.BaseInfo().GetNodeInfo() == nil { // check leader info if is nil
-				logger.Warningf("get leader info: %v failed: %v", leaderID, err)
+			leaderInfo, err := m.watcher.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO, strconv.FormatUint(leaderID, 10))
+			if err != nil || leaderInfo.BaseInfo().GetNodeInfo() == nil {
+				logger.Warningf("node: %v get leader info: %v failed: %v", m.watcher.GetSelfInfo().GetID(), leaderID, err)
 				continue
 			}
 			conn, _ := messenger.GetRpcConnByNodeInfo(leaderInfo.BaseInfo().GetNodeInfo())

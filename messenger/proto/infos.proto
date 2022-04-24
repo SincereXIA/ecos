@@ -129,3 +129,9 @@ message NodeInfo {
   uint64 capacity = 5;
   NodeState state = 6;
 }
+
+message SnapContent {
+  repeated bytes key = 1;
+  repeated bytes value = 2;
+  repeated string column_family_name = 3;
+}

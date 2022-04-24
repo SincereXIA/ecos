@@ -35,14 +35,12 @@ type Moon struct {
 	// Moon Rpc
 	UnimplementedMoonServer
 
-	// Channels communication between Moon and Raft module
-	nodeReady bool
-
-	id       uint64 //raft节点的id
-	raft     *raftNode
-	SelfInfo *infos.NodeInfo
-	ctx      context.Context //context
-	cancel   context.CancelFunc
+	id        uint64 //raft节点的id
+	raft      *raftNode
+	SelfInfo  *infos.NodeInfo
+	ctx       context.Context //context
+	cancel    context.CancelFunc
+	nodeReady bool // Channels communication between Moon and Raft module
 
 	infoMap  map[uint64]*infos.NodeInfo
 	leaderID uint64 // 注册时的 leader 信息
@@ -128,11 +126,11 @@ func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
 			}
 			if snapshot != nil {
 				logger.Infof("%d loading snapshot at term %d and index %d", m.id, snapshot.Metadata.Term, snapshot.Metadata.Index)
-				m.mutex.Lock()
 				if err := m.infoStorageRegister.RecoverFromSnapshot(snapshot.Data); err != nil {
 					logger.Errorf("[%v] failed to recover from snapshot: %v", m.id, err)
+				} else {
+					logger.Infof("[%v] recover from snapshot success", m.id)
 				}
-				m.mutex.Unlock()
 			}
 			continue
 		}
@@ -223,8 +221,8 @@ func (m *Moon) NodeInfoChanged(nodeInfo *infos.NodeInfo) {
 }
 
 func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raftpb.Message, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 	if m.raft == nil {
 		return nil, errors.New("moon" + strconv.FormatUint(m.id, 10) + ": raft is not ready")
 	}
@@ -240,11 +238,10 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 	ctx, cancel := context.WithCancel(ctx)
 
 	m := &Moon{
-		id:       0, // set raft id after register
-		SelfInfo: selfInfo,
-		ctx:      ctx,
-		cancel:   cancel,
-
+		id:                    0, // set raft id after register
+		SelfInfo:              selfInfo,
+		ctx:                   ctx,
+		cancel:                cancel,
 		mutex:                 sync.RWMutex{},
 		infoMap:               make(map[uint64]*infos.NodeInfo),
 		config:                config,
@@ -346,7 +343,7 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 		}
 	}
 	readyC := make(chan bool)
-	snapshotterReady, raftNode := newRaftNode(int(m.id), m.ctx, &m.mutex, peers, join, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
+	snapshotterReady, raftNode := newRaftNode(int(m.id), m.ctx, peers, join, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
 	m.raft = raftNode
 	m.nodeReady = <-readyC
 	m.snapshotter = <-snapshotterReady
@@ -406,9 +403,9 @@ func (m *Moon) reportSelfInfo() {
 
 func (m *Moon) GetLeaderID() uint64 {
 	for {
-		m.mutex.Lock()
+		m.mutex.RLock()
 		nodeReady := m.nodeReady
-		m.mutex.Unlock()
+		m.mutex.RUnlock()
 		if nodeReady == true {
 			break
 		}
