@@ -13,6 +13,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"runtime"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -95,6 +96,9 @@ func (m *NodeMonitor) GetAllReports() []*NodeStatusReport {
 	m.nodeStatusMap.Range(func(key, value interface{}) bool {
 		nodeStatusList = append(nodeStatusList, value.(*NodeStatusReport))
 		return true
+	})
+	sort.Slice(nodeStatusList, func(i, j int) bool {
+		return nodeStatusList[i].NodeId < nodeStatusList[j].NodeId
 	})
 	return nodeStatusList
 }

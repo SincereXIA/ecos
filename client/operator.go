@@ -14,6 +14,7 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"sort"
 	"strconv"
 )
 
@@ -48,6 +49,7 @@ func (c *ClusterOperator) Info() (interface{}, error) {
 }
 
 func (c *ClusterOperator) State() (string, error) {
+	clusterInfo := c.client.clusterInfo
 	leaderInfo := c.client.clusterInfo.LeaderInfo
 	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
 	if err != nil {
@@ -55,7 +57,34 @@ func (c *ClusterOperator) State() (string, error) {
 	}
 	monitor := watcher.NewMonitorClient(conn)
 	report, err := monitor.GetClusterReport(context.Background(), &emptypb.Empty{})
-	return protoToJson(report)
+	sort.Slice(report.Reports, func(i, j int) bool {
+		return report.Reports[i].NodeId < report.Reports[j].NodeId
+	})
+	state, _ := protoToJson(report)
+
+	clusterPipelines, err := pipeline.NewClusterPipelines(c.client.clusterInfo)
+	if err != nil {
+		return "", err
+	}
+	pipelines, _ := interfaceToJson(clusterPipelines.MetaPipelines)
+	s := struct {
+		Term        uint64
+		LeaderID    uint64
+		MetaPGNum   int32
+		MetaPGSize  int32
+		BlockPGNum  int32
+		BlockPGSize int32
+	}{
+		Term:        clusterInfo.Term,
+		LeaderID:    clusterInfo.LeaderInfo.RaftId,
+		MetaPGNum:   clusterInfo.MetaPgNum,
+		MetaPGSize:  clusterInfo.MetaPgSize,
+		BlockPGNum:  clusterInfo.BlockPgNum,
+		BlockPGSize: clusterInfo.BlockPgSize,
+	}
+	base, _ := interfaceToJson(s)
+
+	return base + "\n" + pipelines + "\n" + state, nil
 }
 
 type VolumeOperator struct {
@@ -191,6 +220,20 @@ func protoToJson(pb proto.Message) (string, error) {
 	// convert proto to json
 	marshaller := jsonpb.Marshaler{}
 	jsonData, err := marshaller.MarshalToString(pb)
+	if err != nil {
+		return "marshal data error", err
+	}
+	var pretty bytes.Buffer
+	err = json.Indent(&pretty, []byte(jsonData), "", "  ")
+	if err != nil {
+		return "indent data error", err
+	}
+	return pretty.String(), nil
+}
+
+func interfaceToJson(data interface{}) (string, error) {
+	// convert interface to json
+	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return "marshal data error", err
 	}
