@@ -16,10 +16,11 @@ import (
 func GenTestWatcher(ctx context.Context, basePath string, sunAddr string) (*Watcher, *messenger.RpcServer) {
 	moonConfig := moon.DefaultConfig
 	moonConfig.RaftStoragePath = path.Join(basePath, "moon")
+	moonConfig.RocksdbStoragePath = path.Join(basePath, "rocksdb")
 	port, nodeRpc := messenger.NewRandomPortRpcServer()
 	nodeInfo := infos.NewSelfInfo(0, "127.0.0.1", port)
 	var builder *infos.StorageRegisterBuilder
-	builder = infos.NewStorageRegisterBuilder(infos.NewRocksDBInfoStorageFactory(basePath))
+	builder = infos.NewStorageRegisterBuilder(infos.NewRocksDBInfoStorageFactory(path.Join(basePath, "rocksdb")))
 	register := builder.GetStorageRegister()
 	m := moon.NewMoon(ctx, nodeInfo, &moonConfig, nodeRpc, register)
 

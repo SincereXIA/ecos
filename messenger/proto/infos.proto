@@ -129,3 +129,14 @@ message NodeInfo {
   uint64 capacity = 5;
   NodeState state = 6;
 }
+
+
+message CfContent {
+  string cf_name = 1;
+  repeated bytes keys = 2;
+  repeated bytes values = 3;
+}
+
+message Snapshot {
+  repeated CfContent cf_contents = 1;
+}

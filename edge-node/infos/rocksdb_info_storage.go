@@ -4,11 +4,9 @@ import (
 	"ecos/utils/common"
 	"ecos/utils/database"
 	"ecos/utils/logger"
+	"errors"
 	gorocksdb "github.com/SUMStudio/grocksdb"
-	"io"
-	"io/ioutil"
-	"os"
-	"path"
+	"strconv"
 	"sync"
 )
 
@@ -24,11 +22,11 @@ type RocksDBInfoStorage struct {
 }
 
 func (s *RocksDBInfoStorage) GetSnapshot() ([]byte, error) {
-	return s.getSnapshot()
+	return nil, nil
 }
 
 func (s *RocksDBInfoStorage) RecoverFromSnapshot(snapshot []byte) error {
-	return s.recoverFromSnapshot(snapshot)
+	return nil
 }
 
 func (s *RocksDBInfoStorage) Update(info Information) error {
@@ -63,6 +61,9 @@ func (s *RocksDBInfoStorage) Delete(id string) error {
 
 func (s *RocksDBInfoStorage) Get(id string) (Information, error) {
 	infoData, err := s.db.GetCF(database.ReadOpts, s.myHandler, []byte(id))
+	if infoData.Data() == nil {
+		return nil, errors.New("key " + id + " not found")
+	}
 	defer infoData.Free()
 	if err != nil {
 		logger.Errorf("Get id: %v from rocksdb failed, err: %v", err)
@@ -80,9 +81,8 @@ func (s *RocksDBInfoStorage) GetAll() ([]Information, error) {
 	result := make([]Information, 0)
 	it := s.db.NewIteratorCF(database.ReadOpts, s.myHandler)
 	defer it.Close()
-	it.SeekToFirst()
 
-	for it = it; it.Valid(); it.Next() {
+	for it.SeekToFirst(); it.Valid(); it.Next() {
 		infoData := it.Value()
 		baseInfo := &BaseInfo{}
 		err := baseInfo.Unmarshal(infoData.Data())
@@ -106,41 +106,57 @@ func (s *RocksDBInfoStorage) CancelOnUpdate(name string) {
 }
 
 func (factory *RocksDBInfoStorageFactory) GetSnapshot() ([]byte, error) {
-	cp, err := factory.db.NewCheckpoint()
+	Snapshot := Snapshot{
+		CfContents: make([]*CfContent, 0),
+	}
+
+	for _, name := range factory.cfNames {
+		handle := factory.cfHandleMap[name]
+		CfContent := &CfContent{
+			CfName: name,
+			Keys:   make([][]byte, 0),
+			Values: make([][]byte, 0),
+		}
+
+		it := factory.db.NewIteratorCF(database.ReadOpts, handle)
+
+		for it.SeekToFirst(); it.Valid(); it.Next() {
+			key := make([]byte, len(it.Key().Data()))
+			copy(key, it.Key().Data())
+			value := make([]byte, len(it.Value().Data()))
+			copy(value, it.Value().Data())
+			CfContent.Keys = append(CfContent.Keys, key)
+			CfContent.Values = append(CfContent.Values, value)
+			it.Key().Free()
+			it.Value().Free()
+		}
+		it.Close()
+
+		Snapshot.CfContents = append(Snapshot.CfContents, CfContent)
+	}
+
+	snap, err := Snapshot.Marshal()
 	if err != nil {
-		logger.Infof("Create checkpoint failed, err: %v", err)
 		return nil, err
 	}
-	// TODO:just for Test, need to implement a better way
-	snapshot := make([]byte, 1<<25)
-	cp.CreateCheckpoint(path.Join(factory.basePath, "snapshot"), 0) // what is logSizeForFlush?
-	defer cp.Destroy()
-	zipPath := path.Join(factory.basePath, "snapshot.zip")
-	common.Zip(path.Join(factory.basePath, "snapshot"), zipPath)
-	file, _ := os.Open(zipPath)
-	snapshot, err = ioutil.ReadAll(file)
-	return snapshot, err
+	return snap, nil
 }
 
 func (factory *RocksDBInfoStorageFactory) RecoverFromSnapshot(snapshot []byte) error {
-	// save snapshot to disk
-	os.Remove(path.Join(factory.basePath, "snapshot.zip")) // remove local snapshot
-	file, _ := os.Open(path.Join(factory.basePath, "snapshot.zip"))
-	_, err := io.ReadFull(file, snapshot)
+	snapShot := &Snapshot{}
+	err := snapShot.Unmarshal(snapshot)
 	if err != nil {
-		logger.Infof("Read snapshot failed, err: %v", err)
 		return err
 	}
-	file.Close()
-
-	// backup the old db
-	os.Rename(factory.basePath, factory.basePath+".bak")
-	logger.Infof("Rename %v to %v", factory.basePath, factory.basePath+".bak")
-
-	// recover from snapshot
-	zipPath := path.Join(factory.basePath, "snapshot.zip", "snapshot.zip")
-	common.UnZip(zipPath, factory.basePath)
-
+	for _, cfContent := range snapShot.CfContents {
+		handle := factory.cfHandleMap[cfContent.CfName]
+		for i, key := range cfContent.Keys {
+			err := factory.db.PutCF(database.WriteOpts, handle, key, cfContent.Values[i])
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -166,23 +182,29 @@ type RocksDBInfoStorageFactory struct {
 }
 
 func (factory *RocksDBInfoStorageFactory) GetStorage(infoType InfoType) Storage {
-	if factory.cfHandleMap[string(infoType)] == nil {
-		err := factory.newColumnFamily(infoType)
+	infoTypeStr := infoTypeToStr(infoType)
+	if factory.cfHandleMap[infoTypeStr] == nil {
+		err := factory.newColumnFamily(infoTypeStr)
 		if err != nil {
 			return nil
 		}
 	}
-	return factory.NewRocksDBInfoStorage(string(infoType))
+	return factory.NewRocksDBInfoStorage(infoTypeStr)
 }
 
-func (factory *RocksDBInfoStorageFactory) newColumnFamily(infoType InfoType) error {
-	handle, err := factory.db.CreateColumnFamily(database.Opts, string(infoType))
+func (factory *RocksDBInfoStorageFactory) newColumnFamily(infoType string) error {
+	handle, err := factory.db.CreateColumnFamily(database.Opts, infoType)
 	if err != nil {
 		logger.Errorf("New column family failed, err: %v", err)
 		return err
 	}
-	factory.cfHandleMap[string(infoType)] = handle
+	factory.cfNames = append(factory.cfNames, infoType)
+	factory.cfHandleMap[infoType] = handle
 	return nil
+}
+
+func infoTypeToStr(infoType InfoType) string {
+	return strconv.Itoa(int(infoType))
 }
 
 func (factory *RocksDBInfoStorageFactory) Close() {
@@ -190,10 +212,13 @@ func (factory *RocksDBInfoStorageFactory) Close() {
 }
 
 func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
-	err := common.InitPath(basePath)
-	if err != nil {
-		logger.Errorf("Set path %s failed, err: %v", basePath)
+	if !common.PathExists(basePath) {
+		err := common.InitPath(basePath)
+		if err != nil {
+			logger.Errorf("Set path %s failed, err: %v", basePath)
+		}
 	}
+
 	cfNames, err := gorocksdb.ListColumnFamilies(database.Opts, basePath)
 	if err != nil {
 		logger.Infof("List column families failed, err: %v", err)
@@ -208,7 +233,6 @@ func NewRocksDBInfoStorageFactory(basePath string) StorageFactory {
 	db, handles, err := gorocksdb.OpenDbColumnFamilies(database.Opts, basePath, cfNames, cfOpts)
 	if err != nil {
 		logger.Errorf("Open rocksdb with ColumnFamilies failed, err: %v", err)
-		return nil
 	}
 
 	handleMap := make(map[string]*gorocksdb.ColumnFamilyHandle, 0)
