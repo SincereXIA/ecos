@@ -164,7 +164,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) (<-chan struct{}, bool) 
 		applyDoneC = make(chan struct{}, 1)
 		select {
 		case rc.commitC <- &commit{data, applyDoneC}:
-		case <-rc.stopc:
+		case <-rc.ctx.Done():
 			return nil, false
 		}
 	}
@@ -321,7 +321,7 @@ func (rc *raftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
 	if applyDoneC != nil {
 		select {
 		case <-applyDoneC:
-		case <-rc.stopc:
+		case <-rc.ctx.Done():
 			return
 		}
 	}
@@ -441,6 +441,7 @@ func (rc *raftNode) serveChannels() {
 			}
 		case <-rc.stopc:
 			rc.stop()
+			rc.cancel()
 			return
 		}
 	}
