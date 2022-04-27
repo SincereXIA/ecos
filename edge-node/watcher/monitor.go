@@ -7,6 +7,7 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/logger"
 	"errors"
+	"github.com/rcrowley/go-metrics"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -116,6 +117,12 @@ func (m *NodeMonitor) genSelfState() *NodeStatus {
 	cpuState, _ := cpu.PercentWithContext(m.ctx, 0, false)
 	status.CpuPercent = cpuState[0]
 	status.GoroutineCount = uint64(runtime.NumGoroutine())
+
+	// Get ecos metrics
+	status.MetaPipelineCount = uint64(metrics.GetOrRegisterCounter(MetricsAlayaPipelineCount, nil).Count())
+	status.MetaCount = uint64(metrics.GetOrRegisterCounter(MetricsAlayaMetaCount, nil).Count())
+	status.BlockCount = uint64(metrics.GetOrRegisterCounter(MetricsGaiaBlockCount, nil).Count())
+
 	return &status
 }
 

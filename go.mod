@@ -24,6 +24,7 @@ require (
 	github.com/minio/sha256-simd v1.0.0
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
+	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b
 	github.com/shirou/gopsutil/v3 v3.22.3
 	github.com/sincerexia/gocrush v0.0.0-20220213012034-a24f00a6eb8e
