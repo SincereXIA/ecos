@@ -81,9 +81,8 @@ func (s *RocksDBInfoStorage) GetAll() ([]Information, error) {
 	result := make([]Information, 0)
 	it := s.db.NewIteratorCF(database.ReadOpts, s.myHandler)
 	defer it.Close()
-	it.SeekToFirst()
 
-	for it = it; it.Valid(); it.Next() {
+	for it.SeekToFirst(); it.Valid(); it.Next() {
 		infoData := it.Value()
 		baseInfo := &BaseInfo{}
 		err := baseInfo.Unmarshal(infoData.Data())
@@ -107,33 +106,36 @@ func (s *RocksDBInfoStorage) CancelOnUpdate(name string) {
 }
 
 func (factory *RocksDBInfoStorageFactory) GetSnapshot() ([]byte, error) {
-	snapContent := SnapContent{
-		Key:              make([][]byte, 0),
-		Value:            make([][]byte, 0),
-		ColumnFamilyName: make([]string, 0),
+	Snapshot := Snapshot{
+		CfContents: make([]*CfContent, 0),
 	}
 
 	for _, name := range factory.cfNames {
 		handle := factory.cfHandleMap[name]
+		CfContent := &CfContent{
+			CfName: name,
+			Keys:   make([][]byte, 0),
+			Values: make([][]byte, 0),
+		}
 
 		it := factory.db.NewIteratorCF(database.ReadOpts, handle)
-		it.SeekToFirst()
 
-		for it = it; it.Valid(); it.Next() {
+		for it.SeekToFirst(); it.Valid(); it.Next() {
 			key := make([]byte, len(it.Key().Data()))
 			copy(key, it.Key().Data())
 			value := make([]byte, len(it.Value().Data()))
 			copy(value, it.Value().Data())
-			snapContent.Key = append(snapContent.Key, key)
-			snapContent.Value = append(snapContent.Value, value)
-			snapContent.ColumnFamilyName = append(snapContent.ColumnFamilyName, name)
+			CfContent.Keys = append(CfContent.Keys, key)
+			CfContent.Values = append(CfContent.Values, value)
 			it.Key().Free()
 			it.Value().Free()
 		}
 		it.Close()
+
+		Snapshot.CfContents = append(Snapshot.CfContents, CfContent)
 	}
 
-	snap, err := snapContent.Marshal()
+	snap, err := Snapshot.Marshal()
 	if err != nil {
 		return nil, err
 	}
@@ -141,25 +143,18 @@ func (factory *RocksDBInfoStorageFactory) GetSnapshot() ([]byte, error) {
 }
 
 func (factory *RocksDBInfoStorageFactory) RecoverFromSnapshot(snapshot []byte) error {
-	snapContent := SnapContent{}
-	err := snapContent.Unmarshal(snapshot)
+	snapShot := &Snapshot{}
+	err := snapShot.Unmarshal(snapshot)
 	if err != nil {
 		return err
 	}
-	for i, name := range snapContent.ColumnFamilyName {
-		if factory.cfHandleMap[name] == nil {
-			handle, err := factory.db.CreateColumnFamily(database.Opts, name)
+	for _, cfContent := range snapShot.CfContents {
+		handle := factory.cfHandleMap[cfContent.CfName]
+		for i, key := range cfContent.Keys {
+			err := factory.db.PutCF(database.WriteOpts, handle, key, cfContent.Values[i])
 			if err != nil {
-				logger.Errorf("New column family failed, err: %v", err)
 				return err
 			}
-			factory.cfNames = append(factory.cfNames, name)
-			factory.cfHandleMap[name] = handle
-		}
-		handle := factory.cfHandleMap[name]
-		err = factory.db.PutCF(database.WriteOpts, handle, snapContent.Key[i], snapContent.Value[i])
-		if err != nil {
-			return err
 		}
 	}
 	return nil
