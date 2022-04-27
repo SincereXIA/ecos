@@ -71,15 +71,8 @@ func TestGateway(t *testing.T) {
 	}
 	client := s3.NewFromConfig(cfg)
 
-	test10MBBuffer := make([]byte, 1024*1024*10)
-	for idx := range test10MBBuffer {
-		if idx%100 == 0 {
-			test10MBBuffer[idx] = '\n'
-		} else {
-			test10MBBuffer[idx] = byte(rand.Intn(26) + 97)
-		}
-	}
-	reader := bytes.NewReader(test10MBBuffer) // 10 MB
+	test10MBBuffer := genTestData(10 << 20)
+	reader := bytes.NewReader(test10MBBuffer)
 
 	// Create a test bucket
 	t.Run("CreateBucket", func(t *testing.T) {
@@ -182,14 +175,18 @@ func TestGateway(t *testing.T) {
 		testCreateBucket(t, client, bucketName, false)
 
 		uploadId := testCreateMultipartUpload(t, client, bucketName, "testMultipartUpload.obj", false)
-		_, _ = reader.Seek(0, io.SeekStart)
-		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 1, reader, false)
-		_, _ = reader.Seek(0, io.SeekStart)
-		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 2, reader, false)
-		_, _ = reader.Seek(0, io.SeekStart)
-		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 4, reader, false)
-		_, _ = reader.Seek(0, io.SeekStart)
-		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 3, reader, false)
+		var partFile []io.ReadSeeker
+		for i := 0; i < 5; i++ {
+			reader := bytes.NewReader(genTestData(10))
+			partFile = append(partFile, reader)
+		}
+		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 1, partFile[0], false)
+		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 2, partFile[1], false)
+		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 100, partFile[4], false)
+		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 50, partFile[3], false)
+		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 20, partFile[2], false)
+		_, _ = partFile[0].Seek(0, io.SeekStart)
+		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 100, partFile[0], false)
 		parts := []types.CompletedPart{
 			{
 				PartNumber: 1,
@@ -198,10 +195,13 @@ func TestGateway(t *testing.T) {
 				PartNumber: 2,
 			},
 			{
-				PartNumber: 3,
+				PartNumber: 20,
 			},
 			{
-				PartNumber: 4,
+				PartNumber: 50,
+			},
+			{
+				PartNumber: 100,
 			},
 		}
 		testCompleteMultipartUpload(t, client, bucketName, "testMultipartUpload.obj", uploadId, parts, false)
@@ -209,10 +209,25 @@ func TestGateway(t *testing.T) {
 		content, err := io.ReadAll(obj)
 		assert.NoError(t, err)
 		var fullContent []byte
-		for i := 1; i <= 4; i++ {
-			fullContent = append(fullContent, test10MBBuffer...)
+		for i := 0; i < 4; i++ {
+			_, _ = partFile[i].Seek(0, io.SeekStart)
+			content, _ := io.ReadAll(partFile[i])
+			fullContent = append(fullContent, content...)
 		}
-		assert.Equal(t, fullContent, content)
+		_, _ = partFile[0].Seek(0, io.SeekStart)
+		lastContent, _ := io.ReadAll(partFile[0])
+		fullContent = append(fullContent, lastContent...)
+		result := bytes.Compare(fullContent, content)
+		assert.True(t, result == 0)
+		if result != 0 {
+			t.Log("Expected: \n", string(fullContent))
+			t.Log("Actual: \n", string(content))
+		}
+
+		uploadId = testCreateMultipartUpload(t, client, bucketName, "testMultipartUpload2.obj", false)
+		_, _ = reader.Seek(0, io.SeekStart)
+		testUploadPart(t, client, bucketName, "testMultipartUpload2.obj", uploadId, 1, reader, false)
+		testAbortMultipartUpload(t, client, bucketName, "testMultipartUpload2.obj", uploadId, false)
 	})
 }
 
@@ -403,5 +418,20 @@ func testAbortMultipartUpload(t *testing.T, client *s3.Client, bucketName string
 		return
 	}
 	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("AbortMultipartUpload Error: %v", err)
+	}
 	t.Logf("AbortMultipartUpload: %#v", abortMultipartUploadOutput)
+}
+
+func genTestData(size int) []byte {
+	data := make([]byte, size)
+	for idx := range data {
+		if idx%100 == 0 {
+			data[idx] = '\n'
+		} else {
+			data[idx] = byte(rand.Intn(26) + 97)
+		}
+	}
+	return data
 }

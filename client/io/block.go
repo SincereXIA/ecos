@@ -1,11 +1,13 @@
 package io
 
 import (
+	"context"
 	agent "ecos/client/info-agent"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	common2 "ecos/messenger/common"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
@@ -41,7 +43,7 @@ type Block struct {
 	clusterInfo   *infos.ClusterInfo
 	blockCount    int
 	blockHashType infos.BucketConfig_HashType
-	blockPipes    []*pipeline.Pipeline
+	pipes         *pipeline.ClusterPipelines
 
 	// These are for Upload and Release
 	infoAgent   *agent.InfoAgent
@@ -52,7 +54,7 @@ type Block struct {
 // Upload provides a way to upload self to a given stream
 func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	// Start Upload by ControlMessage with Code BEGIN
-	pipe := b.blockPipes[b.PgId-1]
+	pipe := b.pipes.GetBlockPipeline(b.PgId)
 	start := &gaia.UploadBlockRequest{
 		Payload: &gaia.UploadBlockRequest_Message{
 			Message: &gaia.ControlMessage{
@@ -165,6 +167,24 @@ func (b *Block) Close() error {
 	return nil
 }
 
+func (b *Block) Abort(uc *UploadClient) error {
+	// TODO(xiong): add context
+	res, err := uc.client.DeleteBlock(context.Background(), &gaia.DeleteBlockRequest{
+		BlockId:  b.BlockId,
+		Pipeline: b.pipes.GetBlockPipeline(b.PgId),
+		Term:     b.clusterInfo.Term,
+	})
+	if err != nil {
+		logger.Errorf("Abort block error: %v", err)
+		return err
+	}
+	if res.Status == common2.Result_FAIL {
+		logger.Errorf("Abort block error: %v", res.Message)
+		return errors.New(res.Message)
+	}
+	return nil
+}
+
 // GenBlockId Generates BlockId for the `i` th block of a specific object
 //
 // This method ensures the global unique with UUID!
@@ -177,8 +197,6 @@ func GenBlockId() string {
 // These const are for PgNum calc
 const (
 	blockPgNum = 100
-	objPgNum   = 10
-	groupNum   = 3
 )
 
 var (

@@ -20,13 +20,12 @@ type EcosReader struct {
 	clusterInfo *infos.ClusterInfo
 	bucketInfo  *infos.BucketInfo
 	key         string
+	pipes       *pipeline.ClusterPipelines
 
-	blockPipes     []*pipeline.Pipeline
 	curBlockIndex  int
 	curBlockOffset int
 
 	meta         *object.ObjectMeta
-	objPipes     []*pipeline.Pipeline
 	config       *config.ClientConfig
 	cachedBlocks sync.Map
 }
@@ -40,18 +39,18 @@ func (r *EcosReader) genPipelines() error {
 	if err != nil {
 		return err
 	}
-	r.blockPipes = pipeline.GenPipelines(*r.clusterInfo, blockPgNum, groupNum)
-	return nil
+	r.pipes, err = pipeline.NewClusterPipelines(r.clusterInfo)
+	return err
 }
 
-func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
+func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 	blockID := blockInfo.BlockId
 	if block, ok := r.cachedBlocks.Load(blockID); ok {
 		return block.([]byte), nil
 	}
 	pgID := object.GenBlockPgID(blockInfo.BlockId, r.clusterInfo.BlockPgNum)
-	gaiaServerId := r.blockPipes[pgID-1].RaftId[0]
-	info, err := r.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId, 10))
+	gaiaServerId := r.pipes.GetBlockPG(pgID)
+	info, err := r.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId[0], 10))
 	gaiaServerInfo := info.BaseInfo().GetNodeInfo()
 	if err != nil {
 		logger.Errorf("get gaia server info failed, err: %v", err)
@@ -92,7 +91,7 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 }
 
 func (r *EcosReader) Read(p []byte) (n int, err error) {
-	if r.meta == nil || r.objPipes == nil {
+	if r.meta == nil || r.pipes == nil {
 		err = r.genPipelines()
 		if err != nil {
 			logger.Errorf("gen pipelines failed, err: %v", err)
@@ -108,7 +107,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 		blockInfo := r.meta.Blocks[block.blockIndex]
 		waitGroup.Add(1)
 		go func(info *object.BlockInfo, bufferL, bufferR, blockL, blockR int) {
-			block, err := r.getBlock(info)
+			block, err := r.GetBlock(info)
 			if err != nil {
 				logger.Errorf("get block failed, err: %v", err)
 				return
@@ -127,14 +126,13 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 func (r *EcosReader) getObjMeta() error {
 	// use key to get pdId
 	pgId := object.GenObjPgID(r.bucketInfo, r.key, 10)
-	metaServerIdString := strconv.FormatUint(r.objPipes[pgId-1].RaftId[0], 10)
+	metaServerIdString := r.pipes.GetBlockPGNodeID(pgId)[0]
 	metaServerInfo, _ := r.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
 	metaClient, err := NewMetaClient(metaServerInfo.BaseInfo().GetNodeInfo(), r.config)
 	if err != nil {
 		logger.Errorf("New meta client failed, err: %v", err)
 		return err
 	}
-
 	objID := object.GenObjectId(r.bucketInfo, r.key)
 	r.meta, err = metaClient.GetObjMeta(objID)
 	if err != nil {

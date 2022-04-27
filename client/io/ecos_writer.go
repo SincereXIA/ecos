@@ -348,8 +348,20 @@ func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
 	// TODO: Delete duplicate part
 	noDuplicate := w.addPartID(partID)
 	if !noDuplicate {
-		victim := w.blocks[partID]
+		victim := w.blocks[int(partID)]
 		logger.Tracef("Delete duplicate part %v", victim.PartId)
+		node, err := w.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(victim.PgId)[0])
+		if err != nil {
+			return "", err
+		}
+		client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.config)
+		if err != nil {
+			return "", err
+		}
+		err = victim.Abort(client)
+		if err != nil {
+			return "", err
+		}
 	}
 	w.blocks[partID] = w.getNewBlock()
 	w.blocks[partID].BlockInfo.PartId = int32(partID)
@@ -418,9 +430,35 @@ func (w *EcosWriter) AbortMultiPart() error {
 		return errno.RepeatedClose
 	}
 	w.Status = ABORTED
-	w.blocks = nil
-	w.partIDs = nil
-	return nil
+	var err error
+	errBlocks := make([]int32, 0, len(w.partIDs))
+	for _, partID := range w.partIDs {
+		block := w.blocks[int(partID)]
+		node, err1 := w.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
+		if err1 != nil {
+			err = err1
+			errBlocks = append(errBlocks, partID)
+			continue
+		}
+		client, err2 := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.config)
+		if err2 != nil {
+			err = err2
+			errBlocks = append(errBlocks, partID)
+			continue
+		}
+		err3 := block.Abort(client)
+		if err3 != nil {
+			err = err3
+			errBlocks = append(errBlocks, partID)
+			continue
+		}
+		block.status = ABORTED
+	}
+	w.partIDs = errBlocks
+	if err == nil {
+		w.Status = ABORTED
+	}
+	return err
 }
 
 func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {
