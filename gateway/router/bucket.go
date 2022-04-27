@@ -73,11 +73,6 @@ type ListBucketResult struct {
 
 // listObjects lists objects
 func listObjects(c *gin.Context) {
-	apiVersion := c.Query("list-type")
-	if apiVersion == "2" {
-		listObjectsV2(c)
-		return
-	}
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
 		c.JSON(http.StatusNotFound, gin.H{
@@ -151,6 +146,7 @@ func listObjectsV2(c *gin.Context) {
 }
 
 // bucketLevelPostHandler handles bucket level POST requests
+//
 // POST /{bucketName} Include:
 //  PostObject:   POST /
 //  DeleteObject: POST /?delete
@@ -163,7 +159,19 @@ func bucketLevelPostHandler(c *gin.Context) {
 }
 
 // bucketLevelGetHandler handles bucket level GET requests
+//
 // GET /{bucketName} Include:
 //  ListObjects:          GET /?delimiter=Delimiter&encoding-type=EncodingType&marker=Marker&max-keys=MaxKeys&prefix=Prefix
 //  ListObjectsV2:        GET /?list-type=2&continuation-token=ContinuationToken&delimiter=Delimiter&encoding-type=EncodingType&fetch-owner=FetchOwner&max-keys=MaxKeys&prefix=Prefix&start-after=StartAfter
 //  ListMultipartUploads: GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
+func bucketLevelGetHandler(c *gin.Context) {
+	if _, uploads := c.GetQuery("uploads"); uploads {
+		listMultipartUploads(c)
+		return
+	}
+	if listType := c.Query("list-type"); listType == "2" {
+		listObjectsV2(c)
+		return
+	}
+	listObjects(c)
+}

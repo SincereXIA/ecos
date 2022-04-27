@@ -29,7 +29,7 @@ func NewRouter(cfg Config) *gin.Engine {
 	{
 		bucketRouter.PUT("", createBucket)
 		// bucketRouter.DELETE("", deleteBucket)
-		bucketRouter.GET("", listObjects) // listObjects and listObjectsV2
+		bucketRouter.GET("", bucketLevelGetHandler)
 		// bucketRouter.HEAD("", headBucket)
 		bucketRouter.POST("", bucketLevelPostHandler)
 	}

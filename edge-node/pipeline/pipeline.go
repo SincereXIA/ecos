@@ -18,7 +18,7 @@ func (cp *ClusterPipelines) GetMetaPG(pgID uint64) []uint64 {
 }
 
 func (cp *ClusterPipelines) GetMetaPGNodeID(pgID uint64) []string {
-	NodeIDs := make([]string, len(cp.MetaPipelines[pgID-1].RaftId))
+	NodeIDs := make([]string, 0, len(cp.MetaPipelines[pgID-1].RaftId))
 	for _, id := range cp.MetaPipelines[pgID-1].RaftId {
 		NodeIDs = append(NodeIDs, strconv.FormatUint(id, 10))
 	}
@@ -27,6 +27,14 @@ func (cp *ClusterPipelines) GetMetaPGNodeID(pgID uint64) []string {
 
 func (cp *ClusterPipelines) GetBlockPG(pgID uint64) []uint64 {
 	return cp.BlockPipelines[pgID-1].RaftId
+}
+
+func (cp *ClusterPipelines) GetBlockPGNodeID(pgID uint64) []string {
+	NodeIDs := make([]string, 0, len(cp.BlockPipelines[pgID-1].RaftId))
+	for _, id := range cp.BlockPipelines[pgID-1].RaftId {
+		NodeIDs = append(NodeIDs, strconv.FormatUint(id, 10))
+	}
+	return NodeIDs
 }
 
 func (cp *ClusterPipelines) GetMetaPipeline(pgID uint64) *Pipeline {

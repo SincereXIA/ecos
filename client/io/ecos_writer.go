@@ -14,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"hash"
 	"io"
-	"strconv"
 )
 
 type localChunk struct {
@@ -37,6 +36,7 @@ type EcosWriter struct {
 	key         string
 	config      *config.ClientConfig
 	Status      BlockStatus
+	pipes       *pipeline.ClusterPipelines
 
 	chunks     *common.Pool
 	curChunk   *localChunk
@@ -46,15 +46,13 @@ type EcosWriter struct {
 	curBlock       *Block
 	blockCount     int
 	finishedBlocks chan *Block
-	blockPipes     []*pipeline.Pipeline
 
 	writeSize uint64
 	objHash   hash.Hash
-	objPipes  []*pipeline.Pipeline
 
 	// for multipart upload
 	partObject bool
-	partIDs    []int
+	partIDs    []int32
 }
 
 // getCurBlock ensures to return with a Block can put new Chunk in
@@ -74,8 +72,8 @@ func (w *EcosWriter) getCurBlock() *Block {
 
 // getUploadStream returns a new upload stream
 func (w *EcosWriter) getUploadStream(b *Block) (*UploadClient, error) {
-	idString := strconv.FormatUint(b.blockPipes[b.BlockInfo.PgId-1].RaftId[0], 10)
-	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
+	nodes := w.pipes.GetBlockPGNodeID(b.PgId)
+	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, nodes[0])
 	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo(), w.config)
 	if err != nil {
 		logger.Errorf("Unable to start Gaia Client: %v", err)
@@ -265,7 +263,7 @@ func (w *EcosWriter) genPartialHash() string {
 	}
 	w.objHash.Reset()
 	for _, partID := range w.partIDs {
-		block := w.blocks[partID]
+		block := w.blocks[int(partID)]
 		w.objHash.Write([]byte(block.BlockInfo.BlockHash))
 	}
 	return hex.EncodeToString(w.objHash.Sum(nil))
@@ -275,13 +273,15 @@ func (w *EcosWriter) genPartialHash() string {
 func (w *EcosWriter) genPartialMeta(objectKey string) *object.ObjectMeta {
 	pgID := object.GenObjPgID(w.bucketInfo, objectKey, 10)
 	var blocks []*object.BlockInfo
+	objSize := uint64(0)
 	for _, partID := range w.partIDs {
-		block := w.blocks[partID]
+		block := w.blocks[int(partID)]
 		blocks = append(blocks, &block.BlockInfo)
+		objSize += block.BlockInfo.BlockSize
 	}
 	meta := &object.ObjectMeta{
 		ObjId:      object.GenObjectId(w.bucketInfo, w.key),
-		ObjSize:    w.writeSize,
+		ObjSize:    objSize,
 		UpdateTime: timestamp.Now(),
 		PgId:       pgID,
 		Blocks:     blocks,
@@ -315,18 +315,18 @@ func (w *EcosWriter) CommitPartialMeta() error {
 	return nil
 }
 
-// addPartID will ordinal insert partID to EcosWriter.partIDs
+// addPartID will ordinal insert partID to EcosWriter.partIDs to form an increasing order
 //
 // Returns:
 // 		true:  if partID NOT in EcosWriter.partIDs
 // 		false: if partID IS  in EcosWriter.partIDs
-func (w *EcosWriter) addPartID(partID int) bool {
+func (w *EcosWriter) addPartID(partID int32) bool {
 	for i, id := range w.partIDs {
-		if id == partID {
+		if partID == id {
 			return false
 		}
-		if id < partID {
-			w.partIDs = append(w.partIDs[:i], append([]int{partID}, w.partIDs[i:]...)...)
+		if partID < id {
+			w.partIDs = append(w.partIDs[:i], append([]int32{partID}, w.partIDs[i:]...)...)
 			return true
 		}
 	}
@@ -335,7 +335,7 @@ func (w *EcosWriter) addPartID(partID int) bool {
 }
 
 // WritePart will write data to EcosWriter.blocks[partID]
-func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
+func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	if !w.partObject {
 		return "", errno.MethodNotAllowed
 	}
@@ -363,9 +363,10 @@ func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
 			return "", err
 		}
 	}
-	w.blocks[partID] = w.getNewBlock()
-	w.blocks[partID].BlockInfo.PartId = int32(partID)
-	w.blocks[partID].delFunc = func(self *Block) {
+	w.blocks[int(partID)] = w.getNewBlock()
+	w.blocks[int(partID)].blockCount = int(partID)
+	w.blocks[int(partID)].BlockInfo.PartId = partID
+	w.blocks[int(partID)].delFunc = func(self *Block) {
 		self.chunks = nil
 		w.finishedBlocks <- self
 	}
@@ -378,8 +379,7 @@ func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
 			freeSize: 0,
 			data:     chunkData[:readSize],
 		}
-		w.blocks[partID].chunks = append(w.blocks[partID].chunks, chunk)
-		w.writeSize += uint64(readSize)
+		w.blocks[int(partID)].chunks = append(w.blocks[int(partID)].chunks, chunk)
 		w.objHash.Write(chunkData[:readSize])
 		if err != nil {
 			if err == io.EOF {
@@ -389,14 +389,29 @@ func (w *EcosWriter) WritePart(partID int, reader io.Reader) (string, error) {
 			return "", err
 		}
 	}
-	w.blocks[partID].BlockInfo.BlockSize = blockSize
-	w.blocks[partID].status = UPLOADING
-	err := w.blocks[partID].updateBlockInfo()
+	w.blocks[int(partID)].BlockInfo.BlockSize = blockSize
+	w.blocks[int(partID)].status = UPLOADING
+	err := w.blocks[int(partID)].updateBlockInfo()
 	if err != nil {
 		return "", err
 	}
-	go w.uploadBlock(partID, w.blocks[partID])
-	return w.blocks[partID].BlockId, nil
+	go w.uploadBlock(int(partID), w.blocks[int(partID)])
+	return w.blocks[int(partID)].BlockId, nil
+}
+
+// ListParts will return EcosWriter.partIDs
+func (w *EcosWriter) ListParts() []types.Part {
+	parts := make([]types.Part, 0, len(w.partIDs))
+	for _, partID := range w.partIDs {
+		block := w.blocks[int(partID)]
+		part := types.Part{
+			ETag:       &block.BlockId,
+			PartNumber: partID,
+			Size:       int64(block.BlockSize),
+		}
+		parts = append(parts, part)
+	}
+	return parts
 }
 
 // CloseMultiPart will close EcosWriter for multi-part upload..
@@ -408,10 +423,24 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 		return "", errno.RepeatedClose
 	}
 	w.Status = UPLOADING
-	// TODO: Check completed parts in args
-	for i := 0; i < w.blockCount; i++ {
+	pendingMap := make(map[int32]bool)
+	for _, part := range parts {
+		if part.PartNumber < 1 || part.PartNumber > 10000 {
+			return "", errno.InvalidArgument
+		}
+		if _, ok := w.blocks[int(part.PartNumber)]; !ok {
+			return "", errno.InvalidArgument
+		}
+		pendingMap[part.PartNumber] = true
+	}
+	pending := len(parts)
+	for pending > 0 {
 		block := <-w.finishedBlocks
 		logger.Debugf("block closed: %v", block.BlockId)
+		if w.blocks[int(block.PartId)] == block && pendingMap[block.PartId] {
+			pending--
+			delete(pendingMap, block.PartId)
+		}
 	}
 	err := w.CommitPartialMeta()
 	if err != nil {
@@ -461,10 +490,24 @@ func (w *EcosWriter) AbortMultiPart() error {
 	return err
 }
 
+// GetPartBlockInfo will get BlockInfo of a part.
+func (w *EcosWriter) GetPartBlockInfo(partID int32) (*object.BlockInfo, error) {
+	if !w.partObject {
+		return nil, errno.MethodNotAllowed
+	}
+	if w.Status != READING {
+		return nil, errno.RepeatedClose
+	}
+	if partID < 0 || partID >= int32(len(w.partIDs)) {
+		return nil, errno.InvalidArgument
+	}
+	return &w.blocks[int(partID)].BlockInfo, nil
+}
+
 func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {
-	logger.Infof("META PG: %v, NODE: %v", pgID, w.objPipes[pgID-1].RaftId)
-	idString := strconv.FormatUint(w.objPipes[pgID-1].RaftId[0], 10)
-	nodeInfo, _ := w.infoAgent.Get(infos.InfoType_NODE_INFO, idString)
+	nodeId := w.pipes.GetBlockPGNodeID(pgID)[0]
+	logger.Infof("META PG: %v, NODE: %v", pgID, nodeId)
+	nodeInfo, _ := w.infoAgent.Get(infos.InfoType_NODE_INFO, nodeId)
 	return nodeInfo.BaseInfo().GetNodeInfo()
 }
 
@@ -478,7 +521,7 @@ func (w *EcosWriter) getNewBlock() *Block {
 		infoAgent:   w.infoAgent,
 		clusterInfo: w.clusterInfo,
 		blockCount:  w.blockCount,
-		blockPipes:  w.blockPipes,
+		pipes:       w.pipes,
 		uploadCount: 0,
 		delFunc: func(self *Block) {
 			// Release Chunks

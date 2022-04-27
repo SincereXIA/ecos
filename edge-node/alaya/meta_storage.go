@@ -88,6 +88,9 @@ func (s *MemoryMetaStorage) GetMeta(objID string) (meta *object.ObjectMeta, err 
 
 func (s *MemoryMetaStorage) List(prefix string) (metas []*object.ObjectMeta, err error) {
 	s.MetaMap.Range(func(key, value interface{}) bool {
+		if len(key.(string)) < len(prefix) {
+			return true
+		}
 		if key.(string)[:len(prefix)] == prefix {
 			metas = append(metas, value.(*object.ObjectMeta))
 		}

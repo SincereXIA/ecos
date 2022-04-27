@@ -323,11 +323,11 @@ func objectLevelPutHandler(c *gin.Context) {
 //  ListParts: GET /Key+?max-parts=MaxParts&part-number-marker=PartNumberMarker&uploadId=UploadId
 func objectLevelGetHandler(c *gin.Context) {
 	if _, ok := c.GetQuery("uploadId"); ok {
-		// TODO: listParts(c)
+		listParts(c)
 		return
 	}
 	if _, ok := c.GetQuery("partNumber"); ok {
-		// TODO: getPart(c)
+		getPart(c)
 		return
 	}
 	getObject(c)

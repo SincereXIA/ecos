@@ -28,8 +28,7 @@ type EcosIOFactory struct {
 	infoAgent   *agent.InfoAgent
 	config      *config.ClientConfig
 	clusterInfo *infos.ClusterInfo
-	objPipes    []*pipeline.Pipeline
-	blockPipes  []*pipeline.Pipeline
+	pipes       *pipeline.ClusterPipelines
 	bucketInfo  *infos.BucketInfo
 	chunkPool   *common.Pool
 
@@ -55,6 +54,11 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 	clusterInfo := reply.GetClusterInfo()
 	// TODO: Retry?
 	// TODO: Get pgNum, groupNum from moon
+	pipes, err := pipeline.NewClusterPipelines(clusterInfo)
+	if err != nil {
+		logger.Errorf("get cluster pipelines fail: %v", err)
+		return nil
+	}
 	ret := &EcosIOFactory{
 		volumeID:   volumeID,
 		bucketName: bucketName,
@@ -62,8 +66,7 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 		infoAgent:   agent.NewInfoAgent(context.Background(), clusterInfo),
 		clusterInfo: clusterInfo,
 		config:      config,
-		objPipes:    pipeline.GenPipelines(*clusterInfo, objPgNum, groupNum),
-		blockPipes:  pipeline.GenPipelines(*clusterInfo, blockPgNum, groupNum),
+		pipes:       pipes,
 	}
 	maxChunk := uint(ret.config.UploadBuffer / ret.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(ret.newLocalChunk, maxChunk, int(maxChunk))
@@ -105,11 +108,10 @@ func (f *EcosIOFactory) GetEcosWriter(key string) EcosWriter {
 		key:            key,
 		config:         f.config,
 		Status:         READING,
+		pipes:          f.pipes,
 		chunks:         f.chunkPool,
 		blocks:         map[int]*Block{},
-		blockPipes:     f.blockPipes,
 		objHash:        objHash,
-		objPipes:       f.objPipes,
 		finishedBlocks: make(chan *Block),
 	}
 }
@@ -179,6 +181,19 @@ func (f *EcosIOFactory) AbortAllMultipartUploadJob() error {
 	return nil
 }
 
+// ListMultipartUploadJob List all multipart upload job
+func (f *EcosIOFactory) ListMultipartUploadJob() ([]types.MultipartUpload, error) {
+	ret := make([]types.MultipartUpload, 0)
+	f.multipartJobs.Range(func(key, value interface{}) bool {
+		ret = append(ret, types.MultipartUpload{
+			Key:      &value.(*EcosWriter).key,
+			UploadId: key.(*string),
+		})
+		return true
+	})
+	return ret, nil
+}
+
 // GetEcosReader provide a EcosWriter for object associated with key
 func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 	return &EcosReader{
@@ -186,10 +201,9 @@ func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 		clusterInfo:   f.clusterInfo,
 		bucketInfo:    f.bucketInfo,
 		key:           key,
-		blockPipes:    nil,
+		pipes:         f.pipes,
 		curBlockIndex: 0,
 		meta:          nil,
-		objPipes:      f.objPipes,
 		config:        f.config,
 	}
 }
