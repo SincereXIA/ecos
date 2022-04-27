@@ -96,3 +96,7 @@ func (client *Client) GetVolumeOperator() *VolumeOperator {
 		client:   client,
 	}
 }
+
+func (client *Client) GetClusterOperator() Operator {
+	return &ClusterOperator{client: client}
+}

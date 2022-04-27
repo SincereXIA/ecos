@@ -43,7 +43,7 @@ func GenTestMockWatcher(t gomock.TestReporter, ctx context.Context,
 	watcherConfig := DefaultConfig
 	watcherConfig.SunAddr = sunAddr
 	watcherConfig.SelfNodeInfo = *nodeInfo
-	watcherConfig.NodeInfoCommitInterval = time.Millisecond * 100
+	watcherConfig.NodeInfoCommitInterval = time.Second * 2
 
 	return mockCtrl, NewWatcher(ctx, &watcherConfig, nodeRpc, testMoon, register), nodeRpc
 }

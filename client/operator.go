@@ -8,10 +8,12 @@ import (
 	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"encoding/json"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"strconv"
 )
 
@@ -20,6 +22,40 @@ type Operator interface {
 	Remove(key string) error
 	State() (string, error)
 	Info() (interface{}, error)
+}
+
+type ClusterOperator struct {
+	client *Client
+}
+
+func (c *ClusterOperator) Get(key string) (Operator, error) {
+	panic("cluster operator does not support get")
+}
+
+func (c *ClusterOperator) Remove(key string) error {
+	panic("cluster operator does not support remove")
+}
+
+func (c *ClusterOperator) Info() (interface{}, error) {
+	leaderInfo := c.client.clusterInfo.LeaderInfo
+	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
+	if err != nil {
+		return "", err
+	}
+	monitor := watcher.NewMonitorClient(conn)
+	report, err := monitor.GetClusterReport(context.Background(), nil)
+	return report, err
+}
+
+func (c *ClusterOperator) State() (string, error) {
+	leaderInfo := c.client.clusterInfo.LeaderInfo
+	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
+	if err != nil {
+		return "", err
+	}
+	monitor := watcher.NewMonitorClient(conn)
+	report, err := monitor.GetClusterReport(context.Background(), &emptypb.Empty{})
+	return protoToJson(report)
 }
 
 type VolumeOperator struct {

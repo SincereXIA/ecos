@@ -11,6 +11,7 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"runtime"
 	"strconv"
 	"sync"
@@ -103,6 +104,13 @@ func (m *NodeMonitor) GetReport(nodeID uint64) *NodeStatusReport {
 		return val.(*NodeStatusReport)
 	}
 	return nil
+}
+
+func (m *NodeMonitor) GetClusterReport(context.Context, *emptypb.Empty) (*ClusterReport, error) {
+	reports := m.GetAllReports()
+	return &ClusterReport{
+		Reports: reports,
+	}, nil
 }
 
 func (m *NodeMonitor) genSelfState() *NodeStatus {

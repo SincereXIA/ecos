@@ -59,6 +59,13 @@ func TestClient(t *testing.T) {
 		assert.Equal(t, objectSize, size, "data size not match")
 	}
 
+	t.Run("test get cluster report", func(t *testing.T) {
+		operator := client.GetClusterOperator()
+		state, err := operator.State()
+		assert.NoError(t, err, "Failed to get cluster state")
+		t.Log(state)
+	})
+
 	t.Run("test get object meta", func(t *testing.T) {
 		meta, err := client.ListObjects(ctx, bucketName)
 		assert.NoError(t, err, "Failed to list objects")
