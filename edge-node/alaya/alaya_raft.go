@@ -224,8 +224,8 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 
 func (r *Raft) Stop() {
 	logger.Infof("=========STOP: node: %v, PG: %v ===========", r.raft.Status().ID, r.pgID)
-	r.cancel()
 	r.stopChan <- r.pgID
+	r.cancel()
 	logger.Infof("=========STOP: node: %v, PG: %v done ===========", r.raft.Status().ID, r.pgID)
 }
 
@@ -242,6 +242,11 @@ func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 }
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
+	select {
+	case <-r.ctx.Done():
+		return
+	default:
+	}
 	for _, message := range messages {
 		nodeId := message.To
 		nodeInfo, err := r.getNodeInfo(nodeId)

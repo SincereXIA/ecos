@@ -276,7 +276,11 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		if message.Type == raftpb.MsgSnap {
 			message.Snapshot.Metadata.ConfState = m.raft.confState
 		}
-
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
 		// get node info
 		var nodeInfo *infos.NodeInfo
 		var ok bool
@@ -288,6 +292,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 				return
 			}
 			nodeInfo = info.BaseInfo().GetNodeInfo()
+			m.infoMap[message.To] = nodeInfo
 		}
 
 		conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
