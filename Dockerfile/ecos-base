@@ -1,4 +1,4 @@
-FROM harbor.sums.top/ecos/rocksdb-go:6.28.2-alpine  as builder
+FROM harbor.sums.top/ecos/rocksdb-go:6.28.2-alpine-strip  as builder
 
 WORKDIR /ecos
 
