@@ -13,9 +13,9 @@ import (
 )
 
 type InitiateMultipartUploadResult struct {
-	Bucket   string `xml:"Bucket"`
-	Key      string `xml:"Key"`
-	UploadId string `xml:"UploadId"`
+	Bucket   *string `xml:"Bucket"`
+	Key      *string `xml:"Key"`
+	UploadId *string `xml:"UploadId"`
 }
 
 // parsePartID parses the part ID from the given header.
@@ -45,9 +45,9 @@ func createMultipartUpload(c *gin.Context) {
 	uploadId := Client.GetIOFactory(bucketName).CreateMultipartUploadJob(key)
 	c.Header("Server", "Ecos")
 	c.XML(http.StatusOK, InitiateMultipartUploadResult{
-		Bucket:   bucketName,
-		Key:      key,
-		UploadId: uploadId,
+		Bucket:   &bucketName,
+		Key:      &key,
+		UploadId: &uploadId,
 	})
 }
 
@@ -96,9 +96,9 @@ func uploadPart(c *gin.Context) {
 }
 
 type ListPartsResult struct {
-	Bucket   string       `xml:"Bucket"`
-	Key      string       `xml:"Key"`
-	UploadId string       `xml:"UploadId"`
+	Bucket   *string      `xml:"Bucket"`
+	Key      *string      `xml:"Key"`
+	UploadId *string      `xml:"UploadId"`
 	Part     []types.Part `xml:"Part"`
 }
 
@@ -127,9 +127,9 @@ func listParts(c *gin.Context) {
 	parts := writer.ListParts()
 	c.Header("Server", "Ecos")
 	c.XML(http.StatusOK, ListPartsResult{
-		Bucket:   bucketName,
-		Key:      key,
-		UploadId: uploadId,
+		Bucket:   &bucketName,
+		Key:      &key,
+		UploadId: &uploadId,
 		Part:     parts,
 	})
 }
@@ -182,8 +182,8 @@ func getPart(c *gin.Context) {
 }
 
 type CompletedPart struct {
-	PartNumber int    `xml:"PartNumber"`
-	ETag       string `xml:"ETag"`
+	PartNumber int32   `xml:"PartNumber"`
+	ETag       *string `xml:"ETag"`
 }
 
 type CompleteMultipartUpload struct {
@@ -269,7 +269,7 @@ type ListMultipartUploadsResult struct {
 	NextUploadIdMarker *string                 `xml:"NextUploadIdMarker"`
 	Delimiter          *string                 `xml:"Delimiter"`
 	Prefix             *string                 `xml:"Prefix"`
-	MaxUploads         *int                    `xml:"MaxUploads"`
+	MaxUploads         int                     `xml:"MaxUploads"`
 	IsTruncated        *bool                   `xml:"IsTruncated"`
 	Uploads            []types.MultipartUpload `xml:"Upload"`
 }
@@ -314,7 +314,7 @@ func listMultipartUploads(c *gin.Context) {
 		Uploads:     uploads,
 	}
 	if maxUploads > 0 {
-		ret.MaxUploads = &maxUploads
+		ret.MaxUploads = maxUploads
 	}
 	if delimiter != "" {
 		ret.Delimiter = &delimiter

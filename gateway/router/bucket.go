@@ -11,13 +11,11 @@ import (
 	"time"
 )
 
-// TODO: Create Bucket
-//   DeleteBucket
+// TODO: DeleteBucket
 //	 ShowBucketStat
-//   ListMultipartUploads
 
 type CreateBucketConfiguration struct {
-	LocationConstraint string `xml:"locationConstraint"`
+	LocationConstraint *string `xml:"locationConstraint"`
 }
 
 // createBucket creates a new bucket
@@ -51,21 +49,21 @@ func createBucket(c *gin.Context) {
 }
 
 type Content struct {
-	Key          string `xml:"Key"`
-	LastModified string `xml:"LastModified"`
-	ETag         string `xml:"ETag"`
-	Size         uint64 `xml:"Size"`
-	// StorageClass string `xml:"StorageClass"`
+	Key          *string `xml:"Key"`
+	LastModified *string `xml:"LastModified"`
+	ETag         *string `xml:"ETag"`
+	Size         uint64  `xml:"Size"`
+	// StorageClass *string `xml:"StorageClass"`
 	// Owner struct {
-	//	 ID          string `xml:"ID"`
-	//	 DisplayName string `xml:"DisplayName"`
+	//	 ID          *string `xml:"ID"`
+	//	 DisplayName *string `xml:"DisplayName"`
 	// } `xml:"Owner"`
 }
 
 type ListBucketResult struct {
-	Name        string    `xml:"Name"`
-	Prefix      string    `xml:"Prefix"`
-	Marker      string    `xml:"Marker"`
+	Name        *string   `xml:"Name"`
+	Prefix      *string   `xml:"Prefix"`
+	Marker      *string   `xml:"Marker"`
 	MaxKeys     int       `xml:"MaxKeys"`
 	IsTruncated bool      `xml:"IsTruncated"`
 	Contents    []Content `xml:"Contents"`
@@ -88,7 +86,7 @@ func listObjects(c *gin.Context) {
 		return
 	}
 	result := ListBucketResult{
-		Name: bucketName,
+		Name: &bucketName,
 	}
 	for _, meta := range listObjectsResult {
 		_, _, key, _, err := object.SplitID(meta.ObjId)
@@ -98,10 +96,11 @@ func listObjects(c *gin.Context) {
 			})
 			return
 		}
+		timestamp := meta.UpdateTime.Format(time.RFC3339Nano)
 		result.Contents = append(result.Contents, Content{
-			Key:          key,
-			LastModified: meta.UpdateTime.Format(time.RFC3339Nano),
-			ETag:         meta.ObjHash,
+			Key:          &key,
+			LastModified: &timestamp,
+			ETag:         &meta.ObjHash,
 			Size:         meta.ObjSize,
 		})
 	}
@@ -125,7 +124,7 @@ func listObjectsV2(c *gin.Context) {
 		return
 	}
 	result := ListBucketResult{
-		Name: bucketName,
+		Name: &bucketName,
 	}
 	for _, meta := range listObjectsResult {
 		_, _, key, _, err := object.SplitID(meta.ObjId)
@@ -135,10 +134,11 @@ func listObjectsV2(c *gin.Context) {
 			})
 			return
 		}
+		timestamp := meta.UpdateTime.Format(time.RFC3339Nano)
 		result.Contents = append(result.Contents, Content{
-			Key:          key,
-			LastModified: meta.UpdateTime.Format(time.RFC3339Nano),
-			ETag:         meta.ObjHash,
+			Key:          &key,
+			LastModified: &timestamp,
+			ETag:         &meta.ObjHash,
 			Size:         meta.ObjSize,
 		})
 	}
