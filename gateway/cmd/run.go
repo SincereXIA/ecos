@@ -10,7 +10,7 @@ import (
 var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "run Ecos S3 Gateway Server",
-	Long:  `Run Ecos S3 Gatewat with default configuration.`,
+	Long:  `Run Ecos S3 Gateway with default configuration.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		confPath := cmd.Flag("config").Value.String()
 		conf := router.DefaultConfig

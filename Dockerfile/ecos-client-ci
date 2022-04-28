@@ -3,3 +3,5 @@
 FROM harbor.sums.top/ecos/ecos-base:v0.1
 WORKDIR /ecos
 COPY build/bin/ecos-client .
+
+RUN apk add proxychains-ng
