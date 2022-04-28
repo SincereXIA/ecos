@@ -21,6 +21,8 @@ RUN bash -c "cd ~/rocksdb/rocksdb-6.28.2 \
     && cd ~ && rm -rf rocksdb"
 
 RUN ls /usr/local/lib/
+RUN strip /usr/local/lib/librocksdb.so.6.28.2
+RUN strip /usr/local/lib/librocksdb.a
 
 FROM golang:1.17.8-alpine3.15
 
