@@ -34,6 +34,9 @@ func Execute() {
 	rootCmd.AddCommand(cpCmd)
 	rootCmd.AddCommand(lsCmd)
 
+	rootCmd.AddCommand(clusterCmd)
+	clusterCmd.AddCommand(clusterDescribeCmd)
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)

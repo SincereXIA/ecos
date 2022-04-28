@@ -11,6 +11,7 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"github.com/rcrowley/go-metrics"
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"sync"
@@ -355,6 +356,7 @@ func (a *Alaya) Run() {
 		case pgID := <-a.raftNodeStopChan:
 			a.PGMessageChans.Delete(pgID)
 			a.PGRaftNode.Delete(pgID)
+			metrics.GetOrRegisterCounter(watcher.MetricsAlayaPipelineCount, nil).Dec(1)
 		case <-a.ctx.Done():
 			a.cleanup()
 			return
@@ -418,5 +420,6 @@ func (a *Alaya) makeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pip
 		NewAlayaRaft(a.selfInfo.RaftId, p, oldP, a.watcher, storage,
 			c.(chan raftpb.Message), a.raftNodeStopChan))
 	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.selfInfo.RaftId, pgID)
+	metrics.GetOrRegisterCounter(watcher.MetricsAlayaPipelineCount, nil).Inc(1)
 	return a.getRaftNode(pgID)
 }

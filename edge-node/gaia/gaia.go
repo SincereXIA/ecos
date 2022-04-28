@@ -9,6 +9,7 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"github.com/rcrowley/go-metrics"
 	"io"
 	"os"
 	"path"
@@ -139,6 +140,7 @@ func (g *Gaia) DeleteBlock(_ context.Context, req *DeleteBlockRequest) (*common.
 		return nil, err
 	}
 	logger.Infof("delete block: %v success", req.BlockId)
+	metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Dec(1)
 	return &common.Result{Status: common.Result_OK}, nil
 }
 
@@ -172,6 +174,7 @@ func (g *Gaia) processControlMessage(message *UploadBlockRequest_Message, transp
 			})
 		}
 		logger.Infof("Gaia %v save block: %v success", g.watcher.GetSelfInfo().RaftId, msg.Block.BlockId)
+		metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Inc(1)
 		return stream.SendAndClose(&common.Result{
 			Status: common.Result_OK,
 		})

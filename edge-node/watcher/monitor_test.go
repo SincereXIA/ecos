@@ -49,11 +49,3 @@ func TestMonitor(t *testing.T) {
 		_ = os.RemoveAll(basePath)
 	})
 }
-
-func genTestMonitors(ctx context.Context, watchers []*Watcher, rpcServers []*messenger.RpcServer) []Monitor {
-	monitors := make([]Monitor, len(watchers))
-	for i, w := range watchers {
-		monitors[i] = NewMonitor(ctx, w, rpcServers[i])
-	}
-	return monitors
-}

@@ -3,9 +3,11 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/object"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"github.com/golang/mock/gomock"
+	"github.com/rcrowley/go-metrics"
 )
 
 type MockState struct {
@@ -29,6 +31,7 @@ func (state *MockState) DeleteMeta(_ context.Context, req *DeleteMetaRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Dec(1)
 	return &common.Result{
 		Status: common.Result_OK,
 	}, nil
@@ -39,6 +42,7 @@ func (state *MockState) RecordObjectMeta(_ context.Context, meta *object.ObjectM
 	if err != nil {
 		return nil, err
 	}
+	metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Inc(1)
 	return &common.Result{
 		Status: common.Result_OK,
 	}, nil

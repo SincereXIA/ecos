@@ -10,6 +10,7 @@ import (
 	"ecos/utils/logger"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/gogo/protobuf/proto"
+	"github.com/rcrowley/go-metrics"
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
@@ -279,9 +280,11 @@ func (r *Raft) process(entry raftpb.Entry) {
 			if err != nil {
 				logger.Warningf("alaya record object meta err: %v", err)
 			}
+			metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Inc(1)
 		case MetaOperate_DELETE:
 			logger.Infof("delete meta: %v", metaOperate.Meta.ObjId)
 			err = r.metaStorage.Delete(metaOperate.Meta.ObjId)
+			metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Dec(1)
 		default:
 			logger.Errorf("unsupported alaya meta operate")
 		}

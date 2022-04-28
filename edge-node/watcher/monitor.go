@@ -7,10 +7,13 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/logger"
 	"errors"
+	"github.com/rcrowley/go-metrics"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"runtime"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -94,6 +97,9 @@ func (m *NodeMonitor) GetAllReports() []*NodeStatusReport {
 		nodeStatusList = append(nodeStatusList, value.(*NodeStatusReport))
 		return true
 	})
+	sort.Slice(nodeStatusList, func(i, j int) bool {
+		return nodeStatusList[i].NodeId < nodeStatusList[j].NodeId
+	})
 	return nodeStatusList
 }
 
@@ -102,6 +108,13 @@ func (m *NodeMonitor) GetReport(nodeID uint64) *NodeStatusReport {
 		return val.(*NodeStatusReport)
 	}
 	return nil
+}
+
+func (m *NodeMonitor) GetClusterReport(context.Context, *emptypb.Empty) (*ClusterReport, error) {
+	reports := m.GetAllReports()
+	return &ClusterReport{
+		Reports: reports,
+	}, nil
 }
 
 func (m *NodeMonitor) genSelfState() *NodeStatus {
@@ -116,6 +129,12 @@ func (m *NodeMonitor) genSelfState() *NodeStatus {
 	cpuState, _ := cpu.PercentWithContext(m.ctx, 0, false)
 	status.CpuPercent = cpuState[0]
 	status.GoroutineCount = uint64(runtime.NumGoroutine())
+
+	// Get ecos metrics
+	status.MetaPipelineCount = uint64(metrics.GetOrRegisterCounter(MetricsAlayaPipelineCount, nil).Count())
+	status.MetaCount = uint64(metrics.GetOrRegisterCounter(MetricsAlayaMetaCount, nil).Count())
+	status.BlockCount = uint64(metrics.GetOrRegisterCounter(MetricsGaiaBlockCount, nil).Count())
+
 	return &status
 }
 

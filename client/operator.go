@@ -8,10 +8,13 @@ import (
 	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"encoding/json"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"sort"
 	"strconv"
 )
 
@@ -20,6 +23,71 @@ type Operator interface {
 	Remove(key string) error
 	State() (string, error)
 	Info() (interface{}, error)
+}
+
+type ClusterOperator struct {
+	client *Client
+}
+
+func (c *ClusterOperator) Get(key string) (Operator, error) {
+	panic("cluster operator does not support get")
+}
+
+func (c *ClusterOperator) Remove(key string) error {
+	panic("cluster operator does not support remove")
+}
+
+func (c *ClusterOperator) Info() (interface{}, error) {
+	leaderInfo := c.client.clusterInfo.LeaderInfo
+	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
+	if err != nil {
+		return "", err
+	}
+	monitor := watcher.NewMonitorClient(conn)
+	report, err := monitor.GetClusterReport(context.Background(), nil)
+	return report, err
+}
+
+func (c *ClusterOperator) State() (string, error) {
+	clusterInfo := c.client.clusterInfo
+	leaderInfo := c.client.clusterInfo.LeaderInfo
+	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
+	if err != nil {
+		return "", err
+	}
+	monitor := watcher.NewMonitorClient(conn)
+	report, err := monitor.GetClusterReport(context.Background(), &emptypb.Empty{})
+	if err != nil {
+		return "", err
+	}
+	sort.Slice(report.Reports, func(i, j int) bool {
+		return report.Reports[i].NodeId < report.Reports[j].NodeId
+	})
+	state, _ := protoToJson(report)
+
+	clusterPipelines, err := pipeline.NewClusterPipelines(c.client.clusterInfo)
+	if err != nil {
+		return "", err
+	}
+	pipelines, _ := interfaceToJson(clusterPipelines.MetaPipelines)
+	s := struct {
+		Term        uint64
+		LeaderID    uint64
+		MetaPGNum   int32
+		MetaPGSize  int32
+		BlockPGNum  int32
+		BlockPGSize int32
+	}{
+		Term:        clusterInfo.Term,
+		LeaderID:    clusterInfo.LeaderInfo.RaftId,
+		MetaPGNum:   clusterInfo.MetaPgNum,
+		MetaPGSize:  clusterInfo.MetaPgSize,
+		BlockPGNum:  clusterInfo.BlockPgNum,
+		BlockPGSize: clusterInfo.BlockPgSize,
+	}
+	base, _ := interfaceToJson(s)
+
+	return base + "\n" + pipelines + "\n" + state, nil
 }
 
 type VolumeOperator struct {
@@ -155,6 +223,20 @@ func protoToJson(pb proto.Message) (string, error) {
 	// convert proto to json
 	marshaller := jsonpb.Marshaler{}
 	jsonData, err := marshaller.MarshalToString(pb)
+	if err != nil {
+		return "marshal data error", err
+	}
+	var pretty bytes.Buffer
+	err = json.Indent(&pretty, []byte(jsonData), "", "  ")
+	if err != nil {
+		return "indent data error", err
+	}
+	return pretty.String(), nil
+}
+
+func interfaceToJson(data interface{}) (string, error) {
+	// convert interface to json
+	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return "marshal data error", err
 	}

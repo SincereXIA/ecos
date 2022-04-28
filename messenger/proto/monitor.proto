@@ -4,12 +4,16 @@ package messenger;
 import "common.proto";
 import "infos.proto";
 import "timestamp.proto";
+import "google/protobuf/empty.proto";
 
-option go_package = "ecos/edge-node/monitor";
+option go_package = "ecos/edge-node/watcher";
 
 service Monitor {
   rpc Report(NodeStatusReport) returns (Result) {}
   rpc Get(StateRequest) returns (NodeStatusReport) {}
+  // GetClusterReport returns the entire cluster status report.
+  // This only works if the node is the leader of the cluster.
+  rpc GetClusterReport(google.protobuf.Empty) returns (ClusterReport) {}
 }
 
 message NodeStatusReport {
@@ -31,6 +35,10 @@ message NodeStatus {
   uint64 meta_count = 8;
   uint64 goroutine_count = 9;
   uint64 meta_pipeline_count = 10;
+}
+
+message ClusterReport {
+  repeated NodeStatusReport reports = 1;
 }
 
 message StateRequest {}
