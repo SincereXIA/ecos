@@ -177,7 +177,7 @@ func TestGateway(t *testing.T) {
 		uploadId := testCreateMultipartUpload(t, client, bucketName, "testMultipartUpload.obj", false)
 		var partFile []io.ReadSeeker
 		for i := 0; i < 5; i++ {
-			reader := bytes.NewReader(genTestData(10))
+			reader := bytes.NewReader(genTestData(10 << 20))
 			partFile = append(partFile, reader)
 		}
 		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 1, partFile[0], false)

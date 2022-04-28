@@ -291,6 +291,12 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		// get node info
 		var nodeInfo *infos.NodeInfo
 		var ok bool
+		select {
+		case <-m.ctx.Done():
+			logger.Warningf("moon %d: context is done", m.id)
+			return
+		default:
+		}
 		if nodeInfo, ok = m.infoMap[message.To]; !ok { // infoMap always have latest
 			storage := m.infoStorageRegister.GetStorage(infos.InfoType_NODE_INFO)
 			info, err := storage.Get(strconv.FormatUint(message.To, 10))
