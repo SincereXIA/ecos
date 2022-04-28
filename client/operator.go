@@ -57,6 +57,9 @@ func (c *ClusterOperator) State() (string, error) {
 	}
 	monitor := watcher.NewMonitorClient(conn)
 	report, err := monitor.GetClusterReport(context.Background(), &emptypb.Empty{})
+	if err != nil {
+		return "", err
+	}
 	sort.Slice(report.Reports, func(i, j int) bool {
 		return report.Reports[i].NodeId < report.Reports[j].NodeId
 	})

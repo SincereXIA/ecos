@@ -347,7 +347,6 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 	m.raft = raftNode
 	m.nodeReady = <-readyC
 	m.snapshotter = <-snapshotterReady
-	return
 }
 
 func (m *Moon) Run() {
@@ -406,7 +405,7 @@ func (m *Moon) GetLeaderID() uint64 {
 		m.mutex.RLock()
 		nodeReady := m.nodeReady
 		m.mutex.RUnlock()
-		if nodeReady == true {
+		if nodeReady {
 			break
 		}
 	}
