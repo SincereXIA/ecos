@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -211,28 +212,115 @@ func deleteObject(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+type CopyObjectResult struct {
+	ETag *string `xml:"ETag"`
+}
+
+func parseSrcKey(src string) (bucket, key string, err error) {
+	if strings.HasPrefix(src, "/") {
+		src = src[1:]
+	}
+	if strings.HasSuffix(src, "/") {
+		src = src[:len(src)-1]
+	}
+	if strings.Contains(src, "/") {
+		result := strings.SplitN(src, "/", 2)
+		bucket = result[0]
+		key = result[1]
+	} else {
+		bucket = src
+	}
+	return
+}
+
+// copyObject copies an object
+func copyObject(c *gin.Context) {
+	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		return
+	}
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		return
+	}
+	src := c.GetHeader("x-amz-copy-source")
+	if src == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingBucket.Error()})
+		return
+	}
+	bucket, srcKey, err := parseSrcKey(src)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidArgument.Error()})
+		return
+	}
+	if bucket == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingBucket.Error()})
+		return
+	}
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		return
+	}
+	// Get Bucket Operator
+	op, err := Client.GetVolumeOperator().Get(bucket)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	// Get Object Operator
+	op, err = op.Get(srcKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	info, err := op.Info()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	meta := info.(*object.ObjectMeta)
+	writer := Client.GetIOFactory(bucketName).GetEcosWriter(key)
+	etag, err := writer.Copy(meta)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.Header("Server", "Ecos")
+	c.XML(http.StatusOK, CopyObjectResult{ETag: etag})
+}
+
 type ObjectIdentifier struct {
-	Key string `xml:"Key"`
-	// VersionId string `xml:"VersionId"`
+	Key *string `xml:"Key"`
+	// VersionId *string `xml:"VersionId"`
 }
 
 type DeletedObject struct {
-	// DeleteMarker string `xml:"DeleterMarker"`
-	// DeleteMarkerVersion string `xml:"DeleterMarkerVersion"`
-	Key string `xml:"Key"`
-	// VersionId string `xml:"VersionId"`
+	// DeleteMarker *string `xml:"DeleterMarker"`
+	// DeleteMarkerVersion *string `xml:"DeleterMarkerVersion"`
+	Key *string `xml:"Key"`
+	// VersionId *string `xml:"VersionId"`
 }
 
 type DeleteError struct {
-	Code    string `xml:"Code"`
-	Key     string `xml:"Key"`
-	Message string `xml:"Message"`
-	// VersionId string `xml:"VersionId"`
+	Code    *string `xml:"Code"`
+	Key     *string `xml:"Key"`
+	Message *string `xml:"Message"`
+	// VersionId *string `xml:"VersionId"`
 }
 
 type Delete struct {
 	Object []ObjectIdentifier `xml:"Object"`
-	Quiet  bool               `xml:"Quiet"`
+	Quiet  *bool              `xml:"Quiet"`
 }
 
 type DeleteResult struct {
@@ -265,14 +353,16 @@ func deleteObjects(c *gin.Context) {
 		return
 	}
 	var deleteResult DeleteResult
+	internalErr := "InternalError"
 	for _, obj := range deleteRequest.Object {
 		// Delete Objects from Bucket Operator
-		err = op.Remove(obj.Key)
+		err = op.Remove(*obj.Key)
 		if err != nil {
+			errMsg := err.Error()
 			deleteResult.Error = append(deleteResult.Error, DeleteError{
-				Code:    "InternalError",
+				Code:    &internalErr,
 				Key:     obj.Key,
-				Message: err.Error(),
+				Message: &errMsg,
 			})
 		} else {
 			deleteResult.Deleted = append(deleteResult.Deleted, DeletedObject(obj))
@@ -310,7 +400,7 @@ func objectLevelPutHandler(c *gin.Context) {
 		return
 	}
 	if c.GetHeader("x-amz-copy-source") != "" {
-		// TODO: copyObject(c)
+		copyObject(c)
 		return
 	}
 	putObject(c)

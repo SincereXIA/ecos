@@ -192,19 +192,7 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 // Then these infos will be sent to AlayaServer
 func (w *EcosWriter) commitMeta() error {
 	meta := w.genMeta(w.key)
-	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	metaClient, err := NewMetaClient(metaServerNode, w.config)
-	if err != nil {
-		logger.Errorf("Upload Object Failed: %v", err)
-		return err
-	}
-	result, err := metaClient.SubmitMeta(meta)
-	if err != nil {
-		logger.Errorf("Upload Object Failed: %v with Error %v", result, err)
-		return err
-	}
-	logger.Infof("Upload ObjectMeta for %v: success", w.key)
-	return nil
+	return w.uploadMeta(meta)
 }
 
 // Close will change EcosWriter.Status: READING -> UPLOADING -> FINISHED
@@ -249,6 +237,18 @@ func (w *EcosWriter) Abort() error {
 		// TODO: Delete block from block server
 	}
 	return nil
+}
+
+// Copy will create from src meta to dst
+func (w *EcosWriter) Copy(meta *object.ObjectMeta) (*string, error) {
+	pgID := object.GenObjPgID(w.bucketInfo, w.key, 10)
+	meta.ObjId = object.GenObjectId(w.bucketInfo, w.key)
+	meta.PgId = pgID
+	err := w.uploadMeta(meta)
+	if err != nil {
+		return nil, err
+	}
+	return &meta.ObjId, nil
 }
 
 /////////////////////////////////////////////////////////////////
@@ -505,7 +505,7 @@ func (w *EcosWriter) GetPartBlockInfo(partID int32) (*object.BlockInfo, error) {
 }
 
 func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {
-	nodeId := w.pipes.GetBlockPGNodeID(pgID)[0]
+	nodeId := w.pipes.GetMetaPGNodeID(pgID)[0]
 	logger.Infof("META PG: %v, NODE: %v", pgID, nodeId)
 	nodeInfo, _ := w.infoAgent.Get(infos.InfoType_NODE_INFO, nodeId)
 	return nodeInfo.BaseInfo().GetNodeInfo()
@@ -563,4 +563,21 @@ func (w *EcosWriter) uploadBlock(i int, block *Block) {
 	if err != nil {
 		logger.Warningf("Err while Closing Block %v: %v", i, err)
 	}
+}
+
+// uploadMeta will upload meta info of an object.
+func (w *EcosWriter) uploadMeta(meta *object.ObjectMeta) error {
+	metaServerNode := w.getObjNodeByPg(meta.PgId)
+	metaClient, err := NewMetaClient(metaServerNode, w.config)
+	if err != nil {
+		logger.Errorf("Upload Object Failed: %v", err)
+		return err
+	}
+	result, err := metaClient.SubmitMeta(meta)
+	if err != nil {
+		logger.Errorf("Upload Object Failed: %v with Error %v", result, err)
+		return err
+	}
+	logger.Infof("Upload ObjectMeta for %v: success", w.key)
+	return nil
 }
