@@ -63,6 +63,10 @@ func testAlaya(t *testing.T, mock bool) {
 
 	t.Cleanup(func() {
 		logger.Infof("cleanup")
+		for _, a := range alayas { // stop alaya first to avoid panic
+			a.Stop()
+		}
+		time.Sleep(time.Second)
 		cancel()
 		for i := 0; i < nodeNum; i++ { // for each node
 			server := rpcServers[i]

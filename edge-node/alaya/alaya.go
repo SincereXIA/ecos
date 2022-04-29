@@ -245,6 +245,8 @@ func (a *Alaya) cleanup() {
 		return true
 	})
 	a.MetaStorageRegister.Close()
+	a.state = STOPPED
+	logger.Infof("alaya %v start cleanup done", a.selfInfo.RaftId)
 }
 
 func (a *Alaya) applyNewClusterInfo(info infos.Information) {
