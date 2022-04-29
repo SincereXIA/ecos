@@ -269,8 +269,12 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 }
 
 func (m *Moon) sendByRpc(messages []raftpb.Message) {
-
 	for _, message := range messages {
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
 		logger.Tracef("%d send to %v, type %v", m.id, message, message.Type)
 
 		if message.Type == raftpb.MsgSnap {

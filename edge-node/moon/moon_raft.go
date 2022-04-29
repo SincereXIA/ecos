@@ -287,9 +287,9 @@ func (rc *raftNode) startRaft(readyC chan bool) {
 
 // stop closes http, closes all channels, and stops raft.
 func (rc *raftNode) stop() {
+	rc.node.Stop()
 	close(rc.commitC)
 	close(rc.errorC)
-	rc.node.Stop()
 }
 
 func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
