@@ -186,6 +186,9 @@ func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoRepl
 }
 
 func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Information, error) {
+	if m.isStopped() {
+		return nil, errors.New("moon is stopped")
+	}
 	info, err := m.infoStorageRegister.Get(infoType, id)
 	if err != nil {
 		return nil, err
@@ -269,8 +272,12 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 }
 
 func (m *Moon) sendByRpc(messages []raftpb.Message) {
-
 	for _, message := range messages {
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
 		logger.Tracef("%d send to %v, type %v", m.id, message, message.Type)
 
 		if message.Type == raftpb.MsgSnap {
@@ -378,8 +385,17 @@ func (m *Moon) Stop() {
 
 func (m *Moon) cleanup() {
 	logger.Warningf("moon %d stopped, start clean up", m.SelfInfo.RaftId)
-	m.raft.stopc <- struct{}{}
 	m.infoStorageRegister.Close()
+	logger.Warningf("moon %d clean up done", m.SelfInfo.RaftId)
+}
+
+func (m *Moon) isStopped() bool {
+	select {
+	case <-m.ctx.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *Moon) reportSelfInfo() {

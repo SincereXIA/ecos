@@ -243,6 +243,11 @@ func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 	for _, message := range messages {
+		select {
+		case <-r.ctx.Done():
+			return
+		default:
+		}
 		nodeId := message.To
 		nodeInfo, err := r.getNodeInfo(nodeId)
 		if err != nil {

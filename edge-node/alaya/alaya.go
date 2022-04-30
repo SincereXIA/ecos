@@ -234,10 +234,13 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 }
 
 func (a *Alaya) Stop() {
+	logger.Infof("Alaya %v stop", a.selfInfo.RaftId)
 	a.cancel()
 }
 
 func (a *Alaya) cleanup() {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 	logger.Warningf("alaya %v stopped, start cleanup", a.selfInfo.RaftId)
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		go value.(*Raft).Stop()
@@ -245,6 +248,8 @@ func (a *Alaya) cleanup() {
 		return true
 	})
 	a.MetaStorageRegister.Close()
+	a.state = STOPPED
+	logger.Infof("alaya %v start cleanup done", a.selfInfo.RaftId)
 }
 
 func (a *Alaya) applyNewClusterInfo(info infos.Information) {

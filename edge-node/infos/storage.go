@@ -2,6 +2,8 @@ package infos
 
 import (
 	"ecos/utils/errno"
+	"ecos/utils/logger"
+	"sync"
 )
 
 type StorageUpdateFunc func(info Information)
@@ -29,28 +31,39 @@ type StorageFactory interface {
 // StorageRegister can auto operate information to corresponding storage.
 // It can identify and call storage by infoType.
 type StorageRegister struct {
+	rwMutex        sync.RWMutex
 	storageMap     map[InfoType]Storage
 	storageFactory StorageFactory
 }
 
 func (register *StorageRegister) Close() {
+	register.rwMutex.Lock()
+	defer register.rwMutex.Unlock()
+	register.storageMap = make(map[InfoType]Storage)
 	register.storageFactory.Close()
+	logger.Warningf("info storage register closed")
 }
 
 // Register while add an info storage into StorageRegister,
 // So StorageRegister can process request of this type of info.
 func (register *StorageRegister) Register(infoType InfoType, storage Storage) {
+	register.rwMutex.Lock()
+	defer register.rwMutex.Unlock()
 	register.storageMap[infoType] = storage
 }
 
 // GetStorage return the registered storage of the infoType.
 func (register *StorageRegister) GetStorage(infoType InfoType) Storage {
+	register.rwMutex.RLock()
+	defer register.rwMutex.RUnlock()
 	return register.storageMap[infoType]
 }
 
 // Update will store the Information into corresponding Storage,
 // the Storage must Register before.
 func (register *StorageRegister) Update(info Information) error {
+	register.rwMutex.RLock()
+	defer register.rwMutex.RUnlock()
 	if storage, ok := register.storageMap[info.GetInfoType()]; ok {
 		return storage.Update(info)
 	}
@@ -60,6 +73,8 @@ func (register *StorageRegister) Update(info Information) error {
 // Delete will delete the Information from corresponding Storage
 // by id, the Storage must Register before.
 func (register *StorageRegister) Delete(infoType InfoType, id string) error {
+	register.rwMutex.RLock()
+	defer register.rwMutex.RUnlock()
 	if storage, ok := register.storageMap[infoType]; ok {
 		return storage.Delete(id)
 	}
@@ -69,6 +84,8 @@ func (register *StorageRegister) Delete(infoType InfoType, id string) error {
 // Get will return the Information requested from corresponding Storage
 // by id, the Storage must Register before.
 func (register *StorageRegister) Get(infoType InfoType, id string) (Information, error) {
+	register.rwMutex.RLock()
+	defer register.rwMutex.RUnlock()
 	if storage, ok := register.storageMap[infoType]; ok {
 		return storage.Get(id)
 	}
@@ -77,12 +94,16 @@ func (register *StorageRegister) Get(infoType InfoType, id string) (Information,
 
 // GetSnapshot will return a snapshot of all Information from corresponding Storage
 func (register *StorageRegister) GetSnapshot() ([]byte, error) {
+	register.rwMutex.RLock()
+	defer register.rwMutex.RUnlock()
 	// TODO: This way to get need to optimize
 	return register.storageFactory.GetSnapshot()
 }
 
 // RecoverFromSnapshot will recover all Information from corresponding Storage
 func (register *StorageRegister) RecoverFromSnapshot(snapshot []byte) error {
+	register.rwMutex.Lock()
+	defer register.rwMutex.Unlock()
 	return register.storageFactory.RecoverFromSnapshot(snapshot)
 }
 

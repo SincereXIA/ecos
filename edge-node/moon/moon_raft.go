@@ -53,8 +53,6 @@ type raftNode struct {
 
 	snapCount uint64
 
-	stopc chan struct{} // signals proposal channel closed
-
 	logger *zap.Logger
 }
 
@@ -82,7 +80,6 @@ func newRaftNode(id int, ctx context.Context, peers []raft.Peer, join bool, base
 		snapdir:     path.Join(basePath, "snap"),
 		getSnapshot: getSnapshot,
 		snapCount:   defaultSnapshotCount,
-		stopc:       make(chan struct{}),
 
 		logger: zap.NewExample(),
 
@@ -287,9 +284,13 @@ func (rc *raftNode) startRaft(readyC chan bool) {
 
 // stop closes http, closes all channels, and stops raft.
 func (rc *raftNode) stop() {
+	rc.cancel()
+}
+
+func (rc *raftNode) cleanup() {
+	rc.node.Stop()
 	close(rc.commitC)
 	close(rc.errorC)
-	rc.node.Stop()
 }
 
 func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
@@ -390,10 +391,10 @@ func (rc *raftNode) serveChannels() {
 						logger.Errorf("propose conf change failed: %v", err)
 					}
 				}
+			case <-rc.ctx.Done():
+				return
 			}
 		}
-		// client closed channel; shutdown raft if not already
-		close(rc.stopc)
 	}()
 
 	// event loop on raft state machine updates
@@ -439,9 +440,8 @@ func (rc *raftNode) serveChannels() {
 				logger.Errorf("failed to process raft message %v", err)
 				return
 			}
-		case <-rc.stopc:
-			rc.stop()
-			rc.cancel()
+		case <-rc.ctx.Done():
+			rc.cleanup()
 			return
 		}
 	}
