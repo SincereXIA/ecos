@@ -34,6 +34,7 @@ type StorageRegister struct {
 }
 
 func (register *StorageRegister) Close() {
+	register.storageMap = make(map[InfoType]Storage)
 	register.storageFactory.Close()
 }
 

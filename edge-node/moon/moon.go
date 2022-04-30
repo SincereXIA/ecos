@@ -186,6 +186,9 @@ func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoRepl
 }
 
 func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Information, error) {
+	if m.isStopped() {
+		return nil, errors.New("moon is stopped")
+	}
 	info, err := m.infoStorageRegister.Get(infoType, id)
 	if err != nil {
 		return nil, err
@@ -384,6 +387,15 @@ func (m *Moon) cleanup() {
 	logger.Warningf("moon %d stopped, start clean up", m.SelfInfo.RaftId)
 	m.raft.stopc <- struct{}{}
 	m.infoStorageRegister.Close()
+}
+
+func (m *Moon) isStopped() bool {
+	select {
+	case <-m.ctx.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *Moon) reportSelfInfo() {

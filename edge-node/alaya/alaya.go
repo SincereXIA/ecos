@@ -234,6 +234,7 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 }
 
 func (a *Alaya) Stop() {
+	logger.Infof("Alaya %v stop", a.selfInfo.RaftId)
 	a.cancel()
 }
 
