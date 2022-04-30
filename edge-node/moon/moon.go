@@ -117,8 +117,30 @@ func (m *Moon) loadSnapshot() (*raftpb.Snapshot, error) {
 	return snapshot, nil
 }
 
+func orDone(done <-chan struct{}, c <-chan *commit) <-chan *commit {
+	valStream := make(chan *commit)
+	go func() {
+		defer close(valStream)
+		for {
+			select {
+			case <-done:
+				return
+			case v, ok := <-c:
+				if ok == false {
+					return
+				}
+				select {
+				case valStream <- v:
+				case <-done:
+				}
+			}
+		}
+	}()
+	return valStream
+}
+
 func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
-	for commit := range commitC {
+	for commit := range orDone(m.ctx.Done(), commitC) {
 		if commit == nil {
 			snapshot, err := m.loadSnapshot()
 			if err != nil {
