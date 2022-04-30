@@ -74,7 +74,7 @@ func testAlaya(t *testing.T, mock bool) {
 		}
 		_ = os.RemoveAll(basePath)
 		logger.Infof("cleanup done")
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
 	})
 
 	t.Log("Alayas init done, start run")

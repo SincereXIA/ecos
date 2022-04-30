@@ -64,6 +64,11 @@ func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*comm
 	} else {
 		logger.Debugf("create timer for node %v", report.NodeId)
 		m.reportTimers.Store(report.NodeId, time.AfterFunc(time.Second*3, func() {
+			select {
+			case <-m.ctx.Done():
+				return
+			default:
+			}
 			logger.Warningf("get node status timeout, nodeId: %v", report.NodeId)
 			v, _ := m.nodeStatusMap.Load(report.NodeId)
 			r := v.(*NodeStatusReport)

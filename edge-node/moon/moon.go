@@ -385,8 +385,8 @@ func (m *Moon) Stop() {
 
 func (m *Moon) cleanup() {
 	logger.Warningf("moon %d stopped, start clean up", m.SelfInfo.RaftId)
-	m.raft.stopc <- struct{}{}
 	m.infoStorageRegister.Close()
+	logger.Warningf("moon %d clean up done", m.SelfInfo.RaftId)
 }
 
 func (m *Moon) isStopped() bool {

@@ -147,6 +147,10 @@ func NewRemoteWriter(ctx context.Context, blockInfo *object.BlockInfo, nodeInfo 
 
 func (w *RemoteWriter) init() error {
 	stream, err := w.client.UploadBlockData(w.ctx)
+	if err != nil {
+		logger.Errorf("transporter remoteWriter init remote stream err: %v", err.Error())
+		return err
+	}
 	err = stream.Send(&UploadBlockRequest{
 		Payload: &UploadBlockRequest_Message{
 			Message: &ControlMessage{

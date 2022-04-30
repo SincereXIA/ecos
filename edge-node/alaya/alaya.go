@@ -239,6 +239,8 @@ func (a *Alaya) Stop() {
 }
 
 func (a *Alaya) cleanup() {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 	logger.Warningf("alaya %v stopped, start cleanup", a.selfInfo.RaftId)
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		go value.(*Raft).Stop()

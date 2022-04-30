@@ -2,6 +2,7 @@ package infos
 
 import (
 	"ecos/utils/errno"
+	"ecos/utils/logger"
 	"sync"
 )
 
@@ -40,6 +41,7 @@ func (register *StorageRegister) Close() {
 	defer register.rwMutex.Unlock()
 	register.storageMap = make(map[InfoType]Storage)
 	register.storageFactory.Close()
+	logger.Warningf("info storage register closed")
 }
 
 // Register while add an info storage into StorageRegister,
