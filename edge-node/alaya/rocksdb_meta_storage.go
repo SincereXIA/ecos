@@ -65,6 +65,11 @@ type RocksDBMetaStorage struct {
 	myHandler *gorocksdb.ColumnFamilyHandle
 }
 
+func (s *RocksDBMetaStorage) RecoverFromSnapshot(snapshot []byte) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s *RocksDBMetaStorage) RecordMeta(meta *object.ObjectMeta) error {
 	key := meta.ObjId
 	value, err := meta.Marshal()
