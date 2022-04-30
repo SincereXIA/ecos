@@ -3,6 +3,7 @@ package moon
 import (
 	"context"
 	"ecos/edge-node/infos"
+	eraft "ecos/edge-node/raft-node"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/logger"
@@ -36,7 +37,7 @@ type Moon struct {
 	UnimplementedMoonServer
 
 	id        uint64 //raft节点的id
-	raft      *raftNode
+	raft      *eraft.RaftNode
 	SelfInfo  *infos.NodeInfo
 	ctx       context.Context //context
 	cancel    context.CancelFunc
@@ -85,7 +86,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 		return nil, err
 	}
 
-	m.raft.proposeC <- string(data)
+	m.raft.ProposeC <- string(data)
 
 	// wait propose apply
 	for {
@@ -117,7 +118,7 @@ func (m *Moon) loadSnapshot() (*raftpb.Snapshot, error) {
 	return snapshot, nil
 }
 
-func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
+func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 	for commit := range commitC {
 		if commit == nil {
 			snapshot, err := m.loadSnapshot()
@@ -135,7 +136,7 @@ func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
 			continue
 		}
 
-		for _, rawData := range commit.data {
+		for _, rawData := range commit.Data {
 			var msg ProposeInfoRequest
 			data := []byte(rawData)
 			err := msg.Unmarshal(data)
@@ -158,7 +159,7 @@ func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
 			}
 			m.appliedRequestChan <- &msg
 		}
-		close(commit.applyDoneC) // TODO:
+		close(commit.ApplyDoneC)
 	}
 	if err, ok := <-errorC; ok {
 		logger.Fatalf("commit stream error: %v", err)
@@ -199,7 +200,7 @@ func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Informat
 func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
 	data, _ := nodeInfo.Marshal()
 
-	m.raft.confChangeC <- raftpb.ConfChange{
+	m.raft.ConfChangeC <- raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  nodeInfo.RaftId,
 		Context: data,
@@ -230,7 +231,7 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 		return nil, errors.New("moon" + strconv.FormatUint(m.id, 10) + ": raft is not ready")
 	}
 
-	m.raft.raftChan <- *message
+	m.raft.RaftChan <- *message
 
 	return &raftpb.Message{}, nil
 }
@@ -281,7 +282,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		logger.Tracef("%d send to %v, type %v", m.id, message, message.Type)
 
 		if message.Type == raftpb.MsgSnap {
-			message.Snapshot.Metadata.ConfState = m.raft.confState
+			message.Snapshot.Metadata.ConfState = m.raft.ConfState
 		}
 		select {
 		case <-m.ctx.Done():
@@ -322,7 +323,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 }
 
 func (m *Moon) IsLeader() bool {
-	return m.raft.node.Status().Lead == m.id
+	return m.raft.Node.Status().Lead == m.id
 }
 
 func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
@@ -360,7 +361,7 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 		}
 	}
 	readyC := make(chan bool)
-	snapshotterReady, raftNode := newRaftNode(int(m.id), m.ctx, peers, join, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
+	snapshotterReady, raftNode := eraft.NewRaftNode(int(m.id), m.ctx, peers, join, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
 	m.raft = raftNode
 	m.nodeReady = <-readyC
 	m.snapshotter = <-snapshotterReady
@@ -376,14 +377,14 @@ func (m *Moon) Run() {
 	go m.reportSelfInfo()
 
 	// read commits from raft into storage until error
-	go m.readCommits(m.raft.commitC, m.raft.errorC)
+	go m.readCommits(m.raft.CommitC, m.raft.ErrorC)
 
 	for {
 		select {
 		case <-m.ctx.Done():
 			m.cleanup()
 			return
-		case msgs := <-m.raft.communicationC:
+		case msgs := <-m.raft.CommunicationC:
 			go m.sendByRpc(msgs)
 		}
 	}
@@ -435,8 +436,8 @@ func (m *Moon) GetLeaderID() uint64 {
 			break
 		}
 	}
-	if m.raft.node == nil {
+	if m.raft.Node == nil {
 		return 0
 	}
-	return m.raft.node.Status().Lead
+	return m.raft.Node.Status().Lead
 }
