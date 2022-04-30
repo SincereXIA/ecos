@@ -284,11 +284,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		if message.Type == raftpb.MsgSnap {
 			message.Snapshot.Metadata.ConfState = m.raft.ConfState
 		}
-		select {
-		case <-m.ctx.Done():
-			return
-		default:
-		}
+
 		// get node info
 		var nodeInfo *infos.NodeInfo
 		var ok bool
@@ -346,14 +342,9 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 
 	logger.Tracef("leaderInfo: %v", leaderInfo)
 
-	join := false
-
 	if leaderInfo != nil { // 集群中现在已经有成员，peers 只需要填写 leader
 		peers = []raft.Peer{
 			{ID: leaderInfo.RaftId},
-		}
-		if peersInfo != nil {
-			join = true
 		}
 	} else {
 		for _, nodeInfo := range m.infoMap {
@@ -361,7 +352,7 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 		}
 	}
 	readyC := make(chan bool)
-	snapshotterReady, raftNode := eraft.NewRaftNode(int(m.id), m.ctx, peers, join, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
+	snapshotterReady, raftNode := eraft.NewRaftNode(int(m.id), m.ctx, peers, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
 	m.raft = raftNode
 	m.nodeReady = <-readyC
 	m.snapshotter = <-snapshotterReady
@@ -386,6 +377,8 @@ func (m *Moon) Run() {
 			return
 		case msgs := <-m.raft.CommunicationC:
 			go m.sendByRpc(msgs)
+		case <-m.raft.ApplyConfChangeC:
+			// DO NOTHING
 		}
 	}
 }

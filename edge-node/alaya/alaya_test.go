@@ -264,7 +264,7 @@ func assertAlayasOK(t *testing.T, alayas []Alayaer, pipelines []*pipeline.Pipeli
 		a := alayas[leaderID-1]
 		switch x := a.(type) {
 		case *Alaya:
-			assert.Equal(t, leaderID, x.getRaftNode(pgID).raft.Status().Lead)
+			assert.Equal(t, leaderID, x.getRaftNode(pgID).raft.Node.Status().Lead)
 		}
 	}
 	// 判断 每个 alaya 的每个 raft node 是否都成功加入 PG
@@ -273,7 +273,7 @@ func assertAlayasOK(t *testing.T, alayas []Alayaer, pipelines []*pipeline.Pipeli
 		case *Alaya:
 			x.PGRaftNode.Range(func(key, value interface{}) bool {
 				raftNode := value.(*Raft)
-				assert.NotZero(t, raftNode.raft.Status().Lead)
+				assert.NotZero(t, raftNode.raft.Node.Status().Lead)
 				return true
 			})
 		}

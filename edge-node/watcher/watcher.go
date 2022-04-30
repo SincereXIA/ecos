@@ -199,6 +199,10 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 	leaderID := w.moon.GetLeaderID()
 	// TODO (zhang): need a way to gen infoStorage key
 	leaderInfo, err := nodeInfoStorage.Get(strconv.FormatUint(leaderID, 10))
+	if err != nil {
+		logger.Errorf("get leaderInfo from nodeInfoStorage fail: %v", err)
+		return nil
+	}
 	return &infos.ClusterInfo{
 		Term:            uint64(time.Now().UnixNano()),
 		LeaderInfo:      leaderInfo.BaseInfo().GetNodeInfo(),
@@ -350,6 +354,9 @@ func (w *Watcher) nodeInfoChanged(_ infos.Information) {
 	}
 	w.timer = time.AfterFunc(w.config.NodeInfoCommitInterval, func() {
 		clusterInfo := w.genNewClusterInfo()
+		if clusterInfo == nil {
+			return
+		}
 		w.proposeClusterInfo(clusterInfo)
 	})
 }

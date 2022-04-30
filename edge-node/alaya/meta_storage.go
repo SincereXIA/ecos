@@ -16,6 +16,7 @@ type MetaStorage interface {
 	List(prefix string) ([]*object.ObjectMeta, error)
 	Delete(objID string) error
 	CreateSnapshot() ([]byte, error)
+	RecoverFromSnapshot(snapshot []byte) error
 }
 
 // MetaStorageRegister is a collection of MetaStorage.
@@ -35,6 +36,11 @@ type MetaStorageRegister interface {
 
 type MemoryMetaStorage struct {
 	MetaMap sync.Map
+}
+
+func (s *MemoryMetaStorage) RecoverFromSnapshot(snapshot []byte) error {
+	// Do nothing
+	return nil
 }
 
 type MemoryMetaStorageRegister struct {
