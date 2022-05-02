@@ -14,6 +14,7 @@ import (
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -316,6 +317,7 @@ func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
 		m := <-r.metaApplyChan
 		if operate.Operate != m.Operate || m.Meta.ObjId != operate.Meta.ObjId {
 			r.metaApplyChan <- m
+			runtime.Gosched()
 		} else {
 			return nil
 		}
