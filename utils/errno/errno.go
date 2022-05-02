@@ -1,7 +1,9 @@
 package errno
 
 import (
-	"errors"
+	"ecos/utils/logger"
+	"fmt"
+	"runtime/debug"
 )
 
 const (
@@ -96,14 +98,48 @@ var (
 
 type Errno struct {
 	error
-	Code    int32
-	Message string
+	Code       int32
+	Message    string
+	StackTrace string
 }
 
 func newErr(code int32, name string) Errno {
 	return Errno{
-		error:   errors.New(name),
-		Code:    code,
-		Message: "",
+		error:      nil,
+		Code:       code,
+		Message:    name,
+		StackTrace: string(debug.Stack()),
+	}
+}
+
+func (e Errno) Error() string {
+	var s string
+	if e.error != nil {
+		s = fmt.Sprintf("[%d] %s, raw: %s", e.Code, e.Message, e.error.Error())
+	} else {
+		s = fmt.Sprintf("[%d] %s", e.Code, e.Message)
+	}
+	return s
+}
+
+func WrapError(err error, code int32, message string) Errno {
+	return Errno{
+		error:      err,
+		Code:       code,
+		Message:    message,
+		StackTrace: string(debug.Stack()),
+	}
+}
+
+func HandleError(err error) {
+	if err == nil {
+		return
+	}
+	logger.Errorf("%s", err.Error())
+	if e, ok := err.(Errno); ok {
+		fmt.Println("Raw error stack:")
+		fmt.Println(e.StackTrace)
+	} else {
+		logger.Errorf("There was an unexpected issue; please report this as a bug")
 	}
 }
