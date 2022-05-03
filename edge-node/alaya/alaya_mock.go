@@ -7,6 +7,7 @@ package alaya
 import (
 	context "context"
 	object "ecos/edge-node/object"
+	watcher "ecos/edge-node/watcher"
 	common "ecos/messenger/common"
 	reflect "reflect"
 
@@ -66,6 +67,20 @@ func (mr *MockAlayaerMockRecorder) GetObjectMeta(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetObjectMeta", reflect.TypeOf((*MockAlayaer)(nil).GetObjectMeta), arg0, arg1)
 }
 
+// GetReports mocks base method.
+func (m *MockAlayaer) GetReports() []watcher.Report {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReports")
+	ret0, _ := ret[0].([]watcher.Report)
+	return ret0
+}
+
+// GetReports indicates an expected call of GetReports.
+func (mr *MockAlayaerMockRecorder) GetReports() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReports", reflect.TypeOf((*MockAlayaer)(nil).GetReports))
+}
+
 // IsAllPipelinesOK mocks base method.
 func (m *MockAlayaer) IsAllPipelinesOK() bool {
 	m.ctrl.T.Helper()
@@ -78,6 +93,20 @@ func (m *MockAlayaer) IsAllPipelinesOK() bool {
 func (mr *MockAlayaerMockRecorder) IsAllPipelinesOK() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAllPipelinesOK", reflect.TypeOf((*MockAlayaer)(nil).IsAllPipelinesOK))
+}
+
+// IsChanged mocks base method.
+func (m *MockAlayaer) IsChanged() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsChanged")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsChanged indicates an expected call of IsChanged.
+func (mr *MockAlayaerMockRecorder) IsChanged() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsChanged", reflect.TypeOf((*MockAlayaer)(nil).IsChanged))
 }
 
 // ListMeta mocks base method.

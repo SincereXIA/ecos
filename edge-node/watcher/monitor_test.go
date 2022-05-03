@@ -35,11 +35,11 @@ func TestMonitor(t *testing.T) {
 	}
 	assert.Greater(t, leader, -1)
 
-	for status := watchers[leader].monitor.GetAllReports(); len(status) != len(watchers); {
+	for status := watchers[leader].Monitor.GetAllNodeReports(); len(status) != len(watchers); {
 		time.Sleep(time.Second)
 	}
 
-	status := watchers[leader].monitor.GetAllReports()
+	status := watchers[leader].Monitor.GetAllNodeReports()
 	for _, s := range status {
 		t.Logf("%v", s)
 	}

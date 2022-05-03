@@ -52,6 +52,14 @@ func (state *MockState) IsAllPipelinesOK() bool {
 	return true
 }
 
+func (state *MockState) IsChanged() bool {
+	return true
+}
+
+func (state *MockState) GetReports() []watcher.Report {
+	return nil
+}
+
 func InitMock(alaya *MockAlayaer, rpcServer *messenger.RpcServer,
 	storage MetaStorage) {
 	state := &MockState{storage: storage}
@@ -62,6 +70,8 @@ func InitMock(alaya *MockAlayaer, rpcServer *messenger.RpcServer,
 	alaya.EXPECT().RecordObjectMeta(gomock.Any(), gomock.Not(nil)).DoAndReturn(state.RecordObjectMeta).AnyTimes()
 	alaya.EXPECT().SendRaftMessage(gomock.Any(), gomock.Not(nil)).DoAndReturn(state.SendRaftMessage).AnyTimes()
 	alaya.EXPECT().IsAllPipelinesOK().Return(true).AnyTimes()
+	alaya.EXPECT().IsChanged().DoAndReturn(state.IsChanged).AnyTimes()
+	alaya.EXPECT().GetReports().DoAndReturn(state.GetReports).AnyTimes()
 	alaya.EXPECT().Stop().MaxTimes(1)
 
 	RegisterAlayaServer(rpcServer, alaya)

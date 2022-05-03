@@ -10,7 +10,7 @@ option go_package = "ecos/edge-node/watcher";
 
 service Monitor {
   rpc Report(NodeStatusReport) returns (Result) {}
-  rpc Get(StateRequest) returns (NodeStatusReport) {}
+  rpc Get(google.protobuf.Empty) returns (NodeStatusReport) {}
   // GetClusterReport returns the entire cluster status report.
   // This only works if the node is the leader of the cluster.
   rpc GetClusterReport(google.protobuf.Empty) returns (ClusterReport) {}
@@ -22,6 +22,14 @@ message NodeStatusReport {
   Timestamp timestamp = 3;
   NodeState state = 4;
   NodeStatus status = 5;
+  enum Role {
+    UNKNOWN = 0;
+    LEADER = 1;
+    FOLLOWER = 2;
+    LEARNER = 3;
+  }
+  Role role = 6;
+  repeated PipelineReport pipelines = 7;
 }
 
 message NodeStatus {
@@ -37,8 +45,29 @@ message NodeStatus {
   uint64 meta_pipeline_count = 10;
 }
 
+message PipelineReport {
+  uint64 pg_id = 1;
+  repeated uint64 node_ids = 2;
+  enum State {
+    UNKNOWN = 0;
+    OK = 1;
+    DOWN_GRADE = 2;
+    CHANGING = 3;
+    ERROR = 4;
+  }
+  State state = 3;
+}
+
 message ClusterReport {
-  repeated NodeStatusReport reports = 1;
+  enum ClusterState{
+    UNKNOWN = 0;
+    HEALTH_OK = 1;
+    HEALTH_WARN = 2;
+    HEALTH_ERR = 3;
+  }
+  ClusterState state = 1;
+  repeated NodeStatusReport nodes = 2;
+  repeated PipelineReport pipelines = 3;
 }
 
 message StateRequest {}
