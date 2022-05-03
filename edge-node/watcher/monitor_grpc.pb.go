@@ -175,5 +175,5 @@ var Monitor_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "Monitor.proto",
+	Metadata: "monitor.proto",
 }

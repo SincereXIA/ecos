@@ -49,9 +49,11 @@ type Reporter interface {
 
 type NodeMonitor struct {
 	UnimplementedMonitorServer
-	ctx    context.Context
-	cancel context.CancelFunc
-	timer  *time.Ticker
+	ctx             context.Context
+	cancel          context.CancelFunc
+	timer           *time.Ticker
+	clusterReport   *ClusterReport
+	clusterPipeline sync.Map
 
 	nodeStatusMap sync.Map
 	reportTimers  sync.Map
@@ -112,6 +114,9 @@ func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*comm
 		}
 	}
 	m.nodeStatusMap.Store(report.NodeId, report)
+	for _, p := range report.Pipelines {
+		m.clusterPipeline.Store(p.PgId, p)
+	}
 	return &common.Result{}, nil
 }
 
@@ -143,8 +148,22 @@ func (m *NodeMonitor) GetNodeReport(nodeID uint64) *NodeStatusReport {
 
 func (m *NodeMonitor) GetClusterReport(context.Context, *emptypb.Empty) (*ClusterReport, error) {
 	reports := m.GetAllNodeReports()
+	var pipelines []*PipelineReport
+	// 生成集群 pipeline 列表
+	clusterState := ClusterReport_HEALTH_OK
+
+	m.clusterPipeline.Range(func(key, value interface{}) bool {
+		pipelines = append(pipelines, value.(*PipelineReport))
+		if value.(*PipelineReport).State != PipelineReport_OK {
+			clusterState = ClusterReport_HEALTH_ERR
+		}
+		return true
+	})
+
 	return &ClusterReport{
-		Nodes: reports,
+		State:     clusterState,
+		Nodes:     reports,
+		Pipelines: pipelines,
 	}, nil
 }
 
@@ -171,6 +190,14 @@ func (m *NodeMonitor) collectReports() {
 	})
 }
 
+func (m *NodeMonitor) getAllPipelineReports() []*PipelineReport {
+	var reports []*PipelineReport
+	for _, v := range m.selfPipeline {
+		reports = append(reports, v)
+	}
+	return reports
+}
+
 func (m *NodeMonitor) runReport() {
 	for {
 		select {
@@ -189,6 +216,7 @@ func (m *NodeMonitor) runReport() {
 			}
 			conn, _ := messenger.GetRpcConnByNodeInfo(leaderInfo.BaseInfo().GetNodeInfo())
 			client := NewMonitorClient(conn)
+			m.selfNodeStatus.Pipelines = m.getAllPipelineReports()
 			_, err = client.Report(m.ctx, m.selfNodeStatus)
 			if err != nil {
 				logger.Errorf("runReport node status failed: %v", err)
