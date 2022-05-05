@@ -435,7 +435,9 @@ func (rc *RaftNode) serveChannels() {
 			rc.Node.Advance()
 
 		case m := <-rc.RaftChan:
+			logger.Infof("%v etcd raft received message %v", rc.ID, m)
 			err := rc.Node.Step(rc.ctx, m)
+			logger.Infof("%v etcd raft step success", rc.ID)
 			if err != nil {
 				logger.Errorf("failed to process raft message %v", err)
 				return
