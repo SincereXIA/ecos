@@ -230,6 +230,7 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	default:
 	}
 	pgID := pgMessage.PgId
+	logger.Debugf("alaya %v receive raft message, pg_id: %v", a.selfInfo.RaftId, pgID)
 	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
 		msgChan.(chan raftpb.Message) <- *pgMessage.Message
 		return &PGRaftMessage{
@@ -237,7 +238,7 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 			Message: &raftpb.Message{},
 		}, nil
 	}
-	logger.Warningf("receive raft message from: %v, but pg: %v not exist", pgMessage.Message.From, pgID)
+	logger.Warningf("%v receive raft message from: %v, but pg: %v not exist", a.selfInfo.RaftId, pgMessage.Message.From, pgID)
 	return nil, errno.PGNotExist
 }
 
@@ -295,7 +296,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
 
-		if raftNode.raft.Status().Lead != a.selfInfo.RaftId {
+		if raftNode.raft.Node.Status().Lead != a.selfInfo.RaftId {
 			return true
 		}
 		// if this node is leader, add new pipelines node first
@@ -383,7 +384,7 @@ func (a *Alaya) PrintPipelineInfo() {
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
 		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v",
-			a.selfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
+			a.selfInfo.RaftId, pgID, raftNode.raft.Node.Status().Lead, raftNode.GetVotersID())
 		return true
 	})
 }
@@ -401,7 +402,7 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 	}
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
-		if raftNode.raft.Status().Lead != raftNode.getPipeline().RaftId[0] ||
+		if raftNode.raft.Node.Status().Lead != raftNode.getPipeline().RaftId[0] ||
 			len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
 			ok = false
 			return false

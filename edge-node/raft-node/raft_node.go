@@ -25,12 +25,13 @@ type RaftNode struct {
 	ctx    context.Context //context
 	cancel context.CancelFunc
 
-	ProposeC       chan string            // proposed messages (client)
-	ConfChangeC    chan raftpb.ConfChange // proposed cluster config changes
-	CommunicationC chan []raftpb.Message  // notify upper-layer applications to send messages
-	CommitC        chan *Commit           // entries committed to log (server)
-	ErrorC         chan error             // errors from raft session
-	RaftChan       chan raftpb.Message    // raft messages
+	ProposeC         chan string            // proposed messages (client)
+	ConfChangeC      chan raftpb.ConfChange // proposed cluster config changes
+	ApplyConfChangeC chan raftpb.ConfChange // notify upper layer when config change is applied
+	CommunicationC   chan []raftpb.Message  // notify upper-layer applications to send messages
+	CommitC          chan *Commit           // entries committed to log (server)
+	ErrorC           chan error             // errors from raft session
+	RaftChan         chan raftpb.Message    // raft messages
 
 	ID          int // client ID for raft session
 	peers       []raft.Peer
@@ -66,12 +67,13 @@ func NewRaftNode(id int, ctx context.Context, peers []raft.Peer, join bool, base
 		ctx:    ctx,
 		cancel: cancel,
 
-		ProposeC:       make(chan string),
-		ConfChangeC:    make(chan raftpb.ConfChange),
-		CommunicationC: make(chan []raftpb.Message),
-		CommitC:        make(chan *Commit),
-		ErrorC:         make(chan error),
-		RaftChan:       make(chan raftpb.Message),
+		ProposeC:         make(chan string),
+		ConfChangeC:      make(chan raftpb.ConfChange),
+		ApplyConfChangeC: make(chan raftpb.ConfChange),
+		CommunicationC:   make(chan []raftpb.Message),
+		CommitC:          make(chan *Commit),
+		ErrorC:           make(chan error),
+		RaftChan:         make(chan raftpb.Message),
 
 		ID:          id,
 		peers:       peers,
@@ -148,6 +150,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) (<-chan struct{}, bool) 
 				logger.Fatalf("unmarshal conf change error: %v", err)
 			}
 			rc.ConfState = *rc.Node.ApplyConfChange(cc)
+			rc.ApplyConfChangeC <- cc
 		}
 	}
 
@@ -362,7 +365,7 @@ func (rc *RaftNode) serveChannels() {
 
 	defer rc.wal.Close()
 
-	ticker := time.NewTicker(300 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	// send proposals over raft
@@ -432,7 +435,7 @@ func (rc *RaftNode) serveChannels() {
 			rc.Node.Advance()
 
 		case m := <-rc.RaftChan:
-			err := rc.Node.Step(context.TODO(), m)
+			err := rc.Node.Step(rc.ctx, m)
 			if err != nil {
 				logger.Errorf("failed to process raft message %v", err)
 				return

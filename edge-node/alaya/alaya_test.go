@@ -34,7 +34,7 @@ func testAlaya(t *testing.T, mock bool) {
 	_ = common.InitAndClearPath(basePath)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	nodeNum := 9
+	nodeNum := 5
 	var alayas []Alayaer
 	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
 	mockMetaStorage := NewMemoryMetaStorage()
@@ -264,7 +264,7 @@ func assertAlayasOK(t *testing.T, alayas []Alayaer, pipelines []*pipeline.Pipeli
 		a := alayas[leaderID-1]
 		switch x := a.(type) {
 		case *Alaya:
-			assert.Equal(t, leaderID, x.getRaftNode(pgID).raft.Status().Lead)
+			assert.Equal(t, leaderID, x.getRaftNode(pgID).raft.Node.Status().Lead)
 		}
 	}
 	// 判断 每个 alaya 的每个 raft node 是否都成功加入 PG
@@ -273,7 +273,7 @@ func assertAlayasOK(t *testing.T, alayas []Alayaer, pipelines []*pipeline.Pipeli
 		case *Alaya:
 			x.PGRaftNode.Range(func(key, value interface{}) bool {
 				raftNode := value.(*Raft)
-				assert.NotZero(t, raftNode.raft.Status().Lead)
+				assert.NotZero(t, raftNode.raft.Node.Status().Lead)
 				return true
 			})
 		}
@@ -281,20 +281,20 @@ func assertAlayasOK(t *testing.T, alayas []Alayaer, pipelines []*pipeline.Pipeli
 }
 
 func waiteAllAlayaOK(alayas []Alayaer) {
-	timer := time.After(60 * time.Second)
+	// timer := time.After(60 * time.Second)
 	for {
-		select {
-		case <-timer:
-			logger.Warningf("Alayas not OK after time out")
-			for _, a := range alayas {
-				switch x := a.(type) {
-				case *Alaya:
-					x.PrintPipelineInfo()
-				}
-			}
-			return
-		default:
-		}
+		//select {
+		//case <-timer:
+		//	logger.Warningf("Alayas not OK after time out")
+		//	for _, a := range alayas {
+		//		switch x := a.(type) {
+		//		case *Alaya:
+		//			x.PrintPipelineInfo()
+		//		}
+		//	}
+		//	return
+		//default:
+		//}
 		ok := true
 		for _, alaya := range alayas {
 			if !alaya.IsAllPipelinesOK() {

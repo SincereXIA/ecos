@@ -386,6 +386,8 @@ func (m *Moon) Run() {
 			return
 		case msgs := <-m.raft.CommunicationC:
 			go m.sendByRpc(msgs)
+		case <-m.raft.ApplyConfChangeC:
+			// DO NOTHING
 		}
 	}
 }

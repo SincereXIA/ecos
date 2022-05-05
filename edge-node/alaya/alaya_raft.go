@@ -16,6 +16,7 @@ import (
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
+	"path"
 	"strconv"
 	"sync"
 	"time"
@@ -32,8 +33,8 @@ type Raft struct {
 	raft        *eraft.RaftNode
 	snapshotter *snap.Snapshotter
 
-	raftChan chan raftpb.Message
-	stopChan chan uint64
+	raftAlayaChan chan raftpb.Message
+	stopChan      chan uint64
 
 	metaStorage   MetaStorage
 	metaApplyChan chan *MetaOperate
@@ -47,17 +48,17 @@ type Raft struct {
 
 func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
 	watcher *watcher.Watcher, metaStorage MetaStorage,
-	raftChan chan raftpb.Message, stopChan chan uint64) *Raft {
+	raftAlayaChan chan raftpb.Message, stopChan chan uint64) *Raft {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	r := &Raft{
-		pgID:        nowPipe.PgId,
-		ctx:         ctx,
-		cancel:      cancel,
-		watcher:     watcher,
-		raftChan:    raftChan,
-		metaStorage: metaStorage,
+		pgID:          nowPipe.PgId,
+		ctx:           ctx,
+		cancel:        cancel,
+		watcher:       watcher,
+		raftAlayaChan: raftAlayaChan,
+		metaStorage:   metaStorage,
 
 		pipeline:       nowPipe,
 		stopChan:       stopChan,
@@ -65,6 +66,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 		metaApplyChan:  make(chan *MetaOperate, 100),
 	}
 
+	// TODO: set join value
 	join := false
 
 	var peers []raft.Peer
@@ -73,6 +75,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 			peers = append(peers, raft.Peer{
 				ID: id,
 			})
+			join = true
 		}
 	} else {
 		for _, id := range nowPipe.RaftId {
@@ -80,12 +83,12 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 				ID: id,
 			})
 		}
-		join = true
 	}
 	// TODO: maybe readyC is useless
 	readyC := make(chan bool)
 	// TODO: init wal base path
-	snapshotterReady, raftNode := eraft.NewRaftNode(int(raftID), r.ctx, peers, join, "", readyC, r.metaStorage.CreateSnapshot)
+	basePath := path.Join("ecos-data/alaya/", "pg"+pgIdToStr(r.pgID), strconv.FormatInt(int64(raftID), 10))
+	snapshotterReady, raftNode := eraft.NewRaftNode(int(raftID), r.ctx, peers, join, basePath, readyC, r.metaStorage.CreateSnapshot)
 	r.raft = raftNode
 	<-readyC
 	r.snapshotter = <-snapshotterReady
@@ -93,7 +96,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 	return r
 }
 
-func (r *Raft) cleanup()  {
+func (r *Raft) cleanup() {
 	logger.Warningf("raft %d stopped, start cleanup", r.raft.ID)
 	// TODO: close cf?
 	logger.Warningf("moon %d clean up done", r.raft.ID)
@@ -109,22 +112,24 @@ func (r *Raft) Run() {
 			r.cleanup()
 			return
 		case msgs := <-r.raft.CommunicationC:
-
-		//case ready := <-r.raft.Ready():
-		//	_ = r.raftStorage.Append(ready.Entries)
-		//	go r.sendMsgByRpc(ready.Messages)
-		//	for _, entry := range ready.CommittedEntries {
-		//		r.process(entry)
-		//		if entry.Type == raftpb.EntryConfChange {
-		//			var cc raftpb.ConfChange
-		//			_ = cc.Unmarshal(entry.Data)
-		//			r.raft.ApplyConfChange(cc)
-		//			r.CheckConfChange(&cc) // TODO: use this function
-		//		}
-		//	}
-		//case message := <-r.raftChan:
-		//	_ = r.raft.Step(r.ctx, message)
-		//}
+			go r.sendMsgByRpc(msgs)
+		case message := <-r.raftAlayaChan:
+			r.raft.RaftChan <- message
+		case cc := <-r.raft.ApplyConfChangeC:
+			r.CheckConfChange(&cc)
+			//case ready := <-r.raft.Ready():
+			//	_ = r.raftStorage.Append(ready.Entries)
+			//	go r.sendMsgByRpc(ready.Messages)
+			//	for _, entry := range ready.CommittedEntries {
+			//		r.process(entry)
+			//		if entry.Type == raftpb.EntryConfChange {
+			//			var cc raftpb.ConfChange
+			//			_ = cc.Unmarshal(entry.Data)
+			//			r.raft.ApplyConfChange(cc)
+			//			r.CheckConfChange(&cc) // TODO: use this function
+			//		}
+			//	}
+		}
 	}
 }
 
@@ -167,7 +172,7 @@ func (r *Raft) readCommit(commitC <-chan *eraft.Commit, errorC <-chan error) {
 			switch metaOperate.Operate {
 			case MetaOperate_PUT:
 				meta := metaOperate.Meta
-				logger.Infof("node %v, PG: %v, New object meta: %v", r.raftCfg.ID, r.pgID, meta.ObjId)
+				logger.Infof("node %v, PG: %v, New object meta: %v", r.raft.ID, r.pgID, meta.ObjId)
 				err = r.metaStorage.RecordMeta(meta)
 				if err != nil {
 					logger.Warningf("alaya record object meta err: %v", err)
@@ -281,7 +286,7 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 		<-r.confChangeChan
 	}
 	if removeSelf {
-		logger.Infof("raft: %v PG: %v propose conf change remove self", r.raftCfg.ID, r.pgID)
+		logger.Infof("raft: %v PG: %v propose conf change remove self", r.raft.ID, r.pgID)
 		_ = r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeRemoveNode,
 			NodeID:  uint64(r.raft.ID),
@@ -293,12 +298,11 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 }
 
 func (r *Raft) Stop() {
-	logger.Infof("=========STOP: node: %v, PG: %v ===========", r.raft.Status().ID, r.pgID)
+	logger.Infof("=========STOP: node: %v, PG: %v ===========", r.raft.ID, r.pgID)
 	r.stopChan <- r.pgID
 	r.cancel()
-	logger.Infof("=========STOP: node: %v, PG: %v done ===========", r.raft.Status().ID, r.pgID)
+	logger.Infof("=========STOP: node: %v, PG: %v done ===========", r.raft.ID, r.pgID)
 }
-
 func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 	req := &moon.GetInfoRequest{
 		InfoId:   strconv.FormatUint(nodeID, 10),
@@ -312,17 +316,13 @@ func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 }
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
-	select {
-	case <-r.ctx.Done():
-		return
-	default:
-	}
 	for _, message := range messages {
 		select {
 		case <-r.ctx.Done():
 			return
 		default:
 		}
+		logger.Debugf("%v send msg to node: %v, msg: %v", r.raft.ID, message.To, message)
 		nodeId := message.To
 		nodeInfo, err := r.getNodeInfo(nodeId)
 		if err != nil {
@@ -342,33 +342,6 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 		if err != nil {
 			logger.Warningf("alaya send raft message by rpc err: %v", err)
 		}
-	}
-}
-
-func (r *Raft) process(entry raftpb.Entry) {
-	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var metaOperate MetaOperate
-		err := proto.Unmarshal(entry.Data, &metaOperate)
-		if err != nil {
-			logger.Warningf("alaya raft process object meta in entry err: %v", err)
-		}
-		switch metaOperate.Operate {
-		case MetaOperate_PUT:
-			meta := metaOperate.Meta
-			logger.Infof("node %v, PG: %v, New object meta: %v", r.raftCfg.ID, r.pgID, meta.ObjId)
-			err = r.metaStorage.RecordMeta(meta)
-			if err != nil {
-				logger.Warningf("alaya record object meta err: %v", err)
-			}
-			metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Inc(1)
-		case MetaOperate_DELETE:
-			logger.Infof("delete meta: %v", metaOperate.Meta.ObjId)
-			err = r.metaStorage.Delete(metaOperate.Meta.ObjId)
-			metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Dec(1)
-		default:
-			logger.Errorf("unsupported alaya meta operate")
-		}
-		r.metaApplyChan <- &metaOperate
 	}
 }
 
@@ -420,13 +393,14 @@ func (r *Raft) RunAskForLeader() {
 
 func (r *Raft) askForLeader() {
 	logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raft.ID)
-	r.raft.TransferLeadership(r.ctx, r.raft.Node.Status().Lead, r.raft.ID)
+	r.raft.Node.TransferLeadership(r.ctx, r.raft.Node.Status().Lead, r.raft.Node.Status().ID)
 	for {
 		if r.isLeader() {
 			return
 		}
 		logger.Infof("PG: %v, node %v not leader", r.pgID, r.raft.ID)
-		r.raft.TransferLeadership(r.ctx, r.raft.Node.Status().Lead, r.raft.ID)
+		leader := r.raft.Node.Status().Lead
+		r.raft.Node.TransferLeadership(r.ctx, leader, r.raft.Node.Status().ID)
 		time.Sleep(time.Second)
 	}
 }
