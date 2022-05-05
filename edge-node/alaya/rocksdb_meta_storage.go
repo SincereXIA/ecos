@@ -1,6 +1,7 @@
 package alaya
 
 import (
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/utils/common"
 	"ecos/utils/database"
@@ -63,11 +64,6 @@ type RocksDBMetaStorage struct {
 	db        *gorocksdb.DB
 	myCfName  string
 	myHandler *gorocksdb.ColumnFamilyHandle
-}
-
-func (s *RocksDBMetaStorage) RecoverFromSnapshot(snapshot []byte) error {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (s *RocksDBMetaStorage) RecordMeta(meta *object.ObjectMeta) error {
@@ -133,8 +129,47 @@ func (s *RocksDBMetaStorage) Delete(objID string) error {
 }
 
 func (s *RocksDBMetaStorage) CreateSnapshot() ([]byte, error) {
-	//TODO implement me
-	panic("implement me")
+	CfContent := &infos.CfContent{
+		Keys:   make([][]byte, 0),
+		Values: make([][]byte, 0),
+	}
+
+	it := s.db.NewIteratorCF(database.ReadOpts, s.myHandler)
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		key := make([]byte, len(it.Key().Data()))
+		copy(key, it.Key().Data())
+		value := make([]byte, len(it.Value().Data()))
+		copy(value, it.Value().Data())
+		CfContent.Keys = append(CfContent.Keys, key)
+		CfContent.Values = append(CfContent.Values, value)
+		it.Key().Free()
+		it.Value().Free()
+	}
+	it.Close()
+
+	snap, err := CfContent.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	return snap, nil
+
+}
+
+func (s *RocksDBMetaStorage) RecoverFromSnapshot(snapshot []byte) error {
+	CfContent := &infos.CfContent{}
+	err := CfContent.Unmarshal(snapshot)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < len(CfContent.Keys); i++ {
+		err = s.db.PutCF(database.WriteOpts, s.myHandler, CfContent.Keys[i], CfContent.Values[i])
+		if err != nil {
+			logger.Errorf("RocksDBMetaStorage", "RecoverFromSnapshot", "PutCF error: "+err.Error())
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *RocksDBMetaStorage) Close() {

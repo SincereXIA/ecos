@@ -34,9 +34,9 @@ func testAlaya(t *testing.T, mock bool) {
 	_ = common.InitAndClearPath(basePath)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	nodeNum := 5
+	nodeNum := 9
 	var alayas []Alayaer
-	watchers, rpcServers, sunAddr, _ := watcher.GenMockWatcherCluster(t, ctx, basePath, nodeNum)
+	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
 	mockMetaStorage := NewMemoryMetaStorage()
 	if mock {
 		alayas = GenMockAlayaCluster(t, ctx, basePath, mockMetaStorage, watchers, rpcServers)
@@ -281,20 +281,20 @@ func assertAlayasOK(t *testing.T, alayas []Alayaer, pipelines []*pipeline.Pipeli
 }
 
 func waiteAllAlayaOK(alayas []Alayaer) {
-	// timer := time.After(60 * time.Second)
+	timer := time.After(60 * time.Second)
 	for {
-		//select {
-		//case <-timer:
-		//	logger.Warningf("Alayas not OK after time out")
-		//	for _, a := range alayas {
-		//		switch x := a.(type) {
-		//		case *Alaya:
-		//			x.PrintPipelineInfo()
-		//		}
-		//	}
-		//	return
-		//default:
-		//}
+		select {
+		case <-timer:
+			logger.Warningf("Alayas not OK after time out")
+			for _, a := range alayas {
+				switch x := a.(type) {
+				case *Alaya:
+					x.PrintPipelineInfo()
+				}
+			}
+			return
+		default:
+		}
 		ok := true
 		for _, alaya := range alayas {
 			if !alaya.IsAllPipelinesOK() {

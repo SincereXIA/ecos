@@ -35,7 +35,6 @@ type RaftNode struct {
 
 	ID          int // client ID for raft session
 	peers       []raft.Peer
-	join        bool   // node is joining an existing cluster
 	waldir      string // path to WAL directory
 	snapdir     string // path to snapshot directory
 	getSnapshot func() ([]byte, error)
@@ -57,9 +56,9 @@ type RaftNode struct {
 	logger *zap.Logger
 }
 
-var defaultSnapshotCount uint64 = 10000 // set 10 for test
+var defaultSnapshotCount uint64 = 10 // set 10 for test
 
-func NewRaftNode(id int, ctx context.Context, peers []raft.Peer, join bool, basePath string, readyC chan bool, getSnapshot func() ([]byte, error)) (chan *snap.Snapshotter, *RaftNode) {
+func NewRaftNode(id int, ctx context.Context, peers []raft.Peer, basePath string, readyC chan bool, getSnapshot func() ([]byte, error)) (chan *snap.Snapshotter, *RaftNode) {
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -70,14 +69,13 @@ func NewRaftNode(id int, ctx context.Context, peers []raft.Peer, join bool, base
 		ProposeC:         make(chan string),
 		ConfChangeC:      make(chan raftpb.ConfChange),
 		ApplyConfChangeC: make(chan raftpb.ConfChange),
-		CommunicationC:   make(chan []raftpb.Message),
+		CommunicationC:   make(chan []raftpb.Message, 100),
 		CommitC:          make(chan *Commit),
 		ErrorC:           make(chan error),
-		RaftChan:         make(chan raftpb.Message),
+		RaftChan:         make(chan raftpb.Message, 100),
 
 		ID:          id,
 		peers:       peers,
-		join:        join,
 		waldir:      path.Join(basePath, "raft"),
 		snapdir:     path.Join(basePath, "snap"),
 		getSnapshot: getSnapshot,
@@ -254,7 +252,7 @@ func (rc *RaftNode) startRaft(readyC chan bool) {
 	}
 	rc.snapshotter = snap.New(zap.NewExample(), rc.snapdir)
 
-	oldWal := wal.Exist(rc.waldir)
+	// oldWal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
 
 	// signal replay has finished
@@ -268,15 +266,11 @@ func (rc *RaftNode) startRaft(readyC chan bool) {
 		MaxSizePerMsg:             1024 * 1024,
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
-		//PreVote:                   true,
-		//CheckQuorum:               true,
+		PreVote:                   true,
+		CheckQuorum:               true,
 	}
 
-	if oldWal || rc.join {
-		rc.Node = raft.RestartNode(c)
-	} else {
-		rc.Node = raft.StartNode(c, rc.peers)
-	}
+	rc.Node = raft.StartNode(c, rc.peers)
 
 	readyC <- true
 
@@ -312,7 +306,7 @@ func (rc *RaftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	rc.appliedIndex = snapshotToSave.Metadata.Index
 }
 
-var snapshotCatchUpEntriesN uint64 = 10000 // set 10 for test
+var snapshotCatchUpEntriesN uint64 = 10 // set 10 for test
 
 func (rc *RaftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
 	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
@@ -406,12 +400,12 @@ func (rc *RaftNode) serveChannels() {
 
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.Node.Ready():
-			logger.Debugf("%v do something", rc.ID)
+			//logger.Debugf("%v do something", rc.ID)
 			err := rc.wal.Save(rd.HardState, rd.Entries)
 			if err != nil {
 				logger.Errorf("wal.Save failed: %v", err)
 			}
-			logger.Debugf("%v finish wal", rc.ID)
+			//logger.Debugf("%v finish wal", rc.ID)
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				err := rc.saveSnap(rd.Snapshot)
 				if err != nil {
@@ -423,24 +417,24 @@ func (rc *RaftNode) serveChannels() {
 				}
 				rc.publishSnapshot(rd.Snapshot)
 			}
-			logger.Debugf("%v finish snapshot", rc.ID)
+			//logger.Debugf("%v finish snapshot", rc.ID)
 			err = rc.raftStorage.Append(rd.Entries)
 			if err != nil {
 				logger.Errorf("raftStorage.Append failed: %v", err)
 			}
-			logger.Debugf("%v finish raft storage", rc.ID)
+			//logger.Debugf("%v finish raft storage", rc.ID)
 			rc.CommunicationC <- rd.Messages
-			logger.Debugf("%v finish communicationC", rc.ID)
+			//logger.Debugf("%v finish communicationC", rc.ID)
 			applyDoneC, ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
 			if !ok {
 				rc.stop()
 				return
 			}
-			logger.Debugf("%v finish publish entries", rc.ID)
+			//logger.Debugf("%v finish publish entries", rc.ID)
 			rc.maybeTriggerSnapshot(applyDoneC)
-			logger.Debugf("%v finish snapshot", rc.ID)
+			//logger.Debugf("%v finish snapshot", rc.ID)
 			rc.Node.Advance()
-			logger.Debugf("%v do something Done", rc.ID)
+			//logger.Debugf("%v do something Done", rc.ID)
 
 		case m := <-rc.RaftChan:
 			logger.Debugf("%v receive message and start to step %v", rc.ID, m)

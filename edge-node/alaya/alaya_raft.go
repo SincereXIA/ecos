@@ -66,16 +66,12 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 		metaApplyChan:  make(chan *MetaOperate, 100),
 	}
 
-	// TODO: set join value
-	join := false
-
 	var peers []raft.Peer
 	if oldP != nil {
 		for _, id := range oldP.RaftId {
 			peers = append(peers, raft.Peer{
 				ID: id,
 			})
-			join = true
 		}
 	} else {
 		for _, id := range nowPipe.RaftId {
@@ -88,7 +84,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 	readyC := make(chan bool)
 	// TODO: init wal base path
 	basePath := path.Join("ecos-data/alaya/", "pg"+pgIdToStr(r.pgID), strconv.FormatInt(int64(raftID), 10))
-	snapshotterReady, raftNode := eraft.NewRaftNode(int(raftID), r.ctx, peers, join, basePath, readyC, r.metaStorage.CreateSnapshot)
+	snapshotterReady, raftNode := eraft.NewRaftNode(int(raftID), r.ctx, peers, basePath, readyC, r.metaStorage.CreateSnapshot)
 	r.raft = raftNode
 	<-readyC
 	r.snapshotter = <-snapshotterReady
@@ -114,13 +110,13 @@ func (r *Raft) Run() {
 		case msgs := <-r.raft.CommunicationC:
 			go r.sendMsgByRpc(msgs)
 		case message := <-r.raftAlayaChan:
-			logger.Infof("%v send message %v to etcd raft", r.raft.ID, message)
+			//logger.Infof("%v send message %v to etcd raft", r.raft.ID, message)
 			r.raft.RaftChan <- message
-			logger.Infof("%v send message %v to etcd raft success", r.raft.ID, message)
+			//logger.Infof("%v send message %v to etcd raft success", r.raft.ID, message)
 		case cc := <-r.raft.ApplyConfChangeC:
-			logger.Infof("%v apply conf change %v", r.raft.ID, cc)
+			//logger.Infof("%v apply conf change %v", r.raft.ID, cc)
 			r.CheckConfChange(&cc)
-			logger.Infof("%v apply conf change %v done", r.raft.ID, cc)
+			//logger.Infof("%v apply conf change %v done", r.raft.ID, cc)
 			//case ready := <-r.raft.Ready():
 			//	_ = r.raftStorage.Append(ready.Entries)
 			//	go r.sendMsgByRpc(ready.Messages)
@@ -320,14 +316,14 @@ func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 }
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
-	logger.Infof("%v sendMsgByRpc: %v", r.raft.ID, messages)
+	//logger.Infof("%v sendMsgByRpc: %v", r.raft.ID, messages)
 	for _, message := range messages {
 		select {
 		case <-r.ctx.Done():
 			return
 		default:
 		}
-		logger.Debugf("%v send msg to node: %v, msg: %v", r.raft.ID, message.To, message)
+		//logger.Debugf("%v send msg to node: %v, msg: %v", r.raft.ID, message.To, message)
 		nodeId := message.To
 		nodeInfo, err := r.getNodeInfo(nodeId)
 		if err != nil {
