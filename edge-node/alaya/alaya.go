@@ -92,6 +92,7 @@ func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
 	// check if meta belongs to this PG
 	pgID := a.calculateObjectPGID(meta.ObjId)
 	if meta.Term != a.watcher.GetCurrentTerm() {
+		logger.Errorf("meta term not match, meta term: %v, current term: %v", meta.Term, a.watcher.GetCurrentTerm())
 		return errno.TermNotMatch
 	}
 	if meta.PgId != pgID {
