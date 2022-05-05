@@ -406,10 +406,12 @@ func (rc *RaftNode) serveChannels() {
 
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.Node.Ready():
+			logger.Debugf("%v do something", rc.ID)
 			err := rc.wal.Save(rd.HardState, rd.Entries)
 			if err != nil {
 				logger.Errorf("wal.Save failed: %v", err)
 			}
+			logger.Debugf("%v finish wal", rc.ID)
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				err := rc.saveSnap(rd.Snapshot)
 				if err != nil {
@@ -421,23 +423,28 @@ func (rc *RaftNode) serveChannels() {
 				}
 				rc.publishSnapshot(rd.Snapshot)
 			}
+			logger.Debugf("%v finish snapshot", rc.ID)
 			err = rc.raftStorage.Append(rd.Entries)
 			if err != nil {
 				logger.Errorf("raftStorage.Append failed: %v", err)
 			}
+			logger.Debugf("%v finish raft storage", rc.ID)
 			rc.CommunicationC <- rd.Messages
+			logger.Debugf("%v finish communicationC", rc.ID)
 			applyDoneC, ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
 			if !ok {
 				rc.stop()
 				return
 			}
+			logger.Debugf("%v finish publish entries", rc.ID)
 			rc.maybeTriggerSnapshot(applyDoneC)
+			logger.Debugf("%v finish snapshot", rc.ID)
 			rc.Node.Advance()
+			logger.Debugf("%v do something Done", rc.ID)
 
 		case m := <-rc.RaftChan:
-			logger.Infof("%v etcd raft received message %v", rc.ID, m)
+			logger.Debugf("%v receive message and start to step %v", rc.ID, m)
 			err := rc.Node.Step(rc.ctx, m)
-			logger.Infof("%v etcd raft step success", rc.ID)
 			if err != nil {
 				logger.Errorf("failed to process raft message %v", err)
 				return

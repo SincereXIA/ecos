@@ -114,12 +114,13 @@ func (r *Raft) Run() {
 		case msgs := <-r.raft.CommunicationC:
 			go r.sendMsgByRpc(msgs)
 		case message := <-r.raftAlayaChan:
+			logger.Infof("%v send message %v to etcd raft", r.raft.ID, message)
 			r.raft.RaftChan <- message
-			logger.Infof("raft %v send message %v to etcd raft success", r.raft.ID, message)
+			logger.Infof("%v send message %v to etcd raft success", r.raft.ID, message)
 		case cc := <-r.raft.ApplyConfChangeC:
-			logger.Infof("raft %v apply conf change %v", r.raft.ID, cc)
+			logger.Infof("%v apply conf change %v", r.raft.ID, cc)
 			r.CheckConfChange(&cc)
-			logger.Infof("raft %v apply conf change %v done", r.raft.ID, cc)
+			logger.Infof("%v apply conf change %v done", r.raft.ID, cc)
 			//case ready := <-r.raft.Ready():
 			//	_ = r.raftStorage.Append(ready.Entries)
 			//	go r.sendMsgByRpc(ready.Messages)
