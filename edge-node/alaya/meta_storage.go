@@ -2,12 +2,8 @@ package alaya
 
 import (
 	"ecos/edge-node/object"
-	"ecos/utils/common"
 	"ecos/utils/errno"
-	"ecos/utils/logger"
 	"encoding/json"
-	gorocksdb "github.com/SUMStudio/grocksdb"
-	"github.com/gogo/protobuf/proto"
 	"sync"
 )
 
@@ -20,7 +16,6 @@ type MetaStorage interface {
 	List(prefix string) ([]*object.ObjectMeta, error)
 	Delete(objID string) error
 	CreateSnapshot() ([]byte, error)
-	Close()
 }
 
 // MetaStorageRegister is a collection of MetaStorage.
@@ -38,18 +33,8 @@ type MetaStorageRegister interface {
 	Close()
 }
 
-var ( // rocksdb的设置参数
-	opts         = &gorocksdb.Options{}
-	readOptions  = &gorocksdb.ReadOptions{}
-	writeOptions = &gorocksdb.WriteOptions{}
-)
-
 type MemoryMetaStorage struct {
 	MetaMap sync.Map
-}
-
-type StableMetaStorage struct {
-	db *gorocksdb.DB
 }
 
 type MemoryMetaStorageRegister struct {
@@ -121,80 +106,8 @@ func (s *MemoryMetaStorage) CreateSnapshot() ([]byte, error) {
 	return buf, err
 }
 
-func (s *MemoryMetaStorage) Close() {
-	// need do nothing
-}
-
 func NewMemoryMetaStorage() *MemoryMetaStorage {
 	return &MemoryMetaStorage{
 		MetaMap: sync.Map{},
 	}
-}
-
-func (s *StableMetaStorage) RecordMeta(meta *object.ObjectMeta) error {
-	metaData, err := proto.Marshal(meta)
-	if err != nil {
-		logger.Errorf("Marshal failed")
-		return err
-	}
-	id := meta.ObjId
-	err = s.db.Put(writeOptions, []byte(id), metaData)
-	if err != nil {
-		logger.Infof("write database failed, err:%v", err)
-		return err
-	}
-	return nil
-}
-
-func (s *StableMetaStorage) GetMeta(objID string) (meta *object.ObjectMeta, err error) {
-	metaData, err := s.db.Get(readOptions, []byte(objID))
-	if err != nil {
-		logger.Errorf("get metaData failed, err:%v", err)
-		return nil, errno.MetaNotExist
-	}
-	M := object.ObjectMeta{}
-	err = proto.Unmarshal(metaData.Data(), &M)
-	if err != nil {
-		return nil, err
-	}
-	metaData.Free()
-	return &M, nil
-}
-
-func (s *StableMetaStorage) Close() {
-	s.db.Close()
-}
-
-func NewStableMetaStorage(dataBaseDir string) *StableMetaStorage {
-	err := common.InitAndClearPath(dataBaseDir)
-	if err != nil {
-		logger.Errorf("init database path failed, err:%v", err)
-	}
-	db, err := gorocksdb.OpenDb(opts, dataBaseDir)
-	if err != nil {
-		logger.Errorf("open database failed, err:%v", err)
-	}
-	logger.Infof("open database: " + dataBaseDir + " success")
-	return &StableMetaStorage{
-		db: db,
-	}
-}
-
-func setRocksdbOptions() {
-	opts = gorocksdb.NewDefaultOptions()
-	opts.SetCreateIfMissing(true)
-}
-
-func setRocksdbReadOptions() {
-	readOptions = gorocksdb.NewDefaultReadOptions()
-}
-
-func setRocksdbWriteOptions() {
-	writeOptions = gorocksdb.NewDefaultWriteOptions()
-}
-
-func init() { // init rocksdb param
-	setRocksdbOptions()
-	setRocksdbWriteOptions()
-	setRocksdbReadOptions()
 }

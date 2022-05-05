@@ -33,7 +33,6 @@ func testAlaya(t *testing.T, mock bool) {
 	basePath := "./ecos-data/"
 	_ = common.InitAndClearPath(basePath)
 	ctx, cancel := context.WithCancel(context.Background())
-	//infoStorage := infos.NewStableNodeInfoStorage(nodeInfoDir)
 
 	nodeNum := 9
 	var alayas []Alayaer
@@ -121,7 +120,7 @@ func testAlaya(t *testing.T, mock bool) {
 	var newAlayas []Alayaer
 	t.Run("add new nodes", func(t *testing.T) {
 		for i := 0; i < 3; i++ {
-			newWatcher, newRpc := watcher.GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(nodeNum+i+1)), sunAddr)
+			newWatcher, newRpc := watcher.GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(nodeNum+i)), sunAddr)
 			newWatchers = append(newWatchers, newWatcher)
 			newRpcs = append(newRpcs, newRpc)
 		}
@@ -228,8 +227,11 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	nodeNum := len(watchers)
 	for i := 0; i < nodeNum; i++ {
 		// TODO (qiutb): apply stable meta storage
-		//metaStorage := NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
-		metaStorageRegister := NewMemoryMetaStorageRegister()
+		// metaStorageRegister := NewMemoryMetaStorageRegister()
+		metaStorageRegister, err := NewRocksDBMetaStorageRegister(path.Join(basePath, strconv.FormatInt(int64(i), 10), "meta"))
+		if err != nil {
+			logger.Errorf("new meta storage register err: %v", err)
+		}
 		a := NewAlaya(ctx, watchers[i], metaStorageRegister, rpcServers[i])
 		alayas = append(alayas, a)
 	}
