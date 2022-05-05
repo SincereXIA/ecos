@@ -4,6 +4,7 @@ import (
 	"context"
 	"ecos/messenger"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"os"
 	"testing"
 	"time"
@@ -43,6 +44,10 @@ func TestMonitor(t *testing.T) {
 	for _, s := range status {
 		t.Logf("%v", s)
 	}
+
+	clusterReports, err := watchers[leader].Monitor.GetClusterReport(ctx, &emptypb.Empty{})
+	assert.NoError(t, err)
+	t.Logf("%v", clusterReports)
 
 	t.Cleanup(func() {
 		cancel()

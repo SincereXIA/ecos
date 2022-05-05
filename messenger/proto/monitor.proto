@@ -66,8 +66,9 @@ message ClusterReport {
     HEALTH_ERR = 3;
   }
   ClusterState state = 1;
-  repeated NodeStatusReport nodes = 2;
-  repeated PipelineReport pipelines = 3;
+  ClusterInfo cluster_info = 2;
+  repeated NodeStatusReport nodes = 3;
+  repeated PipelineReport pipelines = 4;
 }
 
 message StateRequest {}

@@ -3,6 +3,7 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/object"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"github.com/golang/mock/gomock"

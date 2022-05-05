@@ -160,10 +160,14 @@ func (m *NodeMonitor) GetClusterReport(context.Context, *emptypb.Empty) (*Cluste
 		return true
 	})
 
+	// 获取最新集群信息
+	clusterInfo := m.watcher.GetCurrentClusterInfo()
+
 	return &ClusterReport{
-		State:     clusterState,
-		Nodes:     reports,
-		Pipelines: pipelines,
+		State:       clusterState,
+		ClusterInfo: &clusterInfo,
+		Nodes:       reports,
+		Pipelines:   pipelines,
 	}, nil
 }
 
