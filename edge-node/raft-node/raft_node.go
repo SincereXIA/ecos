@@ -268,8 +268,8 @@ func (rc *RaftNode) startRaft(readyC chan bool) {
 		MaxSizePerMsg:             1024 * 1024,
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
-		PreVote:                   true,
-		CheckQuorum:               true,
+		//PreVote:                   true,
+		//CheckQuorum:               true,
 	}
 
 	if oldWal || rc.join {

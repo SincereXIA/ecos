@@ -115,8 +115,11 @@ func (r *Raft) Run() {
 			go r.sendMsgByRpc(msgs)
 		case message := <-r.raftAlayaChan:
 			r.raft.RaftChan <- message
+			logger.Infof("raft %v send message %v to etcd raft success", r.raft.ID, message)
 		case cc := <-r.raft.ApplyConfChangeC:
+			logger.Infof("raft %v apply conf change %v", r.raft.ID, cc)
 			r.CheckConfChange(&cc)
+			logger.Infof("raft %v apply conf change %v done", r.raft.ID, cc)
 			//case ready := <-r.raft.Ready():
 			//	_ = r.raftStorage.Append(ready.Entries)
 			//	go r.sendMsgByRpc(ready.Messages)
@@ -316,6 +319,7 @@ func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 }
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
+	logger.Infof("%v sendMsgByRpc: %v", r.raft.ID, messages)
 	for _, message := range messages {
 		select {
 		case <-r.ctx.Done():

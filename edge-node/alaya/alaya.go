@@ -233,6 +233,7 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	logger.Debugf("alaya %v receive raft message, pg_id: %v", a.selfInfo.RaftId, pgID)
 	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
 		msgChan.(chan raftpb.Message) <- *pgMessage.Message
+		logger.Infof("alaya %v receive raft message than send to raft module", a.selfInfo.RaftId)
 		return &PGRaftMessage{
 			PgId:    pgMessage.PgId,
 			Message: &raftpb.Message{},
