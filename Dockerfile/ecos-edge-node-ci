@@ -8,3 +8,4 @@ COPY  conf/edge_node.json.sample ./edge_node.json
 ENTRYPOINT ["./ecos-edge-node"]
 EXPOSE 3267
 EXPOSE 3268
+EXPOSE 8080
