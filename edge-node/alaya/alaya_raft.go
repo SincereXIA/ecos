@@ -323,6 +323,9 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 			return
 		default:
 		}
+		if message.Type == raftpb.MsgSnap {
+			message.Snapshot.Metadata.ConfState = r.raft.ConfState
+		}
 		//logger.Debugf("%v send msg to node: %v, msg: %v", r.raft.ID, message.To, message)
 		nodeId := message.To
 		nodeInfo, err := r.getNodeInfo(nodeId)
