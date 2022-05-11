@@ -8,7 +8,9 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"fmt"
 	"io"
 	"strconv"
 	"sync"
@@ -112,6 +114,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 				logger.Errorf("get block failed, err: %v", err)
 				return
 			}
+			logger.Tracef("block %10.10s size: %d", info.BlockId, len(block))
 			copy(p[bufferL:bufferR], block[blockL:blockR])
 			atomic.AddInt64(&count, int64(bufferR-bufferL))
 			waitGroup.Done()
@@ -121,7 +124,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 		}(blockInfo, block.bufferStart, block.bufferEnd, block.blockStart, block.blockEnd)
 	}
 	waitGroup.Wait()
-	logger.Debugf("read %d bytes done", count)
+	logger.Tracef("read %d bytes done", count)
 
 	return int(count), err
 }
@@ -204,4 +207,45 @@ func (r *EcosReader) calcBlocks(expect int) ([]calcBlock, error) {
 		return blocks, io.EOF
 	}
 	return blocks, nil
+}
+
+func (r *EcosReader) Seek(offset int64, whence int) (newOffset int64, err error) {
+	if r.meta == nil || r.pipes == nil {
+		err = r.genPipelines()
+		if err != nil {
+			logger.Errorf("gen pipelines failed, err: %v", err)
+		}
+	}
+	switch whence {
+	case io.SeekStart:
+		if newOffset = offset; newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
+			return 0, fmt.Errorf("seek out of range, offset: %d, size: %d", newOffset, r.meta.ObjSize)
+		}
+		r.curBlockIndex = 0
+		r.curBlockOffset = 0
+		_, err = r.calcBlocks(int(offset))
+		return
+	case io.SeekCurrent:
+		var curOffset int64 = 0
+		for i := 0; i <= r.curBlockIndex; i++ {
+			curOffset += int64(r.meta.Blocks[i].BlockSize)
+		}
+		if newOffset = curOffset + offset; newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
+			return 0, fmt.Errorf("seek out of range, offset: %d, size: %d", newOffset, r.meta.ObjSize)
+		}
+		_, err = r.calcBlocks(int(offset))
+		if err != nil {
+			return
+		}
+	case io.SeekEnd:
+		if newOffset = int64(r.meta.ObjSize) - offset; newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
+			return 0, fmt.Errorf("seek out of range, offset: %d, size: %d", newOffset, r.meta.ObjSize)
+		}
+		newOffset = int64(r.meta.ObjSize) - offset
+		_, err = r.calcBlocks(int(newOffset))
+		if err != nil {
+			return
+		}
+	}
+	return 0, errno.IllegalStatus
 }

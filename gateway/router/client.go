@@ -12,6 +12,7 @@ var Client *client.Client
 func InitClient(config config.ClientConfig) {
 	var c *client.Client
 	var err error
+	logger.Infof("InitClient: %+v", config)
 	timer := time.NewTimer(time.Minute * 5)
 	for {
 		select {

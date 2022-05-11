@@ -4,9 +4,13 @@ import (
 	"ecos/edge-node/object"
 	"ecos/utils/errno"
 	"encoding/xml"
+	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
@@ -134,10 +138,124 @@ func headObject(c *gin.Context) {
 	meta := info.(*object.ObjectMeta)
 	c.Header("Content-Length", strconv.FormatUint(meta.ObjSize, 10))
 	c.Header("ETag", meta.ObjHash)
-	c.Header("Last-Modified", meta.UpdateTime.Format(time.RFC850))
+	c.Header("Last-Modified", meta.UpdateTime.Format(time.RFC3339Nano))
 	c.Header("Server", "Ecos")
 	c.Status(http.StatusOK)
 }
+
+// Codes Below from golang.org/x/net/http/fs.go
+// License: github.com/golang/go/LICENSE
+
+/*
+Copyright (c) 2009 The Go Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+type httpRange struct {
+	start, length int64
+}
+
+func (r httpRange) contentRange(size int64) string {
+	return fmt.Sprintf("bytes %d-%d/%d", r.start, r.start+r.length-1, size)
+}
+
+// parseRange parses a Range header string as per RFC 7233.
+// errNoOverlap is returned if none of the ranges overlap.
+func parseRange(s string, size int64) ([]httpRange, error) {
+	if s == "" {
+		return nil, nil // header not present
+	}
+	const b = "bytes="
+	if !strings.HasPrefix(s, b) {
+		return nil, errors.New("invalid range")
+	}
+	var ranges []httpRange
+	noOverlap := false
+	for _, ra := range strings.Split(s[len(b):], ",") {
+		ra = textproto.TrimString(ra)
+		if ra == "" {
+			continue
+		}
+		i := strings.Index(ra, "-")
+		if i < 0 {
+			return nil, errors.New("invalid range")
+		}
+		start, end := textproto.TrimString(ra[:i]), textproto.TrimString(ra[i+1:])
+		var r httpRange
+		if start == "" {
+			// If no start is specified, end specifies the
+			// range start relative to the end of the file.
+			i, err := strconv.ParseInt(end, 10, 64)
+			if err != nil {
+				return nil, errors.New("invalid range")
+			}
+			if i > size {
+				i = size
+			}
+			r.start = size - i
+			r.length = size - r.start
+		} else {
+			i, err := strconv.ParseInt(start, 10, 64)
+			if err != nil || i < 0 {
+				return nil, errors.New("invalid range")
+			}
+			if i >= size {
+				// If the range begins after the size of the content,
+				// then it does not overlap.
+				noOverlap = true
+				continue
+			}
+			r.start = i
+			if end == "" {
+				// If no end is specified, range extends to end of the file.
+				r.length = size - r.start
+			} else {
+				i, err := strconv.ParseInt(end, 10, 64)
+				if err != nil || r.start > i {
+					return nil, errors.New("invalid range")
+				}
+				if i >= size {
+					i = size - 1
+				}
+				r.length = i - r.start + 1
+			}
+		}
+		ranges = append(ranges, r)
+	}
+	if noOverlap && len(ranges) == 0 {
+		// The specified ranges did not overlap with the content.
+		return nil, errors.New("invalid range")
+	}
+	return ranges, nil
+}
+
+// Source codes from golang.org/x/net/http/fs.go ends here
+// Codes Above from golang.org/x/net/http/fs.go
 
 // getObject gets an object
 func getObject(c *gin.Context) {
@@ -176,7 +294,83 @@ func getObject(c *gin.Context) {
 	}
 	meta := info.(*object.ObjectMeta)
 	reader := Client.GetIOFactory(bucketName).GetEcosReader(key)
-	c.DataFromReader(http.StatusOK, int64(meta.ObjSize), "application/octet-stream", reader, nil)
+	c.Header("ETag", meta.ObjId)
+	requestRange := c.Request.Header.Get("Range")
+	if requestRange == "" {
+		c.DataFromReader(http.StatusOK, int64(meta.ObjSize), "application/octet-stream", reader, nil)
+		return
+	}
+	ranges, err := parseRange(requestRange, int64(meta.ObjSize))
+	if err != nil {
+		c.Status(http.StatusRequestedRangeNotSatisfiable)
+		return
+	}
+	c.Header("Accept-Ranges", "bytes")
+	if len(ranges) == 0 {
+		c.Status(http.StatusRequestedRangeNotSatisfiable)
+		return
+	}
+	if len(ranges) == 1 {
+		_, err = reader.Seek(ranges[0].start, io.SeekStart)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
+		c.Status(http.StatusPartialContent)
+		_, err = io.CopyN(c.Writer, reader, ranges[0].length)
+		if err != nil {
+			c.Abort()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
+		return
+	}
+	c.Status(http.StatusPartialContent)
+	if len(ranges) > 1 {
+		multipartWriter := multipart.NewWriter(c.Writer)
+		for _, r := range ranges {
+			_, err = reader.Seek(ranges[0].start, io.SeekStart)
+			if err != nil {
+				c.Abort()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error(),
+				})
+				return
+			}
+			header := map[string][]string{
+				"Content-Range": {fmt.Sprintf("bytes %d-%d/%d", r.start, r.start+r.length-1, meta.ObjSize)},
+			}
+			partWriter, err := multipartWriter.CreatePart(header)
+			if err != nil {
+				c.Abort()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error(),
+				})
+				return
+			}
+			_, err = reader.Seek(r.start, io.SeekStart)
+			if err != nil && err != io.EOF {
+				c.Abort()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error(),
+				})
+				return
+			}
+			_, err = io.CopyN(partWriter, reader, r.length)
+			if err != nil && err != io.EOF {
+				c.Abort()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+		c.Status(http.StatusPartialContent)
+		c.Header("Content-Type", "multipart/byteranges; boundary="+multipartWriter.Boundary())
+		c.Header("ETag", meta.ObjId)
+	}
 }
 
 // deleteObject deletes an object

@@ -16,8 +16,8 @@ var runCmd = &cobra.Command{
 		conf := router.DefaultConfig
 		configUtil.Register(&conf, confPath)
 		configUtil.ReadAll()
-		router := router.NewRouter(router.DefaultConfig)
-		err := router.Run(cmd.Flag("port").Value.String())
+		router := router.NewRouter(conf)
+		err := router.Run(":" + cmd.Flag("port").Value.String())
 		if err != nil {
 			return
 		}
