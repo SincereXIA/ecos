@@ -10,6 +10,6 @@ var DefaultConfig Config
 
 func init() {
 	DefaultConfig.Host = "localhost"
-	DefaultConfig.Port = 3276
+	DefaultConfig.Port = 3267
 	DefaultConfig.EnableAuth = false
 }
