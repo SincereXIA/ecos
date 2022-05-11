@@ -46,10 +46,9 @@ type Moon struct {
 	infoMap  map[uint64]*infos.NodeInfo
 	leaderID uint64 // 注册时的 leader 信息
 
-	infoStorageRegister   *infos.StorageRegister
-	appliedRequestChan    chan *ProposeInfoRequest
-	appliedConfChangeChan chan raftpb.ConfChange
-	appliedConfErrorChan  chan error
+	infoStorageRegister  *infos.StorageRegister
+	appliedRequestChan   chan *ProposeInfoRequest
+	appliedConfErrorChan chan error
 
 	snapshotter *snap.Snapshotter
 
@@ -212,7 +211,7 @@ func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.Nod
 		case <-m.appliedConfErrorChan:
 			// TODO:
 			return nil
-		case <-m.appliedConfChangeChan:
+		case <-m.raft.ApplyConfChangeC:
 			// TODO:
 			return nil
 		}
@@ -242,18 +241,17 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 	ctx, cancel := context.WithCancel(ctx)
 
 	m := &Moon{
-		id:                    0, // set raft id after register
-		SelfInfo:              selfInfo,
-		ctx:                   ctx,
-		cancel:                cancel,
-		mutex:                 sync.RWMutex{},
-		infoMap:               make(map[uint64]*infos.NodeInfo),
-		config:                config,
-		status:                StatusInit,
-		infoStorageRegister:   register,
-		appliedRequestChan:    make(chan *ProposeInfoRequest, 100),
-		appliedConfChangeChan: make(chan raftpb.ConfChange, 100),
-		appliedConfErrorChan:  make(chan error),
+		id:                   0, // set raft id after register
+		SelfInfo:             selfInfo,
+		ctx:                  ctx,
+		cancel:               cancel,
+		mutex:                sync.RWMutex{},
+		infoMap:              make(map[uint64]*infos.NodeInfo),
+		config:               config,
+		status:               StatusInit,
+		infoStorageRegister:  register,
+		appliedRequestChan:   make(chan *ProposeInfoRequest, 100),
+		appliedConfErrorChan: make(chan error),
 	}
 	leaderInfo := config.ClusterInfo.LeaderInfo
 	if leaderInfo != nil {

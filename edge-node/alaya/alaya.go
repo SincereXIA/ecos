@@ -273,6 +273,13 @@ func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 	defer a.mutex.Unlock()
 	a.state = UPDATING
 	oldPipelines := a.clusterPipelines
+	if clusterInfo.LastTerm != 0 {
+		info, err := a.watcher.GetClusterInfoByTerm(clusterInfo.LastTerm)
+		if err != nil {
+			logger.Errorf("get cluster info by term fail, term: %v err: %v", clusterInfo.LastTerm, err.Error())
+		}
+		oldPipelines, _ = pipeline.NewClusterPipelines(&info)
+	}
 	if clusterInfo == nil || len(clusterInfo.NodesInfo) == 0 {
 		logger.Warningf("Empty clusterInfo when alaya apply new clusterInfo")
 		return

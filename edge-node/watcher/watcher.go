@@ -80,11 +80,13 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 			BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: info}},
 		}
 		_, err := w.moon.ProposeInfo(w.ctx, request)
+		logger.Infof("propose New nodeInfo: %v", info.RaftId)
 		if err != nil {
 			// TODO
 			return nil, err
 		}
 		err = w.moon.ProposeConfChangeAddNode(w.ctx, info)
+		logger.Infof("propose conf change to add node: %v", info.RaftId)
 		if err != nil {
 			// TODO
 			return nil, err
@@ -212,6 +214,7 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 		MetaPgSize:      3,
 		BlockPgNum:      100,
 		BlockPgSize:     3,
+		LastTerm:        w.GetCurrentTerm(),
 	}
 }
 
@@ -282,6 +285,7 @@ func (w *Watcher) Run() {
 			logger.Errorf("watcher request join to cluster err: %v", err)
 		}
 	}
+	logger.Infof("%v request join to cluster success", w.GetSelfInfo().RaftId)
 	w.StartMoon()
 	logger.Infof("moon init success, NodeID: %v", w.GetSelfInfo().RaftId)
 }

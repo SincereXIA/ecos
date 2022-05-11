@@ -17,6 +17,7 @@ import (
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
 	"path"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -80,6 +81,8 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 			})
 		}
 	}
+	logger.Infof("%v new raft node for pg %v, peers: %v, oldP: %v", raftID, r.pgID, peers, oldP)
+
 	// TODO: maybe readyC is useless
 	readyC := make(chan bool)
 	// TODO: init wal base path
@@ -116,19 +119,6 @@ func (r *Raft) Run() {
 		case cc := <-r.raft.ApplyConfChangeC:
 			//logger.Infof("%v apply conf change %v", r.raft.ID, cc)
 			r.CheckConfChange(&cc)
-			//logger.Infof("%v apply conf change %v done", r.raft.ID, cc)
-			//case ready := <-r.raft.Ready():
-			//	_ = r.raftStorage.Append(ready.Entries)
-			//	go r.sendMsgByRpc(ready.Messages)
-			//	for _, entry := range ready.CommittedEntries {
-			//		r.process(entry)
-			//		if entry.Type == raftpb.EntryConfChange {
-			//			var cc raftpb.ConfChange
-			//			_ = cc.Unmarshal(entry.Data)
-			//			r.raft.ApplyConfChange(cc)
-			//			r.CheckConfChange(&cc) // TODO: use this function
-			//		}
-			//	}
 		}
 	}
 }
@@ -224,10 +214,14 @@ func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 func (r *Raft) ProposeNewPipeline(newP *pipeline.Pipeline, oldP *pipeline.Pipeline) {
 	r.setPipeline(newP)
 	// clear confChangeChan, to wait conf change propose
-	select {
-	case <-r.confChangeChan:
-	default:
+	for {
+		select {
+		case <-r.confChangeChan:
+		default:
+			goto START
+		}
 	}
+START:
 	go func() {
 		needAdd, needRemove := calDiff(newP.RaftId, oldP.RaftId)
 		err := r.ProposeNewNodes(needAdd)
@@ -251,12 +245,29 @@ func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 	for _, id := range NodeIDs {
 		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raft.ID, r.pgID, id)
 		data, _ := r.getPipeline().Marshal()
-		_ = r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
+		err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeAddNode,
 			NodeID:  id,
 			Context: data,
 		})
-		<-r.confChangeChan
+		for err != nil {
+			err = r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
+				Type:    raftpb.ConfChangeAddNode,
+				NodeID:  id,
+				Context: data,
+			})
+			runtime.Gosched()
+		}
+		// 检查是否 propose 了本次节点
+		for {
+			change := <-r.confChangeChan
+			if change.NodeID != id {
+				r.confChangeChan <- change
+				runtime.Gosched()
+			} else {
+				break
+			}
+		}
 	}
 	return nil
 }
@@ -278,12 +289,29 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 			continue
 		}
 		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raft.ID, r.pgID, id)
-		_ = r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
+		err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeRemoveNode,
 			NodeID:  id,
 			Context: data,
 		})
-		<-r.confChangeChan
+		for err != nil {
+			err = r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
+				Type:    raftpb.ConfChangeAddNode,
+				NodeID:  id,
+				Context: data,
+			})
+			runtime.Gosched()
+		}
+		// 检查是否 propose 了本次节点
+		for {
+			change := <-r.confChangeChan
+			if change.NodeID != id {
+				r.confChangeChan <- change
+				runtime.Gosched()
+			} else {
+				break
+			}
+		}
 	}
 	if removeSelf {
 		logger.Infof("raft: %v PG: %v propose conf change remove self", r.raft.ID, r.pgID)
@@ -292,7 +320,7 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 			NodeID:  uint64(r.raft.ID),
 			Context: data,
 		})
-		<-r.confChangeChan
+		//<-r.confChangeChan
 	}
 	return nil
 }
