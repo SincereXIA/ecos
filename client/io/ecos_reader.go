@@ -115,6 +115,9 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 			copy(p[bufferL:bufferR], block[blockL:blockR])
 			atomic.AddInt64(&count, int64(bufferR-bufferL))
 			waitGroup.Done()
+			if blockR == len(block) {
+				r.cachedBlocks.Delete(info.BlockId) // Finish read, delete from cache
+			}
 		}(blockInfo, block.bufferStart, block.bufferEnd, block.blockStart, block.blockEnd)
 	}
 	waitGroup.Wait()

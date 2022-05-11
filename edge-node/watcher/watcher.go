@@ -129,6 +129,7 @@ func (w *Watcher) GetClusterInfoByTerm(term uint64) (infos.ClusterInfo, error) {
 		if info.Term == 0 {
 			return info, errno.InfoNotFound
 		}
+		return info, nil
 	}
 	clusterInfoStorage := w.register.GetStorage(infos.InfoType_CLUSTER_INFO)
 	info, err := clusterInfoStorage.Get(strconv.FormatUint(term, 10))
