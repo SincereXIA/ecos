@@ -74,10 +74,6 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	logger.Infof("Start init Gaia ...")
 	_ = gaia.NewGaia(ctx, rpc, w, &conf.GaiaConfig)
 
-	// Gen Gateway
-	logger.Infof("Start init Gateway ...")
-	g := gateway.NewRouter(conf.GatewayConfig)
-
 	// Run
 	go func() {
 		err := rpc.Run()
@@ -88,6 +84,9 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	go w.Run()
 	go a.Run()
 	go func() {
+		// Gen Gateway
+		logger.Infof("Start init Gateway ...")
+		g := gateway.NewRouter(conf.GatewayConfig)
 		_ = g.Run()
 	}()
 	logger.Infof("edge node init success")
