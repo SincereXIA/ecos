@@ -109,9 +109,9 @@ func TestGateway(t *testing.T) {
 	t.Run("PostObject", func(t *testing.T) {
 		_, _ = reader.Seek(0, io.SeekStart)
 		// Normal Data
-		testPostObject(t, client, "default", "testPOSTObject.obj", reader)
+		testPostObject(t, client, "default", "/testPOSTObject.obj", reader)
 		// Blank Data
-		testPostObject(t, client, "default", "testPOSTEmptyObject.obj", nil)
+		testPostObject(t, client, "default", "/testPOSTEmptyObject.obj", nil)
 	})
 
 	// Test HEAD Object
@@ -124,7 +124,7 @@ func TestGateway(t *testing.T) {
 	t.Run("GetObject", func(t *testing.T) {
 		_, _ = reader.Seek(0, io.SeekStart)
 		testPutObject(t, client, "default", "testGETObject_PUT.obj", reader)
-		testPostObject(t, client, "default", "testGETObject_POST.obj", reader)
+		testPostObject(t, client, "default", "/testGETObject_POST.obj", reader)
 		obj := testGetObject(t, client, "default", "testGETObject_PUT.obj", false)
 		content, err := io.ReadAll(obj)
 		assert.NoError(t, err)
@@ -162,7 +162,7 @@ func TestGateway(t *testing.T) {
 		_, _ = reader.Seek(0, io.SeekStart)
 		testPutObject(t, client, bucketName, "testDeleteObjects2.obj", reader)
 		// Normal Delete
-		testDeleteObjects(t, client, bucketName, []string{"testDeleteObjects1.obj", "testDeleteObjects2.obj"}, false)
+		testDeleteObjects(t, client, bucketName, []string{"/testDeleteObjects1.obj", "/testDeleteObjects2.obj"}, false)
 		testListObjects(t, client, bucketName, false, 0)
 		// Delete non-exist objects
 		// testDeleteObjects(t, client, "default", []string{"testPUTObject.obj", "testPOSTObject.obj", "testPUTEmptyObject.obj", "testPOSTEmptyObject.obj"}, true)

@@ -4,6 +4,7 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/watcher"
 	"ecos/utils/errno"
+	"ecos/utils/logger"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -140,7 +141,7 @@ func headObject(c *gin.Context) {
 	meta := info.(*object.ObjectMeta)
 	c.Header("Content-Length", strconv.FormatUint(meta.ObjSize, 10))
 	c.Header("ETag", meta.ObjHash)
-	c.Header("Last-Modified", meta.UpdateTime.Format(time.RFC3339Nano))
+	c.Header("Last-Modified", meta.UpdateTime.Format(http.TimeFormat))
 	c.Header("Server", "Ecos")
 	c.Status(http.StatusOK)
 }
@@ -573,7 +574,8 @@ func deleteObjects(c *gin.Context) {
 //  CreateMultiPartUpload:   POST /Key+?uploads
 //  CompleteMultipartUpload: POST /Key+?uploadId=UploadId
 func objectLevelPostHandler(c *gin.Context) {
-	if strings.HasSuffix(c.Request.URL.Path, "/") {
+	logger.Infof("objectLevelPostHandler %v %v", c.Request.URL.Path, c.Param("key"))
+	if c.Param("key") == "/" {
 		bucketLevelPostHandler(c)
 		return
 	}
@@ -595,7 +597,7 @@ func objectLevelPostHandler(c *gin.Context) {
 //  CopyObject: PUT /Key+
 //  UploadPart: PUT /Key+?uploadId=UploadId&partNumber=PartNumber
 func objectLevelPutHandler(c *gin.Context) {
-	if strings.HasSuffix(c.Request.URL.Path, "/") {
+	if c.Param("key") == "/" {
 		createBucket(c)
 		return
 	}
@@ -619,7 +621,7 @@ func objectLevelPutHandler(c *gin.Context) {
 //  GetObject: GET /Key+?partNumber=PartNumber&response-cache-control=ResponseCacheControl&response-content-disposition=ResponseContentDisposition&response-content-encoding=ResponseContentEncoding&response-content-language=ResponseContentLanguage&response-content-type=ResponseContentType&response-expires=ResponseExpires&versionId=VersionId
 //  ListParts: GET /Key+?max-parts=MaxParts&part-number-marker=PartNumberMarker&uploadId=UploadId
 func objectLevelGetHandler(c *gin.Context) {
-	if strings.HasSuffix(c.Request.URL.Path, "/") {
+	if c.Param("key") == "/" {
 		bucketLevelGetHandler(c)
 		return
 	}
