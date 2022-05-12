@@ -2,11 +2,13 @@ package router
 
 import (
 	"ecos/edge-node/object"
+	"ecos/edge-node/watcher"
 	"ecos/utils/errno"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/rcrowley/go-metrics"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -571,6 +573,10 @@ func deleteObjects(c *gin.Context) {
 //  CreateMultiPartUpload:   POST /Key+?uploads
 //  CompleteMultipartUpload: POST /Key+?uploadId=UploadId
 func objectLevelPostHandler(c *gin.Context) {
+	if strings.HasSuffix(c.Request.URL.Path, "/") {
+		bucketLevelPostHandler(c)
+		return
+	}
 	if _, ok := c.GetQuery("uploads"); ok {
 		createMultipartUpload(c)
 		return
@@ -589,8 +595,14 @@ func objectLevelPostHandler(c *gin.Context) {
 //  CopyObject: PUT /Key+
 //  UploadPart: PUT /Key+?uploadId=UploadId&partNumber=PartNumber
 func objectLevelPutHandler(c *gin.Context) {
+	if strings.HasSuffix(c.Request.URL.Path, "/") {
+		createBucket(c)
+		return
+	}
+	timer := time.Now()
 	if _, ok := c.GetQuery("uploadId"); ok {
 		uploadPart(c)
+		defer metrics.GetOrRegisterTimer(watcher.MetricsGatewayPartPutTimer, nil).UpdateSince(timer)
 		return
 	}
 	if c.GetHeader("x-amz-copy-source") != "" {
@@ -598,6 +610,7 @@ func objectLevelPutHandler(c *gin.Context) {
 		return
 	}
 	putObject(c)
+	defer metrics.GetOrRegisterTimer(watcher.MetricsGatewayPutTimer, nil).UpdateSince(timer)
 }
 
 // objectLevelGetHandler handles object level GET requests
@@ -606,15 +619,22 @@ func objectLevelPutHandler(c *gin.Context) {
 //  GetObject: GET /Key+?partNumber=PartNumber&response-cache-control=ResponseCacheControl&response-content-disposition=ResponseContentDisposition&response-content-encoding=ResponseContentEncoding&response-content-language=ResponseContentLanguage&response-content-type=ResponseContentType&response-expires=ResponseExpires&versionId=VersionId
 //  ListParts: GET /Key+?max-parts=MaxParts&part-number-marker=PartNumberMarker&uploadId=UploadId
 func objectLevelGetHandler(c *gin.Context) {
+	if strings.HasSuffix(c.Request.URL.Path, "/") {
+		bucketLevelGetHandler(c)
+		return
+	}
+	timer := time.Now()
 	if _, ok := c.GetQuery("uploadId"); ok {
 		listParts(c)
 		return
 	}
 	if _, ok := c.GetQuery("partNumber"); ok {
 		getPart(c)
+		defer metrics.GetOrRegisterTimer(watcher.MetricsGatewayPartGetTimer, nil).UpdateSince(timer)
 		return
 	}
 	getObject(c)
+	defer metrics.GetOrRegisterTimer(watcher.MetricsGatewayGetTimer, nil).UpdateSince(timer)
 }
 
 // objectLevelDeleteHandler handles object level DELETE requests
@@ -627,4 +647,16 @@ func objectLevelDeleteHandler(c *gin.Context) {
 		abortMultipartUpload(c)
 	}
 	deleteObject(c)
+}
+
+// objectLevelHeadHandler handles object level HEAD requests
+//
+// HEAD /{bucketName}/{key} Include:
+//  HeadObject: HEAD /Key+?versionId=VersionId
+func objectLevelHeadHandler(c *gin.Context) {
+	if strings.HasSuffix(c.Request.URL.Path, "/") {
+		bucketLevelHeadHandler(c)
+		return
+	}
+	headObject(c)
 }

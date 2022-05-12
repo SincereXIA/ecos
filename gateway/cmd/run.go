@@ -3,7 +3,13 @@ package cmd
 import (
 	"ecos/gateway/router"
 	configUtil "ecos/utils/config"
+	"ecos/utils/logger"
+	prometheusMetrics "github.com/deathowl/go-metrics-prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
+	"github.com/rcrowley/go-metrics"
 	"github.com/spf13/cobra"
+	"time"
 )
 
 // runCmd represents the run command
@@ -17,6 +23,18 @@ var runCmd = &cobra.Command{
 		configUtil.Register(&conf, confPath)
 		configUtil.ReadAll()
 		router := router.NewRouter(conf)
+		prometheusClient := prometheusMetrics.NewPrometheusProvider(
+			metrics.DefaultRegistry, "ecos", "gateway", prometheus.DefaultRegisterer, 1*time.Second)
+		go prometheusClient.UpdatePrometheusMetrics()
+		go func() {
+			for {
+				time.Sleep(1 * time.Second)
+				err := push.New("http://gateway.prometheus.sums.top", "ecos-gateway").Gatherer(prometheus.DefaultGatherer).Add()
+				if err != nil {
+					logger.Warningf("failed to push metrics to prometheus: %s", err)
+				}
+			}
+		}()
 		err := router.Run(":" + cmd.Flag("port").Value.String())
 		if err != nil {
 			return

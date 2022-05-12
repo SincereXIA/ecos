@@ -145,6 +145,26 @@ func listObjectsV2(c *gin.Context) {
 	c.XML(http.StatusOK, result)
 }
 
+// headBucket checks if the bucket exists
+//
+// HEAD /{bucketName}
+func headBucket(c *gin.Context) {
+	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code": http.StatusNotFound,
+		})
+		return
+	}
+	_, err := Client.GetVolumeOperator().Get(bucketName)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusOK)
+	return
+}
+
 // bucketLevelPostHandler handles bucket level POST requests
 //
 // POST /{bucketName} Include:
@@ -174,4 +194,20 @@ func bucketLevelGetHandler(c *gin.Context) {
 		return
 	}
 	listObjects(c)
+}
+
+// bucketLevelPutHandler handles bucket level PUT requests
+//
+// PUT /{bucketName} Include:
+//  CreateBucket: PUT /
+func bucketLevelPutHandler(c *gin.Context) {
+	createBucket(c)
+}
+
+// bucketLevelHeadHandler handles bucket level HEAD requests
+//
+// HEAD /{bucketName} Include:
+//  HeadBucket: HEAD /
+func bucketLevelHeadHandler(c *gin.Context) {
+	headBucket(c)
 }
