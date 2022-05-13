@@ -17,6 +17,18 @@ var Logger *logrus.Logger
 func init() {
 	Logger = NewDefaultLogrus()
 	raft.SetLogger(NewRaftLogger())
+	lvl, ok := os.LookupEnv("LOG_LEVEL")
+	// LOG_LEVEL not set, let's default to debug
+	if !ok {
+		lvl = "debug"
+	}
+	// parse string, this is built-in feature of logrus
+	ll, err := logrus.ParseLevel(lvl)
+	if err != nil {
+		ll = logrus.DebugLevel
+	}
+	// set global log level
+	Logger.SetLevel(ll)
 }
 
 func NewRaftLogger() *logrus.Logger {
