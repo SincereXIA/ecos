@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"time"
 )
 
 // Gaia save object block data
@@ -30,6 +31,12 @@ type Gaia struct {
 
 func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 	transporter := &PrimaryCopyTransporter{}
+	var timeStart *time.Time
+	defer func() {
+		if timeStart != nil {
+			metrics.GetOrRegisterTimer(watcher.MetricsGaiaBlockPutTimer, nil).UpdateSince(*timeStart)
+		}
+	}()
 	for {
 		select {
 		case <-g.ctx.Done():
@@ -51,6 +58,10 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 		switch payload := r.Payload.(type) {
 		case *UploadBlockRequest_Message:
 			err = g.processControlMessage(payload, transporter, stream)
+			if payload.Message.Code == ControlMessage_BEGIN && len(payload.Message.Pipeline.RaftId) == 3 {
+				t := time.Now()
+				timeStart = &t
+			}
 		case *UploadBlockRequest_Chunk:
 			err = g.processChunk(payload, transporter, stream)
 		case nil:
@@ -73,6 +84,7 @@ func (g *Gaia) UploadBlockData(stream Gaia_UploadBlockDataServer) error {
 
 // GetBlockData return local block data to client
 func (g *Gaia) GetBlockData(req *GetBlockRequest, server Gaia_GetBlockDataServer) error {
+	timeStart := time.Now()
 	// open block file
 	blockPath := path.Join(g.config.BasePath, req.BlockId)
 	block, err := os.Open(blockPath)
@@ -97,6 +109,7 @@ func (g *Gaia) GetBlockData(req *GetBlockRequest, server Gaia_GetBlockDataServer
 		// read this block finished, return io.EOF
 		if err == io.EOF {
 			logger.Infof("gaia [%v] read this block finished", g.watcher.GetSelfInfo().RaftId)
+			metrics.GetOrRegisterTimer(watcher.MetricsGaiaBlockGetTimer, nil).UpdateSince(timeStart)
 			break
 		}
 		if uint64(curChunk) < startChunk {

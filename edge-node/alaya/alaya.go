@@ -105,6 +105,7 @@ func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
 // RecordObjectMeta record object meta to MetaStorage
 // 将对象元数据存储到 MetaStorage
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
+	timeStart := time.Now()
 	err := a.checkObject(meta)
 	if err != nil {
 		return nil, err
@@ -131,6 +132,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 		}
 		logger.Infof("Alaya record object meta success, obj_id: %v, size: %v", meta.ObjId, meta.ObjSize)
 	}
+	metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaPutTimer, nil).UpdateSince(timeStart)
 
 	return &common.Result{
 		Status: common.Result_OK,
@@ -139,6 +141,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 
 func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
 	// clear meta object id
+	timeStart := time.Now()
 	objID := object.CleanObjectKey(req.ObjId)
 	pgID := a.calculateObjectPGID(objID)
 	storage, err := a.MetaStorageRegister.GetStorage(pgID)
@@ -154,6 +157,7 @@ func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.Obje
 		logger.Errorf("alaya get metaStorage by objID failed, err: %v", err)
 		return nil, err
 	}
+	metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaGetTimer, nil).UpdateSince(timeStart)
 	return objMeta, nil
 }
 

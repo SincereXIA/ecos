@@ -5,9 +5,11 @@ import (
 	"ecos/client/config"
 	"ecos/edge-node/infos"
 	edgeNodeTest "ecos/edge-node/test"
+	"ecos/edge-node/watcher"
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"github.com/elliotchance/orderedmap"
+	"github.com/rcrowley/go-metrics"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"io"
@@ -28,7 +30,7 @@ func TestClient(t *testing.T) {
 		_ = os.RemoveAll(basePath)
 	})
 	_ = common.InitAndClearPath(basePath)
-	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, true, basePath, 9)
+	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, false, basePath, 9)
 
 	conf := config.DefaultConfig
 	conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
@@ -81,6 +83,13 @@ func TestClient(t *testing.T) {
 		_, err = bucket.Get("/test0/ecos-test")
 		assert.Error(t, err, "get removed object should fail")
 		time.Sleep(time.Second)
+	})
+
+	t.Run("test metrics", func(t *testing.T) {
+		metaPutTime := metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaPutTimer, nil).Mean()
+		t.Logf("meta put time: %v", metaPutTime)
+		blockPutTime := metrics.GetOrRegisterTimer(watcher.MetricsGaiaBlockPutTimer, nil).Mean()
+		t.Logf("block put time: %v", blockPutTime/float64(time.Second.Nanoseconds()))
 	})
 }
 
