@@ -33,3 +33,10 @@ var MetricsGatewayLabels = []string{
 	MetricsGatewayPutTimer,
 	MetricsGatewayPartPutTimer,
 }
+
+const (
+	MetricsSystem                              = "ecos.node.system"
+	MetricsSystemNetwork                       = MetricsSystem + ".network"
+	MetricsSystemNetworkBytesSendPerSecond     = MetricsSystemNetwork + ".bytes.send.per.second"
+	MetricsSystemNetworkBytesReceivedPerSecond = MetricsSystemNetwork + ".bytes.received.per.second"
+)

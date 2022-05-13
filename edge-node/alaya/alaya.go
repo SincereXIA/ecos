@@ -15,6 +15,7 @@ import (
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"sync"
+	"time"
 )
 
 type Alayaer interface {
@@ -235,10 +236,8 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	default:
 	}
 	pgID := pgMessage.PgId
-	//logger.Debugf("alaya %v receive raft message, pg_id: %v", a.selfInfo.RaftId, pgID)
 	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
 		msgChan.(chan raftpb.Message) <- *pgMessage.Message
-		//	logger.Infof("alaya %v receive raft message than send to raft module", a.selfInfo.RaftId)
 		return &PGRaftMessage{
 			PgId:    pgMessage.PgId,
 			Message: &raftpb.Message{},
@@ -418,11 +417,6 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 		if raftNode.raft.Node.Status().Lead != raftNode.getPipeline().RaftId[0] ||
 			len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
 			ok = false
-			// Print for debug
-			//logger.Infof("Assume Alaya: %v, PG: %v, leader: %v, voter: %v",
-			//	a.selfInfo.RaftId, key.(uint64), raftNode.raft.Node.Status().Lead, raftNode.getPipeline().RaftId)
-			//logger.Infof("Real Alaya: %v, PG: %v, leader: %v, voter: %v",
-			//	a.selfInfo.RaftId, key.(uint64), raftNode.raft.Node.Status().Lead, raftNode.GetVotersID())
 			return false
 		}
 		length += 1
