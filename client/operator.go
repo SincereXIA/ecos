@@ -180,7 +180,7 @@ func (b *BucketOperator) Remove(key string) error {
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
 	if err != nil {
-		logger.Errorf("delete meta: %v failed, err: %v", object.GenObjectId(b.bucketInfo, key), err)
+		logger.Warningf("delete meta: %v failed, err: %v", object.GenObjectId(b.bucketInfo, key), err)
 	}
 	return err
 }

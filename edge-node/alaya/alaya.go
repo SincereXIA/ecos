@@ -15,6 +15,7 @@ import (
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"sync"
+	"time"
 )
 
 type Alayaer interface {
@@ -241,7 +242,8 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 			Message: &raftpb.Message{},
 		}, nil
 	}
-	logger.Warningf("receive raft message from: %v, but pg: %v not exist", pgMessage.Message.From, pgID)
+	logger.Warningf("%v receive raft message from: %v, but pg: %v not exist",
+		a.selfInfo.RaftId, pgMessage.Message.From, pgID)
 	return nil, errno.PGNotExist
 }
 
