@@ -85,7 +85,7 @@ func (m *NodeMonitor) pushToPrometheus() {
 	logger.Infof("[Prometheus push] start")
 
 	prometheusClient := prometheusmetrics.NewPrometheusProvider(
-		metrics.DefaultRegistry, "ecos",
+		metrics.DefaultRegistry, m.watcher.config.ClusterName,
 		"edge-node"+strconv.FormatUint(m.watcher.GetSelfInfo().RaftId, 10),
 		prometheus.DefaultRegisterer, 1*time.Second)
 	go prometheusClient.UpdatePrometheusMetrics()
