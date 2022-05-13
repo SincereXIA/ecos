@@ -87,6 +87,9 @@ func (a *Alaya) calculateObjectPGID(objectID string) uint64 {
 }
 
 func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
+	// clear meta object id
+	meta.ObjId = object.CleanObjectKey(meta.ObjId)
+
 	// check if meta belongs to this PG
 	pgID := a.calculateObjectPGID(meta.ObjId)
 	if meta.Term != a.watcher.GetCurrentTerm() {
@@ -99,6 +102,8 @@ func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
 	return nil
 }
 
+// RecordObjectMeta record object meta to MetaStorage
+// 将对象元数据存储到 MetaStorage
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
 	err := a.checkObject(meta)
 	if err != nil {
@@ -133,7 +138,8 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 }
 
 func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
-	objID := req.ObjId
+	// clear meta object id
+	objID := object.CleanObjectKey(req.ObjId)
 	pgID := a.calculateObjectPGID(objID)
 	storage, err := a.MetaStorageRegister.GetStorage(pgID)
 	if err != nil {
@@ -153,7 +159,7 @@ func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.Obje
 
 // DeleteMeta delete meta from metaStorage, and request delete object blocks
 func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common.Result, error) {
-	objID := req.ObjId
+	objID := object.CleanObjectKey(req.ObjId)
 	objMeta, err := a.GetObjectMeta(ctx, &MetaRequest{ObjId: objID})
 	if err != nil {
 		logger.Errorf("alaya get meta by objID failed, err: %v", err)
@@ -197,6 +203,7 @@ func (a *Alaya) ListMeta(_ context.Context, req *ListMetaRequest) (*ObjectMetaLi
 	storages := a.MetaStorageRegister.GetAllStorage()
 	var metasList [][]*object.ObjectMeta
 	for _, storage := range storages {
+		req.Prefix = object.CleanObjectKey(req.Prefix)
 		metas, _ := storage.List(req.Prefix)
 		metasList = append(metasList, metas)
 	}
