@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -80,6 +81,13 @@ func listObjects(c *gin.Context) {
 	}
 	listObjectsResult, err := Client.ListObjects(c, bucketName)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    http.StatusNotFound,
+				"message": errno.MissingBucket.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
@@ -118,7 +126,14 @@ func listObjectsV2(c *gin.Context) {
 	}
 	listObjectsResult, err := Client.ListObjects(c, bucketName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    http.StatusNotFound,
+				"message": errno.MissingBucket.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -158,7 +173,16 @@ func headBucket(c *gin.Context) {
 	}
 	_, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    http.StatusNotFound,
+				"message": errno.MissingBucket.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 	c.Status(http.StatusOK)

@@ -4,7 +4,6 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/watcher"
 	"ecos/utils/errno"
-	"ecos/utils/logger"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -574,7 +573,6 @@ func deleteObjects(c *gin.Context) {
 //  CreateMultiPartUpload:   POST /Key+?uploads
 //  CompleteMultipartUpload: POST /Key+?uploadId=UploadId
 func objectLevelPostHandler(c *gin.Context) {
-	logger.Infof("objectLevelPostHandler %v %v", c.Request.URL.Path, c.Param("key"))
 	if c.Param("key") == "/" {
 		bucketLevelPostHandler(c)
 		return
@@ -656,7 +654,7 @@ func objectLevelDeleteHandler(c *gin.Context) {
 // HEAD /{bucketName}/{key} Include:
 //  HeadObject: HEAD /Key+?versionId=VersionId
 func objectLevelHeadHandler(c *gin.Context) {
-	if strings.HasSuffix(c.Request.URL.Path, "/") {
+	if c.Param("key") == "/" {
 		bucketLevelHeadHandler(c)
 		return
 	}

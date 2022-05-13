@@ -80,6 +80,12 @@ func TestGateway(t *testing.T) {
 		testCreateBucket(t, client, bucketName, false)
 	})
 
+	// Test Head Bucket
+	t.Run("HeadBucket", func(t *testing.T) {
+		testHeadBucket(t, client, "wrongBucket", true)
+		testHeadBucket(t, client, "test", false)
+	})
+
 	// Test List Bucket
 	t.Run("ListBucket", func(t *testing.T) {
 		// Wrong Bucket Name
@@ -109,9 +115,9 @@ func TestGateway(t *testing.T) {
 	t.Run("PostObject", func(t *testing.T) {
 		_, _ = reader.Seek(0, io.SeekStart)
 		// Normal Data
-		testPostObject(t, client, "default", "/testPOSTObject.obj", reader)
+		testPostObject(t, client, "default", "testPOSTObject.obj", reader)
 		// Blank Data
-		testPostObject(t, client, "default", "/testPOSTEmptyObject.obj", nil)
+		testPostObject(t, client, "default", "testPOSTEmptyObject.obj", nil)
 	})
 
 	// Test HEAD Object
@@ -124,7 +130,7 @@ func TestGateway(t *testing.T) {
 	t.Run("GetObject", func(t *testing.T) {
 		_, _ = reader.Seek(0, io.SeekStart)
 		testPutObject(t, client, "default", "testGETObject_PUT.obj", reader)
-		testPostObject(t, client, "default", "/testGETObject_POST.obj", reader)
+		testPostObject(t, client, "default", "testGETObject_POST.obj", reader)
 		obj := testGetObject(t, client, "default", "testGETObject_PUT.obj", false)
 		content, err := io.ReadAll(obj)
 		assert.NoError(t, err)
@@ -162,7 +168,7 @@ func TestGateway(t *testing.T) {
 		_, _ = reader.Seek(0, io.SeekStart)
 		testPutObject(t, client, bucketName, "testDeleteObjects2.obj", reader)
 		// Normal Delete
-		testDeleteObjects(t, client, bucketName, []string{"/testDeleteObjects1.obj", "/testDeleteObjects2.obj"}, false)
+		testDeleteObjects(t, client, bucketName, []string{"testDeleteObjects1.obj", "testDeleteObjects2.obj"}, false)
 		testListObjects(t, client, bucketName, false, 0)
 		// Delete non-exist objects
 		// testDeleteObjects(t, client, "default", []string{"testPUTObject.obj", "testPOSTObject.obj", "testPUTEmptyObject.obj", "testPOSTEmptyObject.obj"}, true)
@@ -243,6 +249,18 @@ func testCreateBucket(t *testing.T, client *s3.Client, bucketName string, wantEr
 	t.Logf("CreateBucketOutput: %v", createBucketOutput)
 }
 
+func testHeadBucket(t *testing.T, client *s3.Client, bucketName string, wantErr bool) {
+	headBucketOutput, err := client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if wantErr {
+		assert.Error(t, err)
+		return
+	}
+	assert.NoError(t, err)
+	t.Logf("HeadBucketOutput: %v", headBucketOutput)
+}
+
 func testListObjects(t *testing.T, client *s3.Client, bucketName string, wantErr bool, wantLength int) {
 	listObjectsOutput, err := client.ListObjects(context.TODO(), &s3.ListObjectsInput{
 		Bucket: aws.String(bucketName),
@@ -254,6 +272,9 @@ func testListObjects(t *testing.T, client *s3.Client, bucketName string, wantErr
 	assert.NoError(t, err)
 	assert.Equal(t, wantLength, len(listObjectsOutput.Contents))
 	t.Logf("ListObjects: %#v", listObjectsOutput)
+	for _, obj := range listObjectsOutput.Contents {
+		t.Logf("Object: {Key: {%s}\t Size: {%v}}", *obj.Key, obj.Size)
+	}
 }
 
 func testListObjectsV2(t *testing.T, client *s3.Client, bucketName string, wantErr bool, wantLength int) {
@@ -267,6 +288,9 @@ func testListObjectsV2(t *testing.T, client *s3.Client, bucketName string, wantE
 	assert.NoError(t, err)
 	assert.Equal(t, wantLength, len(listObjectsV2Output.Contents))
 	t.Logf("ListObjects: %#v", listObjectsV2Output)
+	for _, obj := range listObjectsV2Output.Contents {
+		t.Logf("Object: {Key: {%s}\t Size: {%v}}", *obj.Key, obj.Size)
+	}
 }
 
 func testPutObject(t *testing.T, client *s3.Client, bucketName string, key string, data io.Reader) {
