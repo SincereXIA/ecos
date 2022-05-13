@@ -7,6 +7,10 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/logger"
 	"errors"
+	prometheusmetrics "github.com/deathowl/go-metrics-prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
+	"github.com/rcrowley/go-metrics"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"sort"
 	"strconv"
@@ -64,6 +68,41 @@ type NodeMonitor struct {
 
 	reportersMap sync.Map
 	eventChannel chan *Event
+}
+
+func (m *NodeMonitor) pushToPrometheus() {
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
+		if m.watcher.GetCurrentTerm() > 0 {
+			break
+		}
+		time.Sleep(time.Second * 3)
+	}
+	logger.Infof("[Prometheus push] start")
+
+	prometheusClient := prometheusmetrics.NewPrometheusProvider(
+		metrics.DefaultRegistry, "ecos",
+		"edge-node"+strconv.FormatUint(m.watcher.GetSelfInfo().RaftId, 10),
+		prometheus.DefaultRegisterer, 1*time.Second)
+	go prometheusClient.UpdatePrometheusMetrics()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
+		err := push.New("http://gateway.prometheus.sums.top", "monitor").
+			Gatherer(prometheus.DefaultGatherer).Grouping("ecos", "monitor").Push()
+		if err != nil {
+			logger.Warningf("push to prometheus failed: %s", err)
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func (m *NodeMonitor) Register(name string, reporter Reporter) error {
@@ -232,6 +271,7 @@ func (m *NodeMonitor) runReport() {
 func (m *NodeMonitor) Run() {
 	m.timer = time.NewTicker(time.Second * 1)
 	go m.runReport()
+	go m.pushToPrometheus()
 }
 
 func (m *NodeMonitor) stop() {
