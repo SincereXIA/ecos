@@ -60,8 +60,8 @@ func (c *ClusterOperator) State() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sort.Slice(report.Reports, func(i, j int) bool {
-		return report.Reports[i].NodeId < report.Reports[j].NodeId
+	sort.Slice(report.Nodes, func(i, j int) bool {
+		return report.Nodes[i].NodeId < report.Nodes[j].NodeId
 	})
 	state, _ := protoToJson(report)
 

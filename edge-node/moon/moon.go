@@ -13,9 +13,9 @@ import (
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
 	"google.golang.org/protobuf/testing/protocmp"
+	"runtime"
 	"strconv"
 	"sync"
-	"time"
 )
 
 type InfoController interface {
@@ -94,7 +94,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 			break
 		} else {
 			m.appliedRequestChan <- applied
-			time.Sleep(10 * time.Millisecond)
+			runtime.Gosched()
 		}
 	}
 

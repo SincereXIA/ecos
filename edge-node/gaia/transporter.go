@@ -1,6 +1,7 @@
 package gaia
 
 import (
+	"bufio"
 	"context"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
@@ -68,10 +69,11 @@ func (transporter *PrimaryCopyTransporter) init() error {
 	blockPath := transporter.GetStoragePath()
 	_ = common.InitParentPath(blockPath)
 	localWriter, err := os.Create(blockPath)
+	bufferedWriter := bufio.NewWriter(localWriter)
 	if err != nil {
 		return err // TODO: trans to ecos err
 	}
-	transporter.localWriter = localWriter
+	transporter.localWriter = bufferedWriter
 	return nil
 }
 

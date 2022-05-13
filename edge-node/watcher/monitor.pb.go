@@ -27,15 +27,113 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
+type NodeStatusReport_Role int32
+
+const (
+	NodeStatusReport_UNKNOWN  NodeStatusReport_Role = 0
+	NodeStatusReport_LEADER   NodeStatusReport_Role = 1
+	NodeStatusReport_FOLLOWER NodeStatusReport_Role = 2
+	NodeStatusReport_LEARNER  NodeStatusReport_Role = 3
+)
+
+var NodeStatusReport_Role_name = map[int32]string{
+	0: "UNKNOWN",
+	1: "LEADER",
+	2: "FOLLOWER",
+	3: "LEARNER",
+}
+
+var NodeStatusReport_Role_value = map[string]int32{
+	"UNKNOWN":  0,
+	"LEADER":   1,
+	"FOLLOWER": 2,
+	"LEARNER":  3,
+}
+
+func (x NodeStatusReport_Role) String() string {
+	return proto.EnumName(NodeStatusReport_Role_name, int32(x))
+}
+
+func (NodeStatusReport_Role) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_44174b7b2a306b71, []int{0, 0}
+}
+
+type PipelineReport_State int32
+
+const (
+	PipelineReport_UNKNOWN    PipelineReport_State = 0
+	PipelineReport_OK         PipelineReport_State = 1
+	PipelineReport_DOWN_GRADE PipelineReport_State = 2
+	PipelineReport_CHANGING   PipelineReport_State = 3
+	PipelineReport_ERROR      PipelineReport_State = 4
+)
+
+var PipelineReport_State_name = map[int32]string{
+	0: "UNKNOWN",
+	1: "OK",
+	2: "DOWN_GRADE",
+	3: "CHANGING",
+	4: "ERROR",
+}
+
+var PipelineReport_State_value = map[string]int32{
+	"UNKNOWN":    0,
+	"OK":         1,
+	"DOWN_GRADE": 2,
+	"CHANGING":   3,
+	"ERROR":      4,
+}
+
+func (x PipelineReport_State) String() string {
+	return proto.EnumName(PipelineReport_State_name, int32(x))
+}
+
+func (PipelineReport_State) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_44174b7b2a306b71, []int{2, 0}
+}
+
+type ClusterReport_ClusterState int32
+
+const (
+	ClusterReport_UNKNOWN     ClusterReport_ClusterState = 0
+	ClusterReport_HEALTH_OK   ClusterReport_ClusterState = 1
+	ClusterReport_HEALTH_WARN ClusterReport_ClusterState = 2
+	ClusterReport_HEALTH_ERR  ClusterReport_ClusterState = 3
+)
+
+var ClusterReport_ClusterState_name = map[int32]string{
+	0: "UNKNOWN",
+	1: "HEALTH_OK",
+	2: "HEALTH_WARN",
+	3: "HEALTH_ERR",
+}
+
+var ClusterReport_ClusterState_value = map[string]int32{
+	"UNKNOWN":     0,
+	"HEALTH_OK":   1,
+	"HEALTH_WARN": 2,
+	"HEALTH_ERR":  3,
+}
+
+func (x ClusterReport_ClusterState) String() string {
+	return proto.EnumName(ClusterReport_ClusterState_name, int32(x))
+}
+
+func (ClusterReport_ClusterState) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_44174b7b2a306b71, []int{3, 0}
+}
+
 type NodeStatusReport struct {
-	NodeId               uint64               `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	NodeUuid             string               `protobuf:"bytes,2,opt,name=node_uuid,json=nodeUuid,proto3" json:"node_uuid,omitempty"`
-	Timestamp            *timestamp.Timestamp `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	State                infos.NodeState      `protobuf:"varint,4,opt,name=state,proto3,enum=messenger.NodeState" json:"state,omitempty"`
-	Status               *NodeStatus          `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
-	XXX_unrecognized     []byte               `json:"-"`
-	XXX_sizecache        int32                `json:"-"`
+	NodeId               uint64                `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	NodeUuid             string                `protobuf:"bytes,2,opt,name=node_uuid,json=nodeUuid,proto3" json:"node_uuid,omitempty"`
+	Timestamp            *timestamp.Timestamp  `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	State                infos.NodeState       `protobuf:"varint,4,opt,name=state,proto3,enum=messenger.NodeState" json:"state,omitempty"`
+	Status               *NodeStatus           `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	Role                 NodeStatusReport_Role `protobuf:"varint,6,opt,name=role,proto3,enum=messenger.NodeStatusReport_Role" json:"role,omitempty"`
+	Pipelines            []*PipelineReport     `protobuf:"bytes,7,rep,name=pipelines,proto3" json:"pipelines,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
 }
 
 func (m *NodeStatusReport) Reset()         { *m = NodeStatusReport{} }
@@ -102,6 +200,20 @@ func (m *NodeStatusReport) GetState() infos.NodeState {
 func (m *NodeStatusReport) GetStatus() *NodeStatus {
 	if m != nil {
 		return m.Status
+	}
+	return nil
+}
+
+func (m *NodeStatusReport) GetRole() NodeStatusReport_Role {
+	if m != nil {
+		return m.Role
+	}
+	return NodeStatusReport_UNKNOWN
+}
+
+func (m *NodeStatusReport) GetPipelines() []*PipelineReport {
+	if m != nil {
+		return m.Pipelines
 	}
 	return nil
 }
@@ -225,18 +337,84 @@ func (m *NodeStatus) GetMetaPipelineCount() uint64 {
 	return 0
 }
 
+type PipelineReport struct {
+	PgId                 uint64               `protobuf:"varint,1,opt,name=pg_id,json=pgId,proto3" json:"pg_id,omitempty"`
+	NodeIds              []uint64             `protobuf:"varint,2,rep,packed,name=node_ids,json=nodeIds,proto3" json:"node_ids,omitempty"`
+	State                PipelineReport_State `protobuf:"varint,3,opt,name=state,proto3,enum=messenger.PipelineReport_State" json:"state,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
+	XXX_unrecognized     []byte               `json:"-"`
+	XXX_sizecache        int32                `json:"-"`
+}
+
+func (m *PipelineReport) Reset()         { *m = PipelineReport{} }
+func (m *PipelineReport) String() string { return proto.CompactTextString(m) }
+func (*PipelineReport) ProtoMessage()    {}
+func (*PipelineReport) Descriptor() ([]byte, []int) {
+	return fileDescriptor_44174b7b2a306b71, []int{2}
+}
+func (m *PipelineReport) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *PipelineReport) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_PipelineReport.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *PipelineReport) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PipelineReport.Merge(m, src)
+}
+func (m *PipelineReport) XXX_Size() int {
+	return m.Size()
+}
+func (m *PipelineReport) XXX_DiscardUnknown() {
+	xxx_messageInfo_PipelineReport.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PipelineReport proto.InternalMessageInfo
+
+func (m *PipelineReport) GetPgId() uint64 {
+	if m != nil {
+		return m.PgId
+	}
+	return 0
+}
+
+func (m *PipelineReport) GetNodeIds() []uint64 {
+	if m != nil {
+		return m.NodeIds
+	}
+	return nil
+}
+
+func (m *PipelineReport) GetState() PipelineReport_State {
+	if m != nil {
+		return m.State
+	}
+	return PipelineReport_UNKNOWN
+}
+
 type ClusterReport struct {
-	Reports              []*NodeStatusReport `protobuf:"bytes,1,rep,name=reports,proto3" json:"reports,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
-	XXX_unrecognized     []byte              `json:"-"`
-	XXX_sizecache        int32               `json:"-"`
+	State                ClusterReport_ClusterState `protobuf:"varint,1,opt,name=state,proto3,enum=messenger.ClusterReport_ClusterState" json:"state,omitempty"`
+	ClusterInfo          *infos.ClusterInfo         `protobuf:"bytes,2,opt,name=cluster_info,json=clusterInfo,proto3" json:"cluster_info,omitempty"`
+	Nodes                []*NodeStatusReport        `protobuf:"bytes,3,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	Pipelines            []*PipelineReport          `protobuf:"bytes,4,rep,name=pipelines,proto3" json:"pipelines,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
+	XXX_unrecognized     []byte                     `json:"-"`
+	XXX_sizecache        int32                      `json:"-"`
 }
 
 func (m *ClusterReport) Reset()         { *m = ClusterReport{} }
 func (m *ClusterReport) String() string { return proto.CompactTextString(m) }
 func (*ClusterReport) ProtoMessage()    {}
 func (*ClusterReport) Descriptor() ([]byte, []int) {
-	return fileDescriptor_44174b7b2a306b71, []int{2}
+	return fileDescriptor_44174b7b2a306b71, []int{3}
 }
 func (m *ClusterReport) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -265,9 +443,30 @@ func (m *ClusterReport) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ClusterReport proto.InternalMessageInfo
 
-func (m *ClusterReport) GetReports() []*NodeStatusReport {
+func (m *ClusterReport) GetState() ClusterReport_ClusterState {
 	if m != nil {
-		return m.Reports
+		return m.State
+	}
+	return ClusterReport_UNKNOWN
+}
+
+func (m *ClusterReport) GetClusterInfo() *infos.ClusterInfo {
+	if m != nil {
+		return m.ClusterInfo
+	}
+	return nil
+}
+
+func (m *ClusterReport) GetNodes() []*NodeStatusReport {
+	if m != nil {
+		return m.Nodes
+	}
+	return nil
+}
+
+func (m *ClusterReport) GetPipelines() []*PipelineReport {
+	if m != nil {
+		return m.Pipelines
 	}
 	return nil
 }
@@ -282,7 +481,7 @@ func (m *StateRequest) Reset()         { *m = StateRequest{} }
 func (m *StateRequest) String() string { return proto.CompactTextString(m) }
 func (*StateRequest) ProtoMessage()    {}
 func (*StateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_44174b7b2a306b71, []int{3}
+	return fileDescriptor_44174b7b2a306b71, []int{4}
 }
 func (m *StateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -312,8 +511,12 @@ func (m *StateRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_StateRequest proto.InternalMessageInfo
 
 func init() {
+	proto.RegisterEnum("messenger.NodeStatusReport_Role", NodeStatusReport_Role_name, NodeStatusReport_Role_value)
+	proto.RegisterEnum("messenger.PipelineReport_State", PipelineReport_State_name, PipelineReport_State_value)
+	proto.RegisterEnum("messenger.ClusterReport_ClusterState", ClusterReport_ClusterState_name, ClusterReport_ClusterState_value)
 	proto.RegisterType((*NodeStatusReport)(nil), "messenger.NodeStatusReport")
 	proto.RegisterType((*NodeStatus)(nil), "messenger.NodeStatus")
+	proto.RegisterType((*PipelineReport)(nil), "messenger.PipelineReport")
 	proto.RegisterType((*ClusterReport)(nil), "messenger.ClusterReport")
 	proto.RegisterType((*StateRequest)(nil), "messenger.StateRequest")
 }
@@ -321,43 +524,60 @@ func init() {
 func init() { proto.RegisterFile("monitor.proto", fileDescriptor_44174b7b2a306b71) }
 
 var fileDescriptor_44174b7b2a306b71 = []byte{
-	// 574 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x93, 0xcf, 0x6e, 0xd3, 0x40,
-	0x10, 0x87, 0xb3, 0x6d, 0x9a, 0x34, 0x93, 0x3f, 0x6d, 0x17, 0x68, 0xad, 0x54, 0xa4, 0xc1, 0x08,
-	0x11, 0x21, 0xd5, 0x91, 0x82, 0xb8, 0x20, 0x71, 0x80, 0x8a, 0x56, 0x1c, 0x40, 0xd5, 0xb6, 0xbd,
-	0x70, 0xb1, 0x1c, 0x7b, 0x6a, 0xac, 0xda, 0x5e, 0xe3, 0xdd, 0xa5, 0xea, 0x9b, 0xf0, 0x48, 0x1c,
-	0x38, 0x70, 0xe3, 0x8a, 0xca, 0x43, 0x70, 0x45, 0xbb, 0xeb, 0xb4, 0x8e, 0x54, 0xf5, 0x96, 0xfd,
-	0x7e, 0x5f, 0x66, 0x67, 0xe4, 0x1d, 0xe8, 0x67, 0x3c, 0x4f, 0x24, 0x2f, 0xbd, 0xa2, 0xe4, 0x92,
-	0xd3, 0x4e, 0x86, 0x42, 0x60, 0x1e, 0x63, 0x39, 0xec, 0x85, 0x3c, 0xcb, 0x78, 0x6e, 0x83, 0x61,
-	0x37, 0xc9, 0xcf, 0xb9, 0xa8, 0x0e, 0x1b, 0x32, 0xc9, 0x50, 0xc8, 0x20, 0x2b, 0x2a, 0xb0, 0x1b,
-	0x73, 0x1e, 0xa7, 0x38, 0x35, 0xa7, 0xb9, 0x3a, 0x9f, 0x62, 0x56, 0xc8, 0x2b, 0x1b, 0xba, 0xbf,
-	0x09, 0x6c, 0x7e, 0xe2, 0x11, 0x9e, 0xc8, 0x40, 0x2a, 0xc1, 0xb0, 0xe0, 0xa5, 0xa4, 0x3b, 0xd0,
-	0xce, 0x79, 0x84, 0x7e, 0x12, 0x39, 0x64, 0x4c, 0x26, 0x4d, 0xd6, 0xd2, 0xc7, 0x0f, 0x11, 0xdd,
-	0x85, 0x8e, 0x09, 0x94, 0x4a, 0x22, 0x67, 0x65, 0x4c, 0x26, 0x1d, 0xb6, 0xae, 0xc1, 0x99, 0x4a,
-	0x22, 0x3a, 0x83, 0xce, 0xcd, 0xd5, 0xce, 0xea, 0x98, 0x4c, 0xba, 0xb3, 0x87, 0xde, 0x4d, 0xcb,
-	0xde, 0xe9, 0x22, 0x63, 0xb7, 0x1a, 0x7d, 0x01, 0x6b, 0x42, 0x06, 0x12, 0x9d, 0xe6, 0x98, 0x4c,
-	0x06, 0x4b, 0xfe, 0xa2, 0x2b, 0x64, 0x56, 0xa1, 0xfb, 0xd0, 0x12, 0xa6, 0x4b, 0x67, 0xcd, 0x14,
-	0x7f, 0x74, 0x87, 0xac, 0x04, 0xab, 0x24, 0xf7, 0xdf, 0x0a, 0xc0, 0x2d, 0xa6, 0xcf, 0x60, 0x10,
-	0x25, 0xe2, 0xc2, 0x0f, 0xbe, 0x05, 0x49, 0x1a, 0xcc, 0x53, 0xac, 0x46, 0xeb, 0x6b, 0xfa, 0x76,
-	0x01, 0xe9, 0x63, 0x00, 0xa3, 0x49, 0x2e, 0x83, 0xd4, 0x8c, 0xd8, 0x64, 0x1d, 0x4d, 0x4e, 0x35,
-	0xa0, 0x4f, 0xa1, 0x9f, 0xa3, 0xbc, 0xe4, 0xe5, 0x85, 0x2f, 0x0a, 0xc4, 0xc8, 0xcc, 0xd9, 0x64,
-	0xbd, 0x0a, 0x9e, 0x68, 0x46, 0xf7, 0xa0, 0x1b, 0x16, 0xca, 0x2f, 0xb0, 0x0c, 0x31, 0x97, 0x66,
-	0x34, 0xc2, 0x20, 0x2c, 0xd4, 0xb1, 0x25, 0xf4, 0x09, 0xf4, 0x32, 0xcc, 0x78, 0x79, 0xe5, 0x2b,
-	0x11, 0xc4, 0x68, 0xe6, 0x69, 0xb2, 0xae, 0x65, 0x67, 0x1a, 0xd5, 0x14, 0xdb, 0x49, 0xab, 0xae,
-	0xd8, 0x5e, 0xf6, 0xa0, 0x3b, 0x4f, 0x79, 0x78, 0xe1, 0x87, 0x5c, 0xe5, 0xd2, 0x69, 0x1b, 0x03,
-	0x0c, 0x3a, 0xd0, 0x44, 0xcf, 0x92, 0xa1, 0x0c, 0xaa, 0x7c, 0xdd, 0xce, 0xa2, 0x89, 0x8d, 0x9f,
-	0xc3, 0x46, 0xcc, 0x4b, 0xae, 0x64, 0x92, 0x63, 0xe5, 0x74, 0x8c, 0x33, 0xb8, 0xc1, 0x56, 0xf4,
-	0xe0, 0x81, 0xa9, 0x53, 0x24, 0x05, 0xa6, 0xb7, 0x32, 0x18, 0x79, 0x4b, 0x47, 0xc7, 0x55, 0x62,
-	0x7c, 0xf7, 0x10, 0xfa, 0x07, 0xa9, 0x12, 0x12, 0xcb, 0xea, 0x3d, 0xbd, 0x82, 0x76, 0x69, 0x7e,
-	0x09, 0x87, 0x8c, 0x57, 0x27, 0xdd, 0xd9, 0xee, 0xdd, 0x9f, 0xce, 0x38, 0x6c, 0xe1, 0xba, 0x03,
-	0xe8, 0xd9, 0x07, 0x80, 0x5f, 0x15, 0x0a, 0x39, 0xfb, 0x49, 0xa0, 0xfd, 0xd1, 0x6e, 0x04, 0x7d,
-	0x0d, 0xad, 0xaa, 0xf8, 0x7d, 0xb5, 0x86, 0x5b, 0xb5, 0x90, 0xa1, 0x50, 0xa9, 0x74, 0x1b, 0xf4,
-	0x0d, 0xac, 0x1e, 0xa1, 0xa4, 0x3b, 0xb5, 0xac, 0x7e, 0xcf, 0xf0, 0xbe, 0x8a, 0x6e, 0x83, 0x1e,
-	0xc2, 0xe6, 0x11, 0xca, 0xe5, 0x09, 0xb7, 0x3d, 0xbb, 0x64, 0xde, 0x62, 0xc9, 0xbc, 0xf7, 0x7a,
-	0xc9, 0x86, 0x4e, 0xad, 0xd4, 0xd2, 0x3f, 0xdc, 0xc6, 0xbb, 0xc9, 0x8f, 0xeb, 0x11, 0xf9, 0x75,
-	0x3d, 0x22, 0x7f, 0xae, 0x47, 0xe4, 0xfb, 0xdf, 0x51, 0xe3, 0xf3, 0x36, 0x86, 0x5c, 0x4c, 0x31,
-	0x8a, 0x71, 0x5f, 0x6f, 0xd5, 0xf4, 0x32, 0x90, 0xe1, 0x17, 0x2c, 0xe7, 0x2d, 0x53, 0xf5, 0xe5,
-	0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xdb, 0x77, 0xf0, 0x20, 0x10, 0x04, 0x00, 0x00,
+	// 842 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x94, 0xdd, 0x6e, 0xe3, 0x44,
+	0x14, 0xc7, 0xe3, 0xd8, 0x49, 0xea, 0xe3, 0x24, 0xf5, 0xce, 0x42, 0xf1, 0xb6, 0xa2, 0x0d, 0x46,
+	0x2b, 0x22, 0xa4, 0x75, 0x45, 0x00, 0x21, 0x16, 0x6e, 0x42, 0xeb, 0x4d, 0xab, 0x06, 0x67, 0x35,
+	0xdb, 0xaa, 0x12, 0x37, 0x96, 0x6b, 0x4f, 0x83, 0x55, 0xdb, 0x63, 0x3c, 0x63, 0x56, 0x7b, 0xcb,
+	0x53, 0xf0, 0x34, 0x88, 0x4b, 0x24, 0x6e, 0x78, 0x04, 0x54, 0x1e, 0x82, 0x5b, 0x34, 0x63, 0xbb,
+	0x49, 0xc4, 0xb6, 0xd2, 0x5e, 0x9e, 0xff, 0xf9, 0xf9, 0xf8, 0xcc, 0xf9, 0x82, 0x41, 0x4a, 0xb3,
+	0x98, 0xd3, 0xc2, 0xc9, 0x0b, 0xca, 0x29, 0xd2, 0x53, 0xc2, 0x18, 0xc9, 0x96, 0xa4, 0xd8, 0xed,
+	0x87, 0x34, 0x4d, 0x69, 0x56, 0x39, 0x76, 0x8d, 0x38, 0xbb, 0xa6, 0xac, 0x36, 0xb6, 0x79, 0x9c,
+	0x12, 0xc6, 0x83, 0x34, 0xaf, 0x85, 0xbd, 0x25, 0xa5, 0xcb, 0x84, 0x1c, 0x4a, 0xeb, 0xaa, 0xbc,
+	0x3e, 0x24, 0x69, 0xce, 0xdf, 0x54, 0x4e, 0xfb, 0x17, 0x15, 0x4c, 0x8f, 0x46, 0xe4, 0x15, 0x0f,
+	0x78, 0xc9, 0x30, 0xc9, 0x69, 0xc1, 0xd1, 0x07, 0xd0, 0xcb, 0x68, 0x44, 0xfc, 0x38, 0xb2, 0x94,
+	0x91, 0x32, 0xd6, 0x70, 0x57, 0x98, 0xa7, 0x11, 0xda, 0x03, 0x5d, 0x3a, 0xca, 0x32, 0x8e, 0xac,
+	0xf6, 0x48, 0x19, 0xeb, 0x78, 0x4b, 0x08, 0x17, 0x65, 0x1c, 0xa1, 0x09, 0xe8, 0x77, 0xbf, 0xb6,
+	0xd4, 0x91, 0x32, 0x36, 0x26, 0xef, 0x39, 0x77, 0x29, 0x3b, 0xe7, 0x8d, 0x0f, 0xaf, 0x30, 0xf4,
+	0x29, 0x74, 0x18, 0x0f, 0x38, 0xb1, 0xb4, 0x91, 0x32, 0x1e, 0x6e, 0xf0, 0x4d, 0x56, 0x04, 0x57,
+	0x08, 0x7a, 0x06, 0x5d, 0x26, 0xb3, 0xb4, 0x3a, 0x32, 0xf8, 0xfb, 0x6f, 0x81, 0x4b, 0x86, 0x6b,
+	0x08, 0x7d, 0x01, 0x5a, 0x41, 0x13, 0x62, 0x75, 0x65, 0xe4, 0xd1, 0xdb, 0x61, 0xf9, 0x5e, 0x07,
+	0xd3, 0x84, 0x60, 0x49, 0xa3, 0xaf, 0x40, 0xcf, 0xe3, 0x9c, 0x24, 0x71, 0x46, 0x98, 0xd5, 0x1b,
+	0xa9, 0x63, 0x63, 0xf2, 0x64, 0xed, 0xd3, 0x97, 0xb5, 0xaf, 0xfa, 0x10, 0xaf, 0x58, 0xfb, 0x39,
+	0x68, 0x22, 0x0c, 0x32, 0xa0, 0x77, 0xe1, 0x9d, 0x79, 0x8b, 0x4b, 0xcf, 0x6c, 0x21, 0x80, 0xee,
+	0xdc, 0x9d, 0x1e, 0xbb, 0xd8, 0x54, 0x50, 0x1f, 0xb6, 0x5e, 0x2c, 0xe6, 0xf3, 0xc5, 0xa5, 0x8b,
+	0xcd, 0xb6, 0xc0, 0xe6, 0xee, 0x14, 0x7b, 0x2e, 0x36, 0x55, 0xfb, 0xdf, 0x36, 0xc0, 0x2a, 0x29,
+	0xf4, 0x14, 0x86, 0x51, 0xcc, 0x6e, 0xfc, 0xe0, 0xe7, 0x20, 0x4e, 0x82, 0xab, 0x84, 0xd4, 0x5d,
+	0x18, 0x08, 0x75, 0xda, 0x88, 0xe8, 0x43, 0x00, 0x89, 0x71, 0xca, 0x83, 0x44, 0x76, 0x43, 0xc3,
+	0xba, 0x50, 0xce, 0x85, 0x80, 0x3e, 0x86, 0x41, 0x46, 0xf8, 0x6b, 0x5a, 0xdc, 0xf8, 0x2c, 0x27,
+	0x24, 0x92, 0x2d, 0xd1, 0x70, 0xbf, 0x16, 0x5f, 0x09, 0x0d, 0x1d, 0x80, 0x11, 0xe6, 0xa5, 0x9f,
+	0x93, 0x22, 0x24, 0x19, 0x97, 0x5d, 0x50, 0x30, 0x84, 0x79, 0xf9, 0xb2, 0x52, 0xd0, 0x47, 0xd0,
+	0x4f, 0x49, 0x4a, 0x8b, 0x37, 0x7e, 0xc9, 0x82, 0x25, 0x91, 0xa5, 0xd7, 0xb0, 0x51, 0x69, 0x17,
+	0x42, 0x5a, 0x43, 0xaa, 0x4c, 0xba, 0xeb, 0x48, 0x95, 0xcb, 0x01, 0x18, 0x57, 0x09, 0x0d, 0x6f,
+	0xfc, 0x90, 0x96, 0x19, 0xb7, 0x7a, 0x92, 0x00, 0x29, 0x1d, 0x09, 0x45, 0xbc, 0x25, 0x25, 0x3c,
+	0xa8, 0xfd, 0x5b, 0xd5, 0x5b, 0x84, 0x52, 0xb9, 0x3f, 0x81, 0xed, 0x25, 0x2d, 0x68, 0xc9, 0xe3,
+	0x8c, 0xd4, 0x8c, 0x2e, 0x99, 0xe1, 0x9d, 0x5c, 0x81, 0x0e, 0x3c, 0x96, 0x71, 0x9a, 0xbe, 0xd4,
+	0x30, 0x48, 0xf8, 0x91, 0x70, 0x35, 0x1d, 0x94, 0xbc, 0xfd, 0x9b, 0x02, 0xc3, 0xcd, 0x9e, 0xa2,
+	0xc7, 0xd0, 0xc9, 0x97, 0xab, 0xd1, 0xd7, 0xf2, 0xe5, 0x69, 0x84, 0x9e, 0xc0, 0x56, 0xbd, 0x11,
+	0xcc, 0x6a, 0x8f, 0xd4, 0xb1, 0x86, 0x7b, 0xd5, 0x4a, 0x30, 0xf4, 0x65, 0x33, 0xc2, 0xaa, 0x1c,
+	0xb4, 0x83, 0x7b, 0xa7, 0xc5, 0x59, 0x9f, 0x66, 0xdb, 0x85, 0x8e, 0xb4, 0x37, 0x07, 0xa6, 0x0b,
+	0xed, 0xc5, 0x99, 0xa9, 0xa0, 0x21, 0xc0, 0xf1, 0xe2, 0xd2, 0xf3, 0x67, 0x78, 0x7a, 0xec, 0x9a,
+	0x6d, 0x31, 0x3c, 0x47, 0x27, 0x53, 0x6f, 0x76, 0xea, 0xcd, 0x4c, 0x15, 0xe9, 0xd0, 0x71, 0x31,
+	0x5e, 0x60, 0x53, 0xb3, 0x7f, 0x6f, 0xc3, 0xe0, 0x28, 0x29, 0x19, 0x27, 0x45, 0x9d, 0xff, 0x37,
+	0x4d, 0x3e, 0x8a, 0xcc, 0xe7, 0xe9, 0x5a, 0x3e, 0x1b, 0x60, 0x63, 0x6d, 0xec, 0xd8, 0xd7, 0xd0,
+	0x0f, 0x2b, 0xd9, 0x17, 0x37, 0x45, 0x4e, 0x95, 0x31, 0xd9, 0xf9, 0x7f, 0x8c, 0xd3, 0xec, 0x9a,
+	0x62, 0x23, 0x5c, 0x19, 0xe8, 0x33, 0xe8, 0x88, 0x92, 0x30, 0x4b, 0x95, 0x5b, 0xb3, 0xf7, 0xc0,
+	0xc2, 0xe1, 0x8a, 0xdc, 0x5c, 0x36, 0xed, 0x1d, 0x96, 0xed, 0x0c, 0xfa, 0xeb, 0xd9, 0x6f, 0xd6,
+	0x70, 0x00, 0xfa, 0x89, 0x3b, 0x9d, 0x9f, 0x9f, 0xf8, 0xb2, 0x94, 0xdb, 0x60, 0xd4, 0xe6, 0xe5,
+	0x14, 0x7b, 0x66, 0x5b, 0xd4, 0xb6, 0x16, 0x5c, 0x2c, 0xb6, 0x6f, 0x08, 0xfd, 0xaa, 0x06, 0xe4,
+	0xa7, 0x92, 0x30, 0x3e, 0xf9, 0x53, 0x81, 0xde, 0xf7, 0xd5, 0xe1, 0x45, 0xcf, 0xa1, 0x5b, 0x97,
+	0xf5, 0xa1, 0xf7, 0xec, 0x3e, 0x5a, 0x73, 0x62, 0xc2, 0xca, 0x84, 0xdb, 0x2d, 0xf4, 0x2d, 0xa8,
+	0x33, 0xc2, 0xd1, 0x8e, 0x53, 0xdd, 0x5f, 0xa7, 0xb9, 0xbf, 0x8e, 0x2b, 0xee, 0xef, 0xee, 0x43,
+	0x01, 0xed, 0x16, 0x7a, 0x01, 0xe6, 0x8c, 0xf0, 0xcd, 0xd6, 0xde, 0x17, 0xca, 0xba, 0xaf, 0xc7,
+	0x76, 0xeb, 0xbb, 0xf1, 0x1f, 0xb7, 0xfb, 0xca, 0x5f, 0xb7, 0xfb, 0xca, 0xdf, 0xb7, 0xfb, 0xca,
+	0xaf, 0xff, 0xec, 0xb7, 0x7e, 0xd8, 0x21, 0x21, 0x65, 0x87, 0x24, 0x5a, 0x92, 0x67, 0xa2, 0x0d,
+	0x87, 0xaf, 0x03, 0x1e, 0xfe, 0x48, 0x8a, 0xab, 0xae, 0x8c, 0xfa, 0xf9, 0x7f, 0x01, 0x00, 0x00,
+	0xff, 0xff, 0x04, 0x45, 0x1e, 0x95, 0x76, 0x06, 0x00, 0x00,
 }
 
 func (m *NodeStatusReport) Marshal() (dAtA []byte, err error) {
@@ -383,6 +603,25 @@ func (m *NodeStatusReport) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.XXX_unrecognized != nil {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Pipelines) > 0 {
+		for iNdEx := len(m.Pipelines) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Pipelines[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintMonitor(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x3a
+		}
+	}
+	if m.Role != 0 {
+		i = encodeVarintMonitor(dAtA, i, uint64(m.Role))
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.Status != nil {
 		{
@@ -506,6 +745,61 @@ func (m *NodeStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *PipelineReport) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PipelineReport) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PipelineReport) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.State != 0 {
+		i = encodeVarintMonitor(dAtA, i, uint64(m.State))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.NodeIds) > 0 {
+		dAtA4 := make([]byte, len(m.NodeIds)*10)
+		var j3 int
+		for _, num := range m.NodeIds {
+			for num >= 1<<7 {
+				dAtA4[j3] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j3++
+			}
+			dAtA4[j3] = uint8(num)
+			j3++
+		}
+		i -= j3
+		copy(dAtA[i:], dAtA4[:j3])
+		i = encodeVarintMonitor(dAtA, i, uint64(j3))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.PgId != 0 {
+		i = encodeVarintMonitor(dAtA, i, uint64(m.PgId))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *ClusterReport) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -530,10 +824,10 @@ func (m *ClusterReport) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if len(m.Reports) > 0 {
-		for iNdEx := len(m.Reports) - 1; iNdEx >= 0; iNdEx-- {
+	if len(m.Pipelines) > 0 {
+		for iNdEx := len(m.Pipelines) - 1; iNdEx >= 0; iNdEx-- {
 			{
-				size, err := m.Reports[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				size, err := m.Pipelines[iNdEx].MarshalToSizedBuffer(dAtA[:i])
 				if err != nil {
 					return 0, err
 				}
@@ -541,8 +835,39 @@ func (m *ClusterReport) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 				i = encodeVarintMonitor(dAtA, i, uint64(size))
 			}
 			i--
-			dAtA[i] = 0xa
+			dAtA[i] = 0x22
 		}
+	}
+	if len(m.Nodes) > 0 {
+		for iNdEx := len(m.Nodes) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Nodes[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintMonitor(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if m.ClusterInfo != nil {
+		{
+			size, err := m.ClusterInfo.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintMonitor(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.State != 0 {
+		i = encodeVarintMonitor(dAtA, i, uint64(m.State))
+		i--
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -609,6 +934,15 @@ func (m *NodeStatusReport) Size() (n int) {
 		l = m.Status.Size()
 		n += 1 + l + sovMonitor(uint64(l))
 	}
+	if m.Role != 0 {
+		n += 1 + sovMonitor(uint64(m.Role))
+	}
+	if len(m.Pipelines) > 0 {
+		for _, e := range m.Pipelines {
+			l = e.Size()
+			n += 1 + l + sovMonitor(uint64(l))
+		}
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -657,14 +991,52 @@ func (m *NodeStatus) Size() (n int) {
 	return n
 }
 
+func (m *PipelineReport) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.PgId != 0 {
+		n += 1 + sovMonitor(uint64(m.PgId))
+	}
+	if len(m.NodeIds) > 0 {
+		l = 0
+		for _, e := range m.NodeIds {
+			l += sovMonitor(uint64(e))
+		}
+		n += 1 + sovMonitor(uint64(l)) + l
+	}
+	if m.State != 0 {
+		n += 1 + sovMonitor(uint64(m.State))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
 func (m *ClusterReport) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if len(m.Reports) > 0 {
-		for _, e := range m.Reports {
+	if m.State != 0 {
+		n += 1 + sovMonitor(uint64(m.State))
+	}
+	if m.ClusterInfo != nil {
+		l = m.ClusterInfo.Size()
+		n += 1 + l + sovMonitor(uint64(l))
+	}
+	if len(m.Nodes) > 0 {
+		for _, e := range m.Nodes {
+			l = e.Size()
+			n += 1 + l + sovMonitor(uint64(l))
+		}
+	}
+	if len(m.Pipelines) > 0 {
+		for _, e := range m.Pipelines {
 			l = e.Size()
 			n += 1 + l + sovMonitor(uint64(l))
 		}
@@ -861,6 +1233,59 @@ func (m *NodeStatusReport) Unmarshal(dAtA []byte) error {
 				m.Status = &NodeStatus{}
 			}
 			if err := m.Status.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Role", wireType)
+			}
+			m.Role = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMonitor
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Role |= NodeStatusReport_Role(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pipelines", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMonitor
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMonitor
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMonitor
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Pipelines = append(m.Pipelines, &PipelineReport{})
+			if err := m.Pipelines[len(m.Pipelines)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -1119,6 +1544,171 @@ func (m *NodeStatus) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *PipelineReport) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMonitor
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PipelineReport: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PipelineReport: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PgId", wireType)
+			}
+			m.PgId = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMonitor
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.PgId |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType == 0 {
+				var v uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowMonitor
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.NodeIds = append(m.NodeIds, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowMonitor
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLengthMonitor
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLengthMonitor
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA[iNdEx:postIndex] {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.NodeIds) == 0 {
+					m.NodeIds = make([]uint64, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowMonitor
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.NodeIds = append(m.NodeIds, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeIds", wireType)
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
+			}
+			m.State = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMonitor
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.State |= PipelineReport_State(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMonitor(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMonitor
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *ClusterReport) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -1149,8 +1739,27 @@ func (m *ClusterReport) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
+			}
+			m.State = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMonitor
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.State |= ClusterReport_ClusterState(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Reports", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterInfo", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -1177,8 +1786,78 @@ func (m *ClusterReport) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Reports = append(m.Reports, &NodeStatusReport{})
-			if err := m.Reports[len(m.Reports)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if m.ClusterInfo == nil {
+				m.ClusterInfo = &infos.ClusterInfo{}
+			}
+			if err := m.ClusterInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Nodes", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMonitor
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMonitor
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMonitor
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Nodes = append(m.Nodes, &NodeStatusReport{})
+			if err := m.Nodes[len(m.Nodes)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pipelines", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMonitor
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMonitor
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMonitor
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Pipelines = append(m.Pipelines, &PipelineReport{})
+			if err := m.Pipelines[len(m.Pipelines)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

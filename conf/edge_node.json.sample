@@ -4,11 +4,14 @@
   "WatcherConfig": {
     "SunAddr": "ecos-cloud-dev:3267",
     "ClusterInfo": {},
-    "NodeInfoCommitInterval": 20000000000
+    "NodeInfoCommitInterval": 20000000000,
+    "PrometheusAddr": "http://gateway.prometheus.sums.top",
+    "ClusterName": "ecos_k8s"
   },
   "MoonConfig": {
     "ClusterInfo": {},
-    "RaftStoragePath": "/data/ecos/moon/raft/"
+    "RaftStoragePath": "/data/ecos/moon/raft/",
+    "RocksdbStoragePath": "/data/ecos/moon/rocksdb/"
   },
   "GaiaConfig": {
     "BasePath": "/data/ecos/gaia/"

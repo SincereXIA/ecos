@@ -7,12 +7,11 @@ import (
 	"ecos/messenger/common"
 	"ecos/utils/logger"
 	"errors"
+	prometheusmetrics "github.com/deathowl/go-metrics-prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/rcrowley/go-metrics"
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
-	"github.com/shirou/gopsutil/v3/mem"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -22,28 +21,96 @@ import (
 type Monitor interface {
 	MonitorServer
 	Run()
-	GetAllReports() []*NodeStatusReport
-	GetReport(nodeId uint64) *NodeStatusReport
+	GetAllNodeReports() []*NodeStatusReport
+	GetNodeReport(nodeId uint64) *NodeStatusReport
 	GetEventChannel() <-chan *Event
-	Stop()
+	Register(name string, reporter Reporter) error
+	stop()
 }
 
 type Event struct {
 	Report *NodeStatusReport
 }
 
+type ReportType int32
+
+const (
+	ReportTypeADD ReportType = iota
+	ReportTypeUPDATE
+	ReportTypeDELETE
+)
+
+type Report struct {
+	ReportType     ReportType
+	NodeReport     *NodeStatusReport
+	PipelineReport *PipelineReport
+}
+
+type Reporter interface {
+	IsChanged() bool
+	GetReports() []Report
+}
+
 type NodeMonitor struct {
 	UnimplementedMonitorServer
-	ctx    context.Context
-	cancel context.CancelFunc
-	timer  *time.Ticker
+	ctx             context.Context
+	cancel          context.CancelFunc
+	timer           *time.Ticker
+	clusterReport   *ClusterReport
+	clusterPipeline sync.Map
 
 	nodeStatusMap sync.Map
 	reportTimers  sync.Map
-	selfStatus    *NodeStatus
-	watcher       *Watcher
 
+	selfNodeStatus *NodeStatusReport
+	selfPipeline   map[uint64]*PipelineReport
+	watcher        *Watcher
+
+	reportersMap sync.Map
 	eventChannel chan *Event
+}
+
+func (m *NodeMonitor) pushToPrometheus() {
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
+		if m.watcher.GetCurrentTerm() > 0 {
+			break
+		}
+		time.Sleep(time.Second * 3)
+	}
+	logger.Infof("[Prometheus push] start")
+
+	prometheusClient := prometheusmetrics.NewPrometheusProvider(
+		metrics.DefaultRegistry, m.watcher.config.ClusterName,
+		"edge-node"+strconv.FormatUint(m.watcher.GetSelfInfo().RaftId, 10),
+		prometheus.DefaultRegisterer, 1*time.Second)
+	go prometheusClient.UpdatePrometheusMetrics()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
+		err := push.New("http://gateway.prometheus.sums.top", "monitor").
+			Gatherer(prometheus.DefaultGatherer).Grouping("ecos", "monitor").Push()
+		if err != nil {
+			logger.Warningf("push to prometheus failed: %s", err)
+		}
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func (m *NodeMonitor) Register(name string, reporter Reporter) error {
+	if _, ok := m.reportersMap.Load(name); ok {
+		return errors.New("reporter already registered")
+	}
+	m.reportersMap.Store(name, reporter)
+	return nil
 }
 
 // Report is a rpc func to get the node status report.
@@ -86,6 +153,9 @@ func (m *NodeMonitor) Report(_ context.Context, report *NodeStatusReport) (*comm
 		}
 	}
 	m.nodeStatusMap.Store(report.NodeId, report)
+	for _, p := range report.Pipelines {
+		m.clusterPipeline.Store(p.PgId, p)
+	}
 	return &common.Result{}, nil
 }
 
@@ -95,8 +165,8 @@ func (m *NodeMonitor) GetEventChannel() <-chan *Event {
 	return m.eventChannel
 }
 
-// GetAllReports returns all node status reports.
-func (m *NodeMonitor) GetAllReports() []*NodeStatusReport {
+// GetAllNodeReports returns all node status reports.
+func (m *NodeMonitor) GetAllNodeReports() []*NodeStatusReport {
 	var nodeStatusList []*NodeStatusReport
 	m.nodeStatusMap.Range(func(key, value interface{}) bool {
 		nodeStatusList = append(nodeStatusList, value.(*NodeStatusReport))
@@ -108,7 +178,7 @@ func (m *NodeMonitor) GetAllReports() []*NodeStatusReport {
 	return nodeStatusList
 }
 
-func (m *NodeMonitor) GetReport(nodeID uint64) *NodeStatusReport {
+func (m *NodeMonitor) GetNodeReport(nodeID uint64) *NodeStatusReport {
 	if val, ok := m.nodeStatusMap.Load(nodeID); ok {
 		return val.(*NodeStatusReport)
 	}
@@ -116,57 +186,68 @@ func (m *NodeMonitor) GetReport(nodeID uint64) *NodeStatusReport {
 }
 
 func (m *NodeMonitor) GetClusterReport(context.Context, *emptypb.Empty) (*ClusterReport, error) {
-	reports := m.GetAllReports()
+	reports := m.GetAllNodeReports()
+	var pipelines []*PipelineReport
+	// 生成集群 pipeline 列表
+	clusterState := ClusterReport_HEALTH_OK
+
+	m.clusterPipeline.Range(func(key, value interface{}) bool {
+		pipelines = append(pipelines, value.(*PipelineReport))
+		if value.(*PipelineReport).State != PipelineReport_OK {
+			clusterState = ClusterReport_HEALTH_ERR
+		}
+		return true
+	})
+
+	// 获取最新集群信息
+	clusterInfo := m.watcher.GetCurrentClusterInfo()
+
 	return &ClusterReport{
-		Reports: reports,
+		State:       clusterState,
+		ClusterInfo: &clusterInfo,
+		Nodes:       reports,
+		Pipelines:   pipelines,
 	}, nil
 }
 
-func (m *NodeMonitor) genSelfState() *NodeStatus {
-	var status NodeStatus
-	diskState, _ := disk.UsageWithContext(m.ctx, "/")
-	status.DiskTotal = diskState.Total
-	status.DiskAvailable = diskState.Free
-	memState, _ := mem.VirtualMemoryWithContext(m.ctx)
-	status.MemoryTotal = memState.Total
-	status.MemoryUsage = memState.Used
-
-	cpuState, _ := cpu.PercentWithContext(m.ctx, 0, false)
-	status.CpuPercent = cpuState[0]
-	status.GoroutineCount = uint64(runtime.NumGoroutine())
-
-	// Get ecos metrics
-	status.MetaPipelineCount = uint64(metrics.GetOrRegisterCounter(MetricsAlayaPipelineCount, nil).Count())
-	status.MetaCount = uint64(metrics.GetOrRegisterCounter(MetricsAlayaMetaCount, nil).Count())
-	status.BlockCount = uint64(metrics.GetOrRegisterCounter(MetricsGaiaBlockCount, nil).Count())
-
-	return &status
-}
-
-func (m *NodeMonitor) getSelfStateChan() <-chan *NodeStatus {
-	stateChan := make(chan *NodeStatus)
-	go func() {
-		for {
-			select {
-			case <-m.ctx.Done():
-				close(stateChan)
-				return
-			default:
-				<-m.timer.C
-				stateChan <- m.genSelfState()
+func (m *NodeMonitor) collectReports() {
+	m.reportersMap.Range(func(key, value interface{}) bool {
+		reporter := value.(Reporter)
+		if reporter.IsChanged() == false {
+			return true
+		}
+		reports := reporter.GetReports()
+		for _, report := range reports {
+			if report.NodeReport != nil {
+				m.selfNodeStatus = report.NodeReport
+			}
+			if report.PipelineReport != nil {
+				if report.ReportType == ReportTypeDELETE {
+					delete(m.selfPipeline, report.PipelineReport.PgId)
+				} else {
+					m.selfPipeline[report.PipelineReport.PgId] = report.PipelineReport
+				}
 			}
 		}
-	}()
-	return stateChan
+		return true
+	})
 }
 
-func (m *NodeMonitor) runReport(nodeStatusChan <-chan *NodeStatus) {
+func (m *NodeMonitor) getAllPipelineReports() []*PipelineReport {
+	var reports []*PipelineReport
+	for _, v := range m.selfPipeline {
+		reports = append(reports, v)
+	}
+	return reports
+}
+
+func (m *NodeMonitor) runReport() {
 	for {
 		select {
 		case <-m.ctx.Done():
 			return
-		case status := <-nodeStatusChan:
-			m.selfStatus = status
+		case <-m.timer.C:
+			m.collectReports()
 			leaderID := m.watcher.GetMoon().GetLeaderID()
 			if leaderID == 0 {
 				continue
@@ -178,13 +259,8 @@ func (m *NodeMonitor) runReport(nodeStatusChan <-chan *NodeStatus) {
 			}
 			conn, _ := messenger.GetRpcConnByNodeInfo(leaderInfo.BaseInfo().GetNodeInfo())
 			client := NewMonitorClient(conn)
-			_, err = client.Report(m.ctx, &NodeStatusReport{
-				NodeId:    m.watcher.GetSelfInfo().RaftId,
-				NodeUuid:  m.watcher.GetSelfInfo().Uuid,
-				Timestamp: nil,
-				Status:    status,
-				State:     infos.NodeState_ONLINE,
-			})
+			m.selfNodeStatus.Pipelines = m.getAllPipelineReports()
+			_, err = client.Report(m.ctx, m.selfNodeStatus)
 			if err != nil {
 				logger.Errorf("runReport node status failed: %v", err)
 			}
@@ -194,10 +270,11 @@ func (m *NodeMonitor) runReport(nodeStatusChan <-chan *NodeStatus) {
 
 func (m *NodeMonitor) Run() {
 	m.timer = time.NewTicker(time.Second * 1)
-	m.runReport(m.getSelfStateChan())
+	go m.runReport()
+	go m.pushToPrometheus()
 }
 
-func (m *NodeMonitor) Stop() {
+func (m *NodeMonitor) stop() {
 	m.cancel()
 	m.timer.Stop()
 }
@@ -208,9 +285,9 @@ func NewMonitor(ctx context.Context, w *Watcher, rpcServer *messenger.RpcServer)
 		ctx:           ctx,
 		cancel:        cancel,
 		nodeStatusMap: sync.Map{},
-		selfStatus:    &NodeStatus{},
 		watcher:       w,
 		eventChannel:  make(chan *Event),
+		selfPipeline:  make(map[uint64]*PipelineReport),
 	}
 	RegisterMonitorServer(rpcServer, monitor)
 	return monitor

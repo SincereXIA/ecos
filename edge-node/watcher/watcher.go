@@ -36,7 +36,7 @@ type Watcher struct {
 	ctx          context.Context
 	selfNodeInfo *infos.NodeInfo
 	moon         moon.InfoController
-	monitor      Monitor
+	Monitor      Monitor
 	register     *infos.StorageRegister
 	timer        *time.Timer
 	timerMutex   sync.Mutex
@@ -179,9 +179,9 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 	for _, info := range nodeInfos {
 		// copy before change to avoid data race
 		nodeInfo := deepcopy.Copy(info.BaseInfo().GetNodeInfo()).(*infos.NodeInfo)
-		report := w.monitor.GetReport(nodeInfo.RaftId)
+		report := w.Monitor.GetNodeReport(nodeInfo.RaftId)
 		if report == nil {
-			logger.Warningf("get report: %v from monitor fail", nodeInfo.RaftId)
+			logger.Warningf("get report: %v from Monitor fail", nodeInfo.RaftId)
 			logger.Warningf("set node: %v state OFFLINE", nodeInfo.RaftId)
 			nodeInfo.State = infos.NodeState_OFFLINE
 		} else {
@@ -261,9 +261,9 @@ func (w *Watcher) GetSelfInfo() *infos.NodeInfo {
 }
 
 func (w *Watcher) Run() {
-	// start monitor
-	go w.monitor.Run()
-	// watch monitor
+	// start Monitor
+	go w.Monitor.Run()
+	// watch Monitor
 	go w.processMonitor()
 	leaderInfo, err := w.AskSky()
 	if err != nil {
@@ -279,13 +279,13 @@ func (w *Watcher) Run() {
 }
 
 func (w *Watcher) processMonitor() {
-	c := w.monitor.GetEventChannel()
+	c := w.Monitor.GetEventChannel()
 	for {
 		select {
 		case <-w.ctx.Done():
 			return
 		case <-c:
-			logger.Warningf("watcher receive monitor event")
+			logger.Warningf("watcher receive Monitor event")
 			w.nodeInfoChanged(nil)
 		}
 	}
@@ -375,11 +375,13 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 		cancelFunc:   cancelFunc,
 	}
 	monitor := NewMonitor(watcherCtx, watcher, server)
-	watcher.monitor = monitor
+	watcher.Monitor = monitor
 	nodeInfoStorage := watcher.register.GetStorage(infos.InfoType_NODE_INFO)
 	clusterInfoStorage := watcher.register.GetStorage(infos.InfoType_CLUSTER_INFO)
 	nodeInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, watcher.nodeInfoChanged)
 	clusterInfoStorage.SetOnUpdate("watcher-"+watcher.selfNodeInfo.Uuid, watcher.clusterInfoChanged)
+	NewStatusReporter(ctx, watcher)
+
 	RegisterWatcherServer(server, watcher)
 	return watcher
 }

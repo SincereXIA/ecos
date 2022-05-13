@@ -23,6 +23,7 @@ type Alayaer interface {
 	Run()
 	Stop()
 	IsAllPipelinesOK() bool
+	watcher.Reporter
 }
 
 // Alaya process record & inquire object Mata request
@@ -343,7 +344,8 @@ func NewAlaya(ctx context.Context, watcher *watcher.Watcher,
 	a.state = READY
 	_ = a.watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO,
 		"alaya-"+a.watcher.GetSelfInfo().Uuid, a.applyNewClusterInfo)
-
+	err := a.watcher.Monitor.Register("alaya", &a)
+	errno.HandleError(err)
 	return &a
 }
 
@@ -401,6 +403,54 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 		return true
 	})
 	return ok
+}
+
+func (a *Alaya) IsChanged() bool {
+	return true
+}
+
+func (a *Alaya) GetReports() []watcher.Report {
+	var reports []watcher.Report
+	a.PGRaftNode.Range(func(key, value interface{}) bool {
+		pgID := key.(uint64)
+		reports = append(reports, a.getPipelineReport(pgID))
+		return true
+	})
+	return reports
+}
+
+// reportPipeline 向 monitor 报告 pipeline 状态
+func (a *Alaya) getPipelineReport(pgID uint64) watcher.Report {
+	if value, ok := a.PGRaftNode.Load(pgID); ok {
+		node := value.(*Raft)
+		var state watcher.PipelineReport_State
+		if node.raft.Status().Lead == 0 {
+			state = watcher.PipelineReport_ERROR
+		} else if len(node.GetVotersID()) < len(node.getPipeline().RaftId) {
+			state = watcher.PipelineReport_DOWN_GRADE
+		} else if node.raft.Status().Lead != node.getPipeline().RaftId[0] {
+			state = watcher.PipelineReport_CHANGING
+		} else {
+			state = watcher.PipelineReport_OK
+		}
+		report := &watcher.PipelineReport{
+			PgId:    pgID,
+			NodeIds: node.GetVotersID(),
+			State:   state,
+		}
+		return watcher.Report{
+			ReportType:     watcher.ReportTypeADD,
+			PipelineReport: report,
+		}
+	}
+	return watcher.Report{
+		ReportType: watcher.ReportTypeDELETE,
+		PipelineReport: &watcher.PipelineReport{
+			PgId:    pgID,
+			NodeIds: nil,
+			State:   0,
+		},
+	}
 }
 
 // makeAlayaRaftInPipeline Make a new raft node for a single pipeline (PG), it will:
