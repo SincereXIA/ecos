@@ -14,6 +14,8 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+	"path"
+	"strings"
 	"sync"
 	"time"
 )
@@ -87,6 +89,10 @@ func (a *Alaya) calculateObjectPGID(objectID string) uint64 {
 }
 
 func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
+	// clear meta object id
+	meta.ObjId = path.Clean(meta.ObjId)
+	meta.ObjId = strings.Trim(meta.ObjId, "/")
+
 	// check if meta belongs to this PG
 	pgID := a.calculateObjectPGID(meta.ObjId)
 	if meta.Term != a.watcher.GetCurrentTerm() {
@@ -99,6 +105,8 @@ func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
 	return nil
 }
 
+// RecordObjectMeta record object meta to MetaStorage
+// 将对象元数据存储到 MetaStorage
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
 	err := a.checkObject(meta)
 	if err != nil {
@@ -197,6 +205,7 @@ func (a *Alaya) ListMeta(_ context.Context, req *ListMetaRequest) (*ObjectMetaLi
 	storages := a.MetaStorageRegister.GetAllStorage()
 	var metasList [][]*object.ObjectMeta
 	for _, storage := range storages {
+		req.Prefix = strings.Trim(req.Prefix, "/")
 		metas, _ := storage.List(req.Prefix)
 		metasList = append(metasList, metas)
 	}

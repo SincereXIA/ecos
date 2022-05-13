@@ -25,7 +25,7 @@ func CalculateSlot(objectKey string, slotNum int32) int32 {
 
 func SplitID(objectID string) (volumeID, bucketID, key string, slotID int32, err error) {
 	objectID = path.Clean(objectID)
-	objectID = strings.TrimPrefix(objectID, "/")
+	objectID = strings.Trim(objectID, "/")
 	split := strings.SplitN(objectID, "/", 4)
 	if len(split) != 4 {
 		// TODO error
@@ -44,7 +44,7 @@ func SplitID(objectID string) (volumeID, bucketID, key string, slotID int32, err
 }
 
 func GenObjPgID(bucketInfo *infos.BucketInfo, objectKey string, pgNum int32) (pgID uint64) {
-	objectKey = strings.TrimPrefix(objectKey, "/")
+	objectKey = strings.Trim(objectKey, "/")
 	bucketID := bucketInfo.GetID()
 	slotNum := bucketInfo.GetConfig().KeySlotNum
 	pgID = GenSlotPgID(bucketID, CalculateSlot(objectKey, slotNum), pgNum)
@@ -56,6 +56,7 @@ func GenObjectId(bucketInfo *infos.BucketInfo, key string) string {
 	prefix := bucketInfo.GetID()
 	slot := CalculateSlot(key, bucketInfo.GetConfig().KeySlotNum)
 	key = path.Clean(key)
+	key = strings.Trim(key, "/")
 	objID := path.Join(prefix, strconv.FormatInt(int64(slot), 10), key)
 	return objID
 }
