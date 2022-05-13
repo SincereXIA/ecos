@@ -14,8 +14,6 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
-	"path"
-	"strings"
 	"sync"
 	"time"
 )
@@ -90,8 +88,7 @@ func (a *Alaya) calculateObjectPGID(objectID string) uint64 {
 
 func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
 	// clear meta object id
-	meta.ObjId = path.Clean(meta.ObjId)
-	meta.ObjId = strings.Trim(meta.ObjId, "/")
+	meta.ObjId = object.CleanObjectKey(meta.ObjId)
 
 	// check if meta belongs to this PG
 	pgID := a.calculateObjectPGID(meta.ObjId)
@@ -141,7 +138,8 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 }
 
 func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
-	objID := req.ObjId
+	// clear meta object id
+	objID := object.CleanObjectKey(req.ObjId)
 	pgID := a.calculateObjectPGID(objID)
 	storage, err := a.MetaStorageRegister.GetStorage(pgID)
 	if err != nil {
@@ -205,7 +203,7 @@ func (a *Alaya) ListMeta(_ context.Context, req *ListMetaRequest) (*ObjectMetaLi
 	storages := a.MetaStorageRegister.GetAllStorage()
 	var metasList [][]*object.ObjectMeta
 	for _, storage := range storages {
-		req.Prefix = strings.Trim(req.Prefix, "/")
+		req.Prefix = object.CleanObjectKey(req.Prefix)
 		metas, _ := storage.List(req.Prefix)
 		metasList = append(metasList, metas)
 	}
