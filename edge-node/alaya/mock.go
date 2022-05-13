@@ -15,10 +15,12 @@ type MockState struct {
 }
 
 func (state *MockState) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
+	req.ObjId = object.CleanObjectKey(req.ObjId)
 	return state.storage.GetMeta(req.ObjId)
 }
 
 func (state *MockState) ListMeta(_ context.Context, req *ListMetaRequest) (*ObjectMetaList, error) {
+	req.Prefix = object.CleanObjectKey(req.Prefix)
 	metas, _ := state.storage.List(req.Prefix)
 	return &ObjectMetaList{
 		Metas: metas,
@@ -26,6 +28,7 @@ func (state *MockState) ListMeta(_ context.Context, req *ListMetaRequest) (*Obje
 }
 
 func (state *MockState) DeleteMeta(_ context.Context, req *DeleteMetaRequest) (*common.Result, error) {
+	req.ObjId = object.CleanObjectKey(req.ObjId)
 	err := state.storage.Delete(req.ObjId)
 	if err != nil {
 		return nil, err
@@ -36,6 +39,7 @@ func (state *MockState) DeleteMeta(_ context.Context, req *DeleteMetaRequest) (*
 }
 
 func (state *MockState) RecordObjectMeta(_ context.Context, meta *object.ObjectMeta) (*common.Result, error) {
+	meta.ObjId = object.CleanObjectKey(meta.ObjId)
 	err := state.storage.RecordMeta(meta)
 	if err != nil {
 		return nil, err

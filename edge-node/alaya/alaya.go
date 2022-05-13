@@ -159,7 +159,7 @@ func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.Obje
 
 // DeleteMeta delete meta from metaStorage, and request delete object blocks
 func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common.Result, error) {
-	objID := req.ObjId
+	objID := object.CleanObjectKey(req.ObjId)
 	objMeta, err := a.GetObjectMeta(ctx, &MetaRequest{ObjId: objID})
 	if err != nil {
 		logger.Errorf("alaya get meta by objID failed, err: %v", err)
