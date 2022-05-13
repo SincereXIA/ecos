@@ -128,7 +128,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 			atomic.AddInt64(&count, int64(minSize(end-start, len(block)-offset)))
 			if end-start+offset < len(block) {
 				r.curBlockOffset = end - start + offset
-				logger.Debugf("CurBlockOffset: %d", r.curBlockOffset)
+				logger.Tracef("CurBlockOffset: %d", r.curBlockOffset)
 				isEOF = false
 			} else {
 				r.cachedBlocks.Delete(info.BlockId) // 已经读完，释放内存
@@ -141,7 +141,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 		offset = 0 // 后续 block 都是从头开始读
 	}
 	waitGroup.Wait()
-	logger.Debugf("read %d bytes done", count)
+	logger.Tracef("read %d bytes done", count)
 
 	if isEOF {
 		r.curBlockIndex += blockNum
