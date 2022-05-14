@@ -180,7 +180,7 @@ func (r *Raft) readCommit(commitC <-chan *eraft.Commit, errorC <-chan error) {
 			}
 			r.metaApplyChan <- &metaOperate
 		}
-		close(commit.ApplyDoneC) // TODO: what use for?
+		close(commit.ApplyDoneC) // TODO: (qiu) what use for
 	}
 	if err, ok := <-errorC; ok {
 		logger.Fatalf("commit stream error: %v", err)
@@ -242,30 +242,28 @@ func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 	if len(NodeIDs) == 0 {
 		return nil
 	}
+RETRY_ADD:
 	for _, id := range NodeIDs {
 		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raft.ID, r.pgID, id)
 		data, _ := r.getPipeline().Marshal()
-		err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
+		r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeAddNode,
 			NodeID:  id,
 			Context: data,
 		})
-		for err != nil {
-			err = r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
-				Type:    raftpb.ConfChangeAddNode,
-				NodeID:  id,
-				Context: data,
-			})
-			runtime.Gosched()
-		}
-		// 检查是否 propose 了本次节点
 		for {
-			change := <-r.confChangeChan
-			if change.NodeID != id {
-				r.confChangeChan <- change
-				runtime.Gosched()
-			} else {
-				break
+			select {
+			case <-time.After(time.Duration(time.Second * 5)):
+				logger.Infof("raft %v retry to add nodes", r.raft.ID)
+				goto RETRY_ADD
+			case change := <-r.confChangeChan:
+				if change.NodeID != id {
+					r.confChangeChan <- change
+					runtime.Gosched()
+				} else {
+					logger.Infof("raft: %v PG: %v success add node: %v", r.raft.ID, r.pgID, id)
+					return nil
+				}
 			}
 		}
 	}
@@ -288,6 +286,7 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 			removeSelf = true
 			continue
 		}
+	RETRY_REMOVE:
 		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raft.ID, r.pgID, id)
 		err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeRemoveNode,
@@ -303,12 +302,23 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 			runtime.Gosched()
 		}
 		// 检查是否 propose 了本次节点
+		flag := false
 		for {
-			change := <-r.confChangeChan
-			if change.NodeID != id {
-				r.confChangeChan <- change
-				runtime.Gosched()
-			} else {
+			select {
+			case <-time.After(time.Duration(time.Second * 2)):
+				logger.Infof("raft %v retry to remove node", r.raft.ID)
+				goto RETRY_REMOVE
+			case change := <-r.confChangeChan:
+				if change.NodeID != id {
+					r.confChangeChan <- change
+					runtime.Gosched()
+				} else {
+					logger.Infof("raft: %v PG: %v success remove node: %v", r.raft.ID, r.pgID, id)
+					flag = true
+					break
+				}
+			}
+			if flag {
 				break
 			}
 		}

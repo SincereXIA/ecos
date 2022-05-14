@@ -266,6 +266,7 @@ func (rc *RaftNode) startRaft(readyC chan bool) {
 		MaxSizePerMsg:             1024 * 1024,
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
+		//Logger:                    logger.Logger,
 		//PreVote:                   true,
 		//CheckQuorum:               true,
 	}
