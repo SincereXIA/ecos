@@ -191,7 +191,7 @@ func (f *EcosIOFactory) ListMultipartUploadJob() ([]types.MultipartUpload, error
 	f.multipartJobs.Range(func(key, value interface{}) bool {
 		ret = append(ret, types.MultipartUpload{
 			Key:      &value.(*EcosWriter).key,
-			UploadId: key.(*string),
+			UploadId: common.PtrString(key.(string)),
 		})
 		return true
 	})

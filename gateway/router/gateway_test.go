@@ -179,20 +179,25 @@ func TestGateway(t *testing.T) {
 	t.Run("MultipartUpload", func(t *testing.T) {
 		bucketName := "test-multipart-upload-bucket"
 		testCreateBucket(t, client, bucketName, false)
+		testListMultipartUploads(t, client, bucketName, false, 0)
 
 		uploadId := testCreateMultipartUpload(t, client, bucketName, "testMultipartUpload.obj", false)
+		testListMultipartUploads(t, client, bucketName, false, 1)
 		var partFile []io.ReadSeeker
 		for i := 0; i < 5; i++ {
 			reader := bytes.NewReader(genTestData(10 << 20))
 			partFile = append(partFile, reader)
 		}
+		testListParts(t, client, bucketName, "testMultipartUpload.obj", uploadId, false, 0)
 		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 1, partFile[0], false)
 		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 2, partFile[1], false)
 		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 100, partFile[4], false)
 		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 50, partFile[3], false)
 		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 20, partFile[2], false)
+		testListParts(t, client, bucketName, "testMultipartUpload.obj", uploadId, false, 5)
 		_, _ = partFile[0].Seek(0, io.SeekStart)
 		testUploadPart(t, client, bucketName, "testMultipartUpload.obj", uploadId, 100, partFile[0], false)
+		testListParts(t, client, bucketName, "testMultipartUpload.obj", uploadId, false, 5)
 		parts := []types.CompletedPart{
 			{
 				PartNumber: 1,
@@ -211,6 +216,8 @@ func TestGateway(t *testing.T) {
 			},
 		}
 		testCompleteMultipartUpload(t, client, bucketName, "testMultipartUpload.obj", uploadId, parts, false)
+		testListMultipartUploads(t, client, bucketName, false, 0)
+		testListObjects(t, client, bucketName, false, 1)
 		obj := testGetObject(t, client, bucketName, "testMultipartUpload.obj", false)
 		content, err := io.ReadAll(obj)
 		assert.NoError(t, err)
@@ -234,6 +241,8 @@ func TestGateway(t *testing.T) {
 		_, _ = reader.Seek(0, io.SeekStart)
 		testUploadPart(t, client, bucketName, "testMultipartUpload2.obj", uploadId, 1, reader, false)
 		testAbortMultipartUpload(t, client, bucketName, "testMultipartUpload2.obj", uploadId, false)
+		testListMultipartUploads(t, client, bucketName, false, 0)
+		testListObjects(t, client, bucketName, false, 1)
 	})
 }
 
@@ -446,6 +455,44 @@ func testAbortMultipartUpload(t *testing.T, client *s3.Client, bucketName string
 		t.Errorf("AbortMultipartUpload Error: %v", err)
 	}
 	t.Logf("AbortMultipartUpload: %#v", abortMultipartUploadOutput)
+}
+
+func testListMultipartUploads(t *testing.T, client *s3.Client, bucketName string, wantErr bool, wantLength int) {
+	listMultipartUploadsOutput, err := client.ListMultipartUploads(context.TODO(), &s3.ListMultipartUploadsInput{
+		Bucket: aws.String(bucketName),
+	})
+	if wantErr {
+		assert.Error(t, err)
+		return
+	}
+	assert.NoError(t, err)
+	t.Logf("ListMultipartUploads: %#v", listMultipartUploadsOutput)
+	if err != nil {
+		return
+	}
+	if wantLength > 0 {
+		assert.Equal(t, len(listMultipartUploadsOutput.Uploads), wantLength)
+	}
+}
+
+func testListParts(t *testing.T, client *s3.Client, bucketName string, key string, uploadId string, wantErr bool, wantLength int) {
+	listPartsOutput, err := client.ListParts(context.TODO(), &s3.ListPartsInput{
+		Bucket:   aws.String(bucketName),
+		Key:      aws.String(key),
+		UploadId: aws.String(uploadId),
+	})
+	if wantErr {
+		assert.Error(t, err)
+		return
+	}
+	assert.NoError(t, err)
+	t.Logf("ListParts: %#v", listPartsOutput)
+	if err != nil {
+		return
+	}
+	if wantLength > 0 {
+		assert.Equal(t, len(listPartsOutput.Parts), wantLength)
+	}
 }
 
 func genTestData(size int) []byte {

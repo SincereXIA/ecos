@@ -2,6 +2,7 @@ package router
 
 import (
 	"bytes"
+	"ecos/utils/common"
 	"ecos/utils/errno"
 	"encoding/xml"
 	"errors"
@@ -225,12 +226,11 @@ func completeMultipartUpload(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	location := fmt.Sprintf("%s/%s", bucketName, key)
 	c.XML(http.StatusOK, CompleteMultipartUploadResult{
-		Location: &location,
-		Bucket:   &bucketName,
-		Key:      &key,
-		ETag:     &etag,
+		Location: common.PtrString(fmt.Sprintf("%s/%s", bucketName, key)),
+		Bucket:   common.PtrString(bucketName),
+		Key:      common.PtrString(key),
+		ETag:     common.PtrString(etag),
 	})
 	c.Header("Server", "Ecos")
 }
@@ -292,35 +292,30 @@ func listMultipartUploads(c *gin.Context) {
 	//	c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadIdMarker.Error()})
 	//	return
 	//}
-	delimiter := c.Query("delimiter")
-	maxUploads, err := strconv.Atoi(c.Query("maxUploads"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidArgument.Error()})
-		return
-	}
-	if maxUploads < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidArgument.Error()})
-		return
-	}
 	uploads, err := Client.GetIOFactory(bucketName).ListMultipartUploadJob()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	isTruncated := false
 	ret := ListMultipartUploadsResult{
-		Bucket:      &bucketName,
-		IsTruncated: &isTruncated,
+		Bucket:      common.PtrString(bucketName),
+		IsTruncated: common.PtrBool(false),
 		Uploads:     uploads,
+	}
+	delimiter := c.Query("delimiter")
+	maxUploads, err := strconv.Atoi(c.Query("maxUploads"))
+	if maxUploads < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidArgument.Error()})
+		return
 	}
 	if maxUploads > 0 {
 		ret.MaxUploads = maxUploads
 	}
 	if delimiter != "" {
-		ret.Delimiter = &delimiter
+		ret.Delimiter = common.PtrString(delimiter)
 	}
 	if prefix != "" {
-		ret.Prefix = &prefix
+		ret.Prefix = common.PtrString(prefix)
 	}
 	c.XML(http.StatusOK, ret)
 }

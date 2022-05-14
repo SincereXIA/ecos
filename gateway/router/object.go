@@ -3,6 +3,7 @@ package router
 import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/watcher"
+	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/xml"
@@ -600,17 +601,15 @@ func deleteObjects(c *gin.Context) {
 		return
 	}
 	var deleteResult DeleteResult
-	internalErr := "InternalError"
 	for _, obj := range deleteRequest.Object {
 		// Delete Objects from Bucket Operator
 		logger.Infof("Delete Object: %s", *obj.Key)
 		err = op.Remove(*obj.Key)
 		if err != nil {
-			errMsg := err.Error()
 			deleteResult.Error = append(deleteResult.Error, DeleteError{
-				Code:    &internalErr,
+				Code:    common.PtrString("InternalError"),
 				Key:     obj.Key,
-				Message: &errMsg,
+				Message: common.PtrString(err.Error()),
 			})
 			logger.Warningf("Delete Object Failed: %s", *obj.Key)
 		} else {
