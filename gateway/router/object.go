@@ -39,7 +39,7 @@ func putObject(c *gin.Context) {
 		return
 	}
 	writer := factory.GetEcosWriter(key)
-	_, err := io.Copy(&writer, body)
+	_, err := io.Copy(writer, body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
@@ -97,7 +97,7 @@ func postObject(c *gin.Context) {
 		return
 	}
 	writer := factory.GetEcosWriter(key)
-	_, err = io.Copy(&writer, content)
+	_, err = io.Copy(writer, content)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),

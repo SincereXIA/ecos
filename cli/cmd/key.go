@@ -126,7 +126,7 @@ func KeyPut(bucketName string, key string, path string) {
 			logger.Errorf("close file: %v, fail: %v", path, err)
 		}
 	}(fi)
-	_, err = io.Copy(&writer, fi)
+	_, err = io.Copy(writer, fi)
 	if err != nil {
 		logger.Errorf("put key fail: %v", err)
 		os.Exit(1)

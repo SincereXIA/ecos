@@ -93,7 +93,7 @@ func (f *EcosIOFactory) newLocalChunk() (io.Closer, error) {
 }
 
 // GetEcosWriter provide a EcosWriter for object associated with key
-func (f *EcosIOFactory) GetEcosWriter(key string) EcosWriter {
+func (f *EcosIOFactory) GetEcosWriter(key string) *EcosWriter {
 	var objHash hash.Hash
 	switch f.bucketInfo.Config.ObjectHashType {
 	case infos.BucketConfig_SHA256:
@@ -105,7 +105,7 @@ func (f *EcosIOFactory) GetEcosWriter(key string) EcosWriter {
 	default:
 		objHash = nil
 	}
-	return EcosWriter{
+	return &EcosWriter{
 		infoAgent:      f.infoAgent,
 		clusterInfo:    f.clusterInfo,
 		bucketInfo:     f.bucketInfo,
@@ -127,7 +127,7 @@ func (f *EcosIOFactory) CreateMultipartUploadJob(key string) string {
 	ret := f.GetEcosWriter(key)
 	ret.partObject = true
 	uploadId := uuid.New().String()
-	f.multipartJobs.Store(uploadId, &ret)
+	f.multipartJobs.Store(uploadId, ret)
 	return uploadId
 }
 
