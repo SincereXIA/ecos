@@ -31,7 +31,12 @@ func putObject(c *gin.Context) {
 		return
 	}
 	body := c.Request.Body
-	writer := Client.GetIOFactory(bucketName).GetEcosWriter(key)
+	factory := Client.GetIOFactory(bucketName)
+	if factory == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.BucketNotFound.Error()})
+		return
+	}
+	writer := factory.GetEcosWriter(key)
 	_, err := io.Copy(&writer, body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -84,7 +89,12 @@ func postObject(c *gin.Context) {
 		})
 		return
 	}
-	writer := Client.GetIOFactory(bucketName).GetEcosWriter(key)
+	factory := Client.GetIOFactory(bucketName)
+	if factory == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.BucketNotFound.Error()})
+		return
+	}
+	writer := factory.GetEcosWriter(key)
 	_, err = io.Copy(&writer, content)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -117,6 +127,13 @@ func headObject(c *gin.Context) {
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    http.StatusNotFound,
+				"message": errno.BucketNotFound.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
@@ -125,6 +142,13 @@ func headObject(c *gin.Context) {
 	// Get Object Operator
 	op, err = op.Get(key)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.MetaNotExist.Error()) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    http.StatusNotFound,
+				"message": errno.ObjectNotFound.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
@@ -274,6 +298,13 @@ func getObject(c *gin.Context) {
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    http.StatusNotFound,
+				"message": errno.BucketNotFound.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
@@ -390,6 +421,13 @@ func deleteObject(c *gin.Context) {
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    http.StatusNotFound,
+				"message": errno.BucketNotFound.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
@@ -483,7 +521,12 @@ func copyObject(c *gin.Context) {
 		return
 	}
 	meta := info.(*object.ObjectMeta)
-	writer := Client.GetIOFactory(bucketName).GetEcosWriter(key)
+	factory := Client.GetIOFactory(bucketName)
+	if factory == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": errno.BucketNotFound.Error()})
+		return
+	}
+	writer := factory.GetEcosWriter(key)
 	etag, err := writer.Copy(meta)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -543,6 +586,13 @@ func deleteObjects(c *gin.Context) {
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    http.StatusNotFound,
+				"message": errno.BucketNotFound.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})

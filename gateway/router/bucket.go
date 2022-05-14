@@ -84,7 +84,7 @@ func listObjects(c *gin.Context) {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"code":    http.StatusNotFound,
-				"message": errno.MissingBucket.Error(),
+				"message": errno.BucketNotFound.Error(),
 			})
 			return
 		}
@@ -129,7 +129,7 @@ func listObjectsV2(c *gin.Context) {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"code":    http.StatusNotFound,
-				"message": errno.MissingBucket.Error(),
+				"message": errno.BucketNotFound.Error(),
 			})
 			return
 		}
@@ -176,7 +176,7 @@ func headBucket(c *gin.Context) {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"code":    http.StatusNotFound,
-				"message": errno.MissingBucket.Error(),
+				"message": errno.BucketNotFound.Error(),
 			})
 			return
 		}

@@ -111,11 +111,18 @@ func (client *Client) ListObjects(_ context.Context, bucketName string) ([]*obje
 }
 
 func (client *Client) GetIOFactory(bucketName string) *io.EcosIOFactory {
-	if ret, ok := client.factoryPool.Get(bucketName); ok {
-		return ret.(*io.EcosIOFactory)
+	if ret, ok := client.factoryPool.Get(bucketName); ok && ret != nil {
+		ecosIOFactory := ret.(*io.EcosIOFactory)
+		if ecosIOFactory.IsConnected() {
+			return ecosIOFactory
+		} else {
+			client.factoryPool.Remove(bucketName)
+		}
 	}
 	ret := io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
-	client.factoryPool.Add(bucketName, ret)
+	if ret != nil {
+		client.factoryPool.Add(bucketName, ret)
+	}
 	return ret
 }
 

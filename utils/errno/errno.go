@@ -98,6 +98,8 @@ const (
 	CodeInvalidPart
 	CodeInvalidPartOrder
 	CodeNoSuchUpload
+
+	CodeObjectNotFound
 )
 
 var (
@@ -116,6 +118,8 @@ var (
 	InvalidPart      = newErr(CodeInvalidPart, "invalid part")
 	InvalidPartOrder = newErr(CodeInvalidPartOrder, "invalid part order")
 	NoSuchUpload     = newErr(CodeNoSuchUpload, "no such upload")
+
+	ObjectNotFound = newErr(CodeObjectNotFound, "object not found")
 )
 
 const (

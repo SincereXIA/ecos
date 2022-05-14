@@ -81,6 +81,10 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 	return ret
 }
 
+func (f *EcosIOFactory) IsConnected() bool {
+	return f.bucketInfo != nil
+}
+
 func (f *EcosIOFactory) newLocalChunk() (io.Closer, error) {
 	return &localChunk{
 		data:     make([]byte, f.config.Object.ChunkSize),
