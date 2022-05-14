@@ -4,6 +4,7 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/watcher"
 	"ecos/utils/errno"
+	"ecos/utils/logger"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -602,6 +603,7 @@ func deleteObjects(c *gin.Context) {
 	internalErr := "InternalError"
 	for _, obj := range deleteRequest.Object {
 		// Delete Objects from Bucket Operator
+		logger.Infof("Delete Object: %s", *obj.Key)
 		err = op.Remove(*obj.Key)
 		if err != nil {
 			errMsg := err.Error()
@@ -610,8 +612,10 @@ func deleteObjects(c *gin.Context) {
 				Key:     obj.Key,
 				Message: &errMsg,
 			})
+			logger.Warningf("Delete Object Failed: %s", *obj.Key)
 		} else {
 			deleteResult.Deleted = append(deleteResult.Deleted, DeletedObject(obj))
+			logger.Infof("Delete Object Success: %s", *obj.Key)
 		}
 	}
 	c.Header("Server", "Ecos")
