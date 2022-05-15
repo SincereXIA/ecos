@@ -15,7 +15,6 @@ import (
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"sync"
-	"time"
 )
 
 type Alayaer interface {
@@ -322,7 +321,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 		}
 		if a.state == UPDATING {
 			go func(raft *Raft) {
-				time.Sleep(time.Second * 2)
+				//time.Sleep(time.Second * 2)
 				raft.Run()
 			}(raft)
 		}

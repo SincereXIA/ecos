@@ -34,8 +34,9 @@ message MetaOperate {
     PUT = 0;
     DELETE = 1;
   }
-  Operate operate = 1;
-  ObjectMeta meta = 2;
+  uint64 operate_id = 1;
+  Operate operate = 2;
+  ObjectMeta meta = 3;
 }
 
 message PGRaftMessage {

@@ -35,6 +35,7 @@ require (
 	github.com/stretchr/testify v1.7.1
 	github.com/wxnacy/wgo v1.0.4
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2
+	go.etcd.io/etcd/pkg/v3 v3.5.2
 	go.etcd.io/etcd/raft/v3 v3.5.2
 	go.etcd.io/etcd/server/v3 v3.5.2
 	go.uber.org/zap v1.17.0
