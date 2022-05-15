@@ -14,6 +14,6 @@
     "RocksdbStoragePath": "/data/ecos/moon/rocksdb/"
   },
   "GaiaConfig": {
-    "BasePath": "./ecos-data/gaia",
+    "BasePath": "./ecos-data/gaia"
   }
 }
