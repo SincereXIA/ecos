@@ -29,6 +29,8 @@ type EcosReader struct {
 	objPipes     []*pipeline.Pipeline
 	config       *config.ClientConfig
 	cachedBlocks sync.Map
+
+	blockPool *sync.Pool
 }
 
 func (r *EcosReader) genPipelines() error {
@@ -71,7 +73,8 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		logger.Warningf("blockClient responds err: %v", err)
 		return nil, err
 	}
-	block := make([]byte, 0, r.bucketInfo.Config.BlockSize)
+	//block := make([]byte, 0, r.bucketInfo.Config.BlockSize)
+	block := r.blockPool.Get().([]byte)
 	for {
 		rs, err := res.Recv()
 		if err != nil {
@@ -110,7 +113,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 
 	isEOF := true              // 是否每一个 block 都已经读取完毕
 	offset := r.curBlockOffset // 第一个 block 需要加入上次读的偏移
-	for i := 0; i < blockNum && r.curBlockIndex < len(r.meta.Blocks); i++ {
+	for i := 0; i < blockNum && r.curBlockIndex+i < len(r.meta.Blocks); i++ {
 		start := i * blockSize
 		end := start + blockSize
 		if end > len(p) {
@@ -131,8 +134,13 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 				logger.Tracef("CurBlockOffset: %d", r.curBlockOffset)
 				isEOF = false
 			} else {
-				r.cachedBlocks.Delete(info.BlockId) // 已经读完，释放内存
-				if offset > 0 {                     // 当前 block 不是从头读的，但已经读完，需要重置 offset，否则下一个 block 不会从头读
+				value, ok := r.cachedBlocks.LoadAndDelete(info.BlockId) // 已经读完，释放内存
+				if ok {
+					b := value.([]byte)
+					b = b[:0] // re-slice to make block slice empty
+					r.blockPool.Put(b)
+				}
+				if offset > 0 { // 当前 block 不是从头读的，但已经读完，需要重置 offset，否则下一个 block 不会从头读
 					r.curBlockOffset = 0
 				}
 			}

@@ -49,7 +49,7 @@ func TestClient(t *testing.T) {
 	objectSize := 1024 * 1024 * 10 //10M
 	for i := 0; i < objectNum; i++ {
 		data := genTestData(objectSize)
-		writer := factory.GetEcosWriter("test" + strconv.Itoa(i))
+		writer := factory.GetEcosWriter("/test" + strconv.Itoa(i) + "/ecos-test")
 		size, err := writer.Write(data)
 		if err != nil {
 			t.Errorf("Failed to write data: %v", err)
@@ -76,9 +76,9 @@ func TestClient(t *testing.T) {
 		operator := client.GetVolumeOperator()
 		bucket, err := operator.Get("default")
 		assert.NoError(t, err, "Failed to get bucket")
-		err = bucket.Remove("test0")
+		err = bucket.Remove("/test0/ecos-test")
 		assert.NoError(t, err, "Failed to remove object")
-		_, err = bucket.Get("test0")
+		_, err = bucket.Get("/test0/ecos-test")
 		assert.Error(t, err, "get removed object should fail")
 		time.Sleep(time.Second)
 	})
@@ -195,6 +195,7 @@ func BenchmarkClient(b *testing.B) {
 					reader := factory.GetEcosReader("test0")
 					data := make([]byte, objectSize)
 					_, err := reader.Read(data)
+					//data, _ = io.ReadAll(reader)
 					if err != nil && err != io.EOF {
 						b.Errorf("Failed to read data: %v", err)
 					}
