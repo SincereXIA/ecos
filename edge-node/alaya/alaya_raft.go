@@ -13,11 +13,12 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/rcrowley/go-metrics"
 	"github.com/wxnacy/wgo/arrays"
+	"go.etcd.io/etcd/pkg/v3/idutil"
+	"go.etcd.io/etcd/pkg/v3/wait"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
 	"path"
-	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -37,14 +38,14 @@ type Raft struct {
 	raftAlayaChan chan raftpb.Message
 	stopChan      chan uint64
 
-	metaStorage   MetaStorage
-	metaApplyChan chan *MetaOperate
+	metaStorage MetaStorage
+	//metaApplyChan chan *MetaOperate
+	w        wait.Wait
+	reqIDGen *idutil.Generator
 
 	pipeline *pipeline.Pipeline
 	// rwMutex protect pipeline
 	rwMutex sync.RWMutex
-
-	confChangeChan chan raftpb.ConfChange
 }
 
 func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
@@ -61,10 +62,10 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 		raftAlayaChan: raftAlayaChan,
 		metaStorage:   metaStorage,
 
-		pipeline:       nowPipe,
-		stopChan:       stopChan,
-		confChangeChan: make(chan raftpb.ConfChange, 100), // TODO: not ok
-		metaApplyChan:  make(chan *MetaOperate, 100),
+		pipeline: nowPipe,
+		stopChan: stopChan,
+		w:        wait.New(),
+		reqIDGen: idutil.NewGenerator(uint16(raftID), time.Now()),
 	}
 
 	var peers []raft.Peer
@@ -83,7 +84,6 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 	}
 	logger.Infof("%v new raft node for pg %v, peers: %v, oldP: %v", raftID, r.pgID, peers, oldP)
 
-	// TODO: maybe readyC is useless
 	readyC := make(chan bool)
 	// TODO: init wal base path
 	basePath := path.Join("ecos-data/alaya/", "pg"+pgIdToStr(r.pgID), strconv.FormatInt(int64(raftID), 10))
@@ -97,7 +97,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 
 func (r *Raft) cleanup() {
 	logger.Warningf("raft %d stopped, start cleanup", r.raft.ID)
-	// TODO: close cf?
+	// TODO:(qiutb) close cf?
 	logger.Warningf("moon %d clean up done", r.raft.ID)
 }
 
@@ -178,9 +178,11 @@ func (r *Raft) readCommit(commitC <-chan *eraft.Commit, errorC <-chan error) {
 			if err != nil {
 				logger.Errorf("Alaya process Alaya message err: %v", err.Error())
 			}
-			r.metaApplyChan <- &metaOperate
+			if r.w.IsRegistered(metaOperate.OperateId) {
+				r.w.Trigger(metaOperate.OperateId, struct{}{})
+			}
 		}
-		close(commit.ApplyDoneC) // TODO: (qiu) what use for
+		close(commit.ApplyDoneC)
 	}
 	if err, ok := <-errorC; ok {
 		logger.Fatalf("commit stream error: %v", err)
@@ -189,17 +191,19 @@ func (r *Raft) readCommit(commitC <-chan *eraft.Commit, errorC <-chan error) {
 
 func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 	if len(change.Context) > 0 {
-		if r.raft.Node.Status().Lead == r.raft.Node.Status().ID {
-			// this message sent by propose new pipeline
-			r.confChangeChan <- *change
-		} else {
-			var p pipeline.Pipeline
-			err := p.Unmarshal(change.Context)
-			if err != nil {
-				logger.Errorf("get pipeline from conf change fail")
-			}
-			r.setPipeline(&p)
+		if change.Type == raftpb.ConfChangeRemoveNode {
+			logger.Infof("raft: %v PG: %v remove node %v and raft apply", r.raft.ID, r.pgID, change.NodeID)
 		}
+		if r.w.IsRegistered(change.NodeID) {
+			r.w.Trigger(change.NodeID, struct{}{})
+		}
+		var p pipeline.Pipeline
+		err := p.Unmarshal(change.Context)
+		if err != nil {
+			logger.Errorf("get pipeline from conf change fail")
+		}
+		r.setPipeline(&p)
+
 	}
 	if change.NodeID != uint64(r.raft.ID) {
 		return
@@ -213,15 +217,6 @@ func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 
 func (r *Raft) ProposeNewPipeline(newP *pipeline.Pipeline, oldP *pipeline.Pipeline) {
 	r.setPipeline(newP)
-	// clear confChangeChan, to wait conf change propose
-	for {
-		select {
-		case <-r.confChangeChan:
-		default:
-			goto START
-		}
-	}
-START:
 	go func() {
 		needAdd, needRemove := calDiff(newP.RaftId, oldP.RaftId)
 		err := r.ProposeNewNodes(needAdd)
@@ -238,15 +233,31 @@ START:
 	}()
 }
 
+func (r *Raft) findVoter(id uint64) bool {
+	for _, v := range r.GetVotersID() {
+		logger.Infof("id: %v, voters: %v", id, r.GetVotersID())
+		if v == id {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Raft) addNode(id uint64, data []byte) error {
+	logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raft.ID, r.pgID, id)
+	ch := r.w.Register(id)
 	err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  id,
 		Context: data,
 	})
 	if err != nil {
-		logger.Infof("raft %v propose add node %v failed, err: %v", r.raft.ID, id, err)
+		logger.Errorf("raft: %v PG: %v propose conf change addNode: %v fail, err: %v", r.raft.ID, r.pgID, id, err)
 		return err
+	}
+	select {
+	case <-ch:
+		logger.Infof("raft: %v add node: %v success", r.raft.ID, id)
 	}
 	return nil
 }
@@ -256,43 +267,29 @@ func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 		return nil
 	}
 	for _, id := range NodeIDs {
-		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raft.ID, r.pgID, id)
 		data, _ := r.getPipeline().Marshal()
-		err := r.addNode(id, data)
-		if err != nil {
-			return err
-		}
-		for {
-			select {
-			case <-time.After(time.Duration(time.Second * 5)):
-				logger.Infof("raft %v retry to add nodes", r.raft.ID)
-				err := r.addNode(id, data)
-				if err != nil {
-					return err
-				}
-			case change := <-r.confChangeChan:
-				if change.NodeID != id {
-					r.confChangeChan <- change
-					runtime.Gosched()
-				} else {
-					logger.Infof("raft: %v PG: %v success add node: %v", r.raft.ID, r.pgID, id)
-					return nil
-				}
-			}
+		for !r.findVoter(id) {
+			r.addNode(id, data)
 		}
 	}
 	return nil
 }
 
 func (r *Raft) removeNode(id uint64, data []byte) error {
+	logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raft.ID, r.pgID, id)
+	ch := r.w.Register(id)
 	err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
 		Type:    raftpb.ConfChangeRemoveNode,
 		NodeID:  id,
 		Context: data,
 	})
 	if err != nil {
-		logger.Errorf("raft %v propose remove node %v fail, err: %v", r.raft.ID, id, err)
+		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v fail, err: %v", r.raft.ID, r.pgID, id, err)
 		return err
+	}
+	select {
+	case <-ch:
+		logger.Infof("raft: %v remove node: %v success", r.raft.ID, id)
 	}
 	return nil
 }
@@ -309,48 +306,28 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 	removeSelf := false
 	data, _ := r.getPipeline().Marshal()
 	for _, id := range NodeIDs {
-		if id == r.raft.Node.Status().ID {
+		if id == uint64(r.raft.ID) {
 			removeSelf = true
 			continue
 		}
-		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raft.ID, r.pgID, id)
-		err := r.removeNode(id, data)
-		if err != nil {
-			return err
-		}
-		// 检查是否 propose 了本次节点
-		flag := false
-		for {
-			select {
-			case <-time.After(time.Second * 2):
-				logger.Infof("raft %v retry to remove node", r.raft.ID)
-				err := r.removeNode(id, data)
-				if err != nil {
-					return err
-				}
-			case change := <-r.confChangeChan:
-				if change.NodeID != id {
-					r.confChangeChan <- change
-					runtime.Gosched()
-				} else {
-					logger.Infof("raft: %v PG: %v success remove node: %v", r.raft.ID, r.pgID, id)
-					flag = true
-					break
-				}
-			}
-			if flag {
-				break
-			}
+		r.removeNode(id, data)
+		for r.findVoter(id) {
+			logger.Infof("raft: %v PG: %v do not success remove node: %v", r.raft.ID, r.pgID, id)
+			r.removeNode(id, data)
 		}
 	}
 	if removeSelf {
 		logger.Infof("raft: %v PG: %v propose conf change remove self", r.raft.ID, r.pgID)
+		ch := r.w.Register(uint64(r.raft.ID))
 		_ = r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeRemoveNode,
 			NodeID:  uint64(r.raft.ID),
 			Context: data,
 		})
-		//<-r.confChangeChan
+		select {
+		case <-ch:
+			logger.Infof("raft: %v remove self success", r.raft.ID)
+		}
 	}
 	return nil
 }
@@ -410,21 +387,24 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 // ProposeObjectMetaOperate Propose a request to operate object meta to raft group,
 // and wait it applied into meta storage
 func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
+	// 生成一个新的操作序列号
+	opID := r.reqIDGen.Next()
+	operate.OperateId = opID
 	bytes, _ := proto.Marshal(operate)
+	// 注册，等待 operate 被 apply
+	ch := r.w.Register(opID)
 	err := r.raft.Node.Propose(r.ctx, bytes)
 	if err != nil {
 		logger.Warningf("raft propose err: %v", err)
 		return err
 	}
 	// TODO (zhang): Time out
-	for {
-		m := <-r.metaApplyChan
-		if operate.Operate != m.Operate || m.Meta.ObjId != operate.Meta.ObjId {
-			r.metaApplyChan <- m
-		} else {
-			return nil
-		}
+	logger.Debugf("%v pg: %v raft propose object meta: %v, wait for it apply", r.raft.ID, r.pgID, operate.Meta.ObjId)
+	select {
+	case <-ch:
+		logger.Debugf("%v pg: %v raft propose object meta: %v, apply done", r.raft.ID, r.pgID, operate.Meta.ObjId)
 	}
+	return nil
 }
 
 func (r *Raft) RunAskForLeader() {

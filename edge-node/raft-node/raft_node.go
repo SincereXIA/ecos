@@ -68,7 +68,7 @@ func NewRaftNode(id int, ctx context.Context, peers []raft.Peer, basePath string
 
 		ProposeC:         make(chan string),
 		ConfChangeC:      make(chan raftpb.ConfChange),
-		ApplyConfChangeC: make(chan raftpb.ConfChange),
+		ApplyConfChangeC: make(chan raftpb.ConfChange, 10),
 		CommunicationC:   make(chan []raftpb.Message, 100),
 		CommitC:          make(chan *Commit),
 		ErrorC:           make(chan error),
@@ -148,7 +148,13 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) (<-chan struct{}, bool) 
 				logger.Fatalf("unmarshal conf change error: %v", err)
 			}
 			rc.ConfState = *rc.Node.ApplyConfChange(cc)
+			//if cc.Type == raftpb.ConfChangeRemoveNode {
+			//	logger.Infof("before chan raft: %v remove %v, confState: %v", rc.ID, cc.NodeID, rc.ConfState.Voters)
+			//}
 			rc.ApplyConfChangeC <- cc
+			//if cc.Type == raftpb.ConfChangeRemoveNode {
+			//	logger.Infof("after chan raft: %v remove %v, confState: %v", rc.ID, cc.NodeID, rc.ConfState.Voters)
+			//}
 		}
 	}
 
@@ -266,9 +272,8 @@ func (rc *RaftNode) startRaft(readyC chan bool) {
 		MaxSizePerMsg:             1024 * 1024,
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
-		//Logger:                    logger.Logger,
-		//PreVote:                   true,
-		//CheckQuorum:               true,
+		PreVote:                   true,
+		CheckQuorum:               true,
 	}
 
 	rc.Node = raft.StartNode(c, rc.peers)
@@ -438,7 +443,7 @@ func (rc *RaftNode) serveChannels() {
 			//logger.Debugf("%v do something Done", rc.ID)
 
 		case m := <-rc.RaftChan:
-			logger.Debugf("%v receive message and start to step %v", rc.ID, m)
+			//logger.Debugf("%v receive message and start to step %v", rc.ID, m)
 			err := rc.Node.Step(rc.ctx, m)
 			if err != nil {
 				logger.Errorf("failed to process raft message %v", err)
