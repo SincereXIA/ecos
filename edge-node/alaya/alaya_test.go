@@ -91,7 +91,7 @@ func testAlaya(t *testing.T, mock bool) {
 	})
 	assert.NoError(t, err)
 
-	testMetaNum := 10000
+	testMetaNum := 1000
 
 	var metas []*object.ObjectMeta
 
