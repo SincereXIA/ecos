@@ -24,33 +24,33 @@ import (
 func putObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	body := c.Request.Body
-	factory := Client.GetIOFactory(bucketName)
-	if factory == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.BucketNotFound.Error()})
+	factory, err := Client.GetIOFactory(bucketName)
+	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	writer := factory.GetEcosWriter(key)
-	_, err := io.Copy(writer, body)
+	_, err = io.Copy(writer, body)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	err = writer.Close()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	c.Status(http.StatusOK)
@@ -60,55 +60,59 @@ func putObject(c *gin.Context) {
 func postObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusNotFound, InvalidBucketName(nil))
 		return
 	}
 	mForm, err := c.MultipartForm()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusBadRequest, MalformedPOSTRequest(bucketName, c.Request.URL.Path, nil))
+		return
+	}
+	if mForm.Value == nil {
+		c.XML(http.StatusBadRequest, RequestIsNotMultiPartContent(bucketName, c.Request.URL.Path))
+		return
+	}
+	if len(mForm.Value["key"]) != 1 {
+		c.XML(http.StatusBadRequest, IncorrectNumberOfFilesInPostRequest(bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	key := mForm.Value["key"][0]
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": errno.MissingKey.Error(),
-		})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
+		return
+	}
+	if len(mForm.File["file"]) != 1 {
+		c.XML(http.StatusBadRequest, IncorrectNumberOfFilesInPostRequest(bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	file := mForm.File["file"][0]
 	if file == nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": errno.EmptyField.Error(),
-		})
+		c.XML(http.StatusBadRequest, InvalidArgument("file", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	content, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
-	factory := Client.GetIOFactory(bucketName)
-	if factory == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.BucketNotFound.Error()})
+	factory, err := Client.GetIOFactory(bucketName)
+	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	writer := factory.GetEcosWriter(key)
 	_, err = io.Copy(writer, content)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	err = writer.Close()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	c.Status(http.StatusOK)
@@ -118,56 +122,43 @@ func postObject(c *gin.Context) {
 func headObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"code":    http.StatusNotFound,
-				"message": errno.BucketNotFound.Error(),
-			})
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	// Get Object Operator
 	op, err = op.Get(key)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.MetaNotExist.Error()) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"code":    http.StatusNotFound,
-				"message": errno.ObjectNotFound.Error(),
-			})
+			c.XML(http.StatusNotFound, NoSuchKey(bucketName, c.Request.URL.Path, key))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	info, err := op.Info()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	meta := info.(*object.ObjectMeta)
 	c.Header("Content-Length", strconv.FormatUint(meta.ObjSize, 10))
 	c.Header("ETag", meta.ObjHash)
 	c.Header("Last-Modified", meta.UpdateTime.Format(http.TimeFormat))
-	c.Header("Server", "Ecos")
 	c.Status(http.StatusOK)
 }
 
@@ -289,58 +280,63 @@ func parseRange(s string, size int64) ([]httpRange, error) {
 func getObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"code":    http.StatusNotFound,
-				"message": errno.BucketNotFound.Error(),
-			})
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	// Get Object Operator
 	op, err = op.Get(key)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		if strings.Contains(err.Error(), errno.MetaNotExist.Error()) {
+			c.XML(http.StatusNotFound, NoSuchKey(bucketName, c.Request.URL.Path, key))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	info, err := op.Info()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	meta := info.(*object.ObjectMeta)
-	reader := Client.GetIOFactory(bucketName).GetEcosReader(key)
+	factory, err := Client.GetIOFactory(bucketName)
+	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+		return
+	}
+	reader := factory.GetEcosReader(key)
 	c.Header("ETag", meta.ObjId)
 	requestRange := c.Request.Header.Get("Range")
 	if requestRange == "" {
-		c.DataFromReader(http.StatusOK, int64(meta.ObjSize), "application/octet-stream", reader, nil)
+		c.DataFromReader(http.StatusOK, int64(meta.ObjSize), "application/octet-stream", reader, map[string]string{
+			"Last-Modified": meta.UpdateTime.Format(http.TimeFormat),
+		})
 		return
 	}
 	ranges, err := parseRange(requestRange, int64(meta.ObjSize))
 	if err != nil {
-		c.Status(http.StatusRequestedRangeNotSatisfiable)
+		c.XML(http.StatusRequestedRangeNotSatisfiable, InvalidRange(bucketName, c.Request.URL.Path, key))
 		return
 	}
-	c.Header("Accept-Ranges", "bytes")
 	if len(ranges) == 0 {
 		c.Status(http.StatusRequestedRangeNotSatisfiable)
 		return
@@ -348,30 +344,28 @@ func getObject(c *gin.Context) {
 	if len(ranges) == 1 {
 		_, err = reader.Seek(ranges[0].start, io.SeekStart)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+			return
 		}
 		c.Status(http.StatusPartialContent)
+		c.Header("Last-Modified", meta.UpdateTime.Format(http.TimeFormat))
 		_, err = io.CopyN(c.Writer, reader, ranges[0].length)
 		if err != nil {
-			c.Abort()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+			return
 		}
 		return
 	}
 	c.Status(http.StatusPartialContent)
+	c.Header("Last-Modified", meta.UpdateTime.Format(http.TimeFormat))
 	if len(ranges) > 1 {
 		multipartWriter := multipart.NewWriter(c.Writer)
+		c.Header("Content-Type", "multipart/byteranges; boundary="+multipartWriter.Boundary())
+		c.Header("ETag", meta.ObjId)
 		for _, r := range ranges {
 			_, err = reader.Seek(ranges[0].start, io.SeekStart)
 			if err != nil {
-				c.Abort()
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": err.Error(),
-				})
+				c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 				return
 			}
 			header := map[string][]string{
@@ -379,32 +373,20 @@ func getObject(c *gin.Context) {
 			}
 			partWriter, err := multipartWriter.CreatePart(header)
 			if err != nil {
-				c.Abort()
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": err.Error(),
-				})
+				c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 				return
 			}
 			_, err = reader.Seek(r.start, io.SeekStart)
 			if err != nil && err != io.EOF {
-				c.Abort()
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": err.Error(),
-				})
+				c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 				return
 			}
 			_, err = io.CopyN(partWriter, reader, r.length)
 			if err != nil && err != io.EOF {
-				c.Abort()
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": err.Error(),
-				})
+				c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 				return
 			}
 		}
-		c.Status(http.StatusPartialContent)
-		c.Header("Content-Type", "multipart/byteranges; boundary="+multipartWriter.Boundary())
-		c.Header("ETag", meta.ObjId)
 	}
 }
 
@@ -412,39 +394,30 @@ func getObject(c *gin.Context) {
 func deleteObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"code":    http.StatusNotFound,
-				"message": errno.BucketNotFound.Error(),
-			})
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	// Delete Object from Bucket Operator
 	err = op.Remove(key)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+	if err != nil && !strings.Contains(err.Error(), errno.MetaNotExist.Error()) {
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
-	c.Header("Content-Length", "0")
-	c.Header("Server", "Ecos")
 	c.Status(http.StatusNoContent)
 }
 
@@ -473,70 +446,73 @@ func parseSrcKey(src string) (bucket, key string, err error) {
 func copyObject(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	src := c.GetHeader("x-amz-copy-source")
 	if src == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("x-amz-copy-source", bucketName, c.Request.URL.Path, nil))
 		return
 	}
-	bucket, srcKey, err := parseSrcKey(src)
+	srcBucket, srcKey, err := parseSrcKey(src)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidArgument.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("x-amz-copy-source", bucketName, c.Request.URL.Path, nil))
 		return
 	}
-	if bucket == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingBucket.Error()})
+	if srcBucket == "" {
+		c.XML(http.StatusBadRequest, InvalidArgument("x-amz-copy-source", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	// Get Bucket Operator
-	op, err := Client.GetVolumeOperator().Get(bucket)
+	op, err := Client.GetVolumeOperator().Get(srcBucket)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(srcBucket))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	// Get Object Operator
 	op, err = op.Get(srcKey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		if strings.Contains(err.Error(), errno.MetaNotExist.Error()) {
+			c.XML(http.StatusNotFound, NoSuchKey(srcBucket, c.Request.URL.Path, srcKey))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	info, err := op.Info()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	meta := info.(*object.ObjectMeta)
-	factory := Client.GetIOFactory(bucketName)
-	if factory == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.BucketNotFound.Error()})
+	factory, err := Client.GetIOFactory(bucketName)
+	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	writer := factory.GetEcosWriter(key)
 	etag, err := writer.Copy(meta)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
-	c.Header("Server", "Ecos")
 	c.XML(http.StatusOK, CopyObjectResult{ETag: etag})
 }
 
@@ -573,31 +549,24 @@ type DeleteResult struct {
 func deleteObjects(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	body := c.Request.Body
 	var deleteRequest Delete
 	err := xml.NewDecoder(body).Decode(&deleteRequest)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusBadRequest, MalformedXML(bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	// Get Bucket Operator
 	op, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"code":    http.StatusNotFound,
-				"message": errno.BucketNotFound.Error(),
-			})
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	var deleteResult DeleteResult
@@ -605,7 +574,7 @@ func deleteObjects(c *gin.Context) {
 		// Delete Objects from Bucket Operator
 		logger.Infof("Delete Object: %s", *obj.Key)
 		err = op.Remove(*obj.Key)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), errno.MetaNotExist.Error()) {
 			deleteResult.Error = append(deleteResult.Error, DeleteError{
 				Code:    common.PtrString("InternalError"),
 				Key:     obj.Key,
@@ -617,7 +586,6 @@ func deleteObjects(c *gin.Context) {
 			logger.Infof("Delete Object Success: %s", *obj.Key)
 		}
 	}
-	c.Header("Server", "Ecos")
 	c.XML(http.StatusOK, deleteResult)
 }
 
@@ -696,6 +664,10 @@ func objectLevelGetHandler(c *gin.Context) {
 //  DeleteObject:         DELETE /Key+?versionId=VersionId
 //  AbortMultipartUpload: DELETE /Key+?uploadId=UploadId
 func objectLevelDeleteHandler(c *gin.Context) {
+	if c.Param("key") == "/" {
+		bucketLevelDeleteHandler(c)
+		return
+	}
 	if _, ok := c.GetQuery("uploadId"); ok {
 		abortMultipartUpload(c)
 	}

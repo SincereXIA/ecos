@@ -47,7 +47,10 @@ func TestClient(t *testing.T) {
 	err = client.GetVolumeOperator().CreateBucket(bucketInfo)
 	assert.NoError(t, err, "Failed to create default bucket")
 
-	factory := client.GetIOFactory(bucketName)
+	factory, err := client.GetIOFactory(bucketName)
+	if err != nil {
+		t.Errorf("Failed to get io factory: %v", err)
+	}
 	objectSize := 1024 * 1024 * 10 //10M
 	for i := 0; i < objectNum; i++ {
 		data := genTestData(objectSize)
@@ -69,7 +72,7 @@ func TestClient(t *testing.T) {
 	})
 
 	t.Run("test get object meta", func(t *testing.T) {
-		meta, err := client.ListObjects(ctx, bucketName)
+		meta, err := client.ListObjects(ctx, bucketName, "")
 		assert.NoError(t, err, "Failed to list objects")
 		assert.Equal(t, objectNum, len(meta), "object count not match")
 	})
@@ -146,7 +149,10 @@ func BenchmarkClient(b *testing.B) {
 		b.Errorf("Failed to create default bucket: %v", err)
 	}
 
-	factory := client.GetIOFactory(bucketName)
+	factory, err := client.GetIOFactory(bucketName)
+	if err != nil {
+		b.Errorf("Failed to get io factory: %v", err)
+	}
 	sizeMap := orderedmap.NewOrderedMap()
 	sizeMap.Set("10K", 10*1024)
 	sizeMap.Set("1M", 1024*1024)

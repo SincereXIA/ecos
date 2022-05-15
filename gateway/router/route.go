@@ -30,7 +30,7 @@ func NewRouter(cfg Config) *gin.Engine {
 	bucketRouter := router.Group("/:bucketName")
 	{
 		bucketRouter.PUT("", bucketLevelPutHandler)
-		// bucketRouter.DELETE("", deleteBucket)
+		bucketRouter.DELETE("", bucketLevelDeleteHandler)
 		bucketRouter.GET("", bucketLevelGetHandler)
 		bucketRouter.HEAD("", bucketLevelHeadHandler)
 		bucketRouter.POST("", bucketLevelPostHandler)
@@ -43,6 +43,10 @@ func NewRouter(cfg Config) *gin.Engine {
 		bucketRouter.HEAD("/*key", objectLevelHeadHandler)
 		bucketRouter.POST("/*key", objectLevelPostHandler)
 	}
+	router.Use(func(c *gin.Context) {
+		c.Header("Server", "ECOS")
+		c.Header("Accept-Ranges", "bytes")
+	})
 	return router
 }
 

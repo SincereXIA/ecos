@@ -429,7 +429,7 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 			return "", errno.InvalidArgument
 		}
 		if _, ok := w.blocks[int(part.PartNumber)]; !ok {
-			return "", errno.InvalidArgument
+			return "", errno.InvalidPart
 		}
 		pendingMap[part.PartNumber] = true
 	}
@@ -496,12 +496,19 @@ func (w *EcosWriter) GetPartBlockInfo(partID int32) (*object.BlockInfo, error) {
 		return nil, errno.MethodNotAllowed
 	}
 	if w.Status != READING {
-		return nil, errno.RepeatedClose
+		return nil, errno.MethodNotAllowed
 	}
 	if partID < 0 || partID >= int32(len(w.partIDs)) {
 		return nil, errno.InvalidArgument
 	}
-	return &w.blocks[int(partID)].BlockInfo, nil
+	targetBlock := w.blocks[int(partID)]
+	if targetBlock == nil {
+		return nil, errno.InvalidPart
+	}
+	if targetBlock.status != FINISHED {
+		return nil, errno.InvalidObjectState
+	}
+	return &targetBlock.BlockInfo, nil
 }
 
 func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {

@@ -23,14 +23,18 @@ type CreateBucketConfiguration struct {
 func createBucket(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
+		return
+	}
+	if bucketName == "default" {
+		c.XML(http.StatusConflict, BucketAlreadyExists("default"))
 		return
 	}
 	if c.Request.ContentLength > 0 {
 		var createBucketConfiguration CreateBucketConfiguration
 		err := xml.NewDecoder(c.Request.Body).Decode(&createBucketConfiguration)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.XML(http.StatusBadRequest, MalformedXML(bucketName, c.Request.URL.Path, nil))
 			return
 		}
 	}
@@ -42,7 +46,7 @@ func createBucket(c *gin.Context) {
 	bucketInfo := infos.GenBucketInfo(credential.GetUserID(), bucketName, credential.GetUserID())
 	err := volOp.CreateBucket(bucketInfo)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	c.Header("Location", "/"+bucketName)
@@ -74,23 +78,16 @@ type ListBucketResult struct {
 func listObjects(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{
-			"code":    http.StatusNotFound,
-			"message": errno.MissingBucket.Error(),
-		})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 	}
-	listObjectsResult, err := Client.ListObjects(c, bucketName)
+	prefix := c.Query("prefix")
+	listObjectsResult, err := Client.ListObjects(c, bucketName, prefix)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"code":    http.StatusNotFound,
-				"message": errno.BucketNotFound.Error(),
-			})
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	result := ListBucketResult{
@@ -99,16 +96,14 @@ func listObjects(c *gin.Context) {
 	for _, meta := range listObjectsResult {
 		_, _, key, _, err := object.SplitID(meta.ObjId)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 			return
 		}
 		timestamp := meta.UpdateTime.Format(time.RFC3339Nano)
 		result.Contents = append(result.Contents, Content{
 			Key:          &key,
 			LastModified: &timestamp,
-			ETag:         &meta.ObjHash,
+			ETag:         &meta.ObjId,
 			Size:         meta.ObjSize,
 		})
 	}
@@ -119,23 +114,17 @@ func listObjects(c *gin.Context) {
 func listObjectsV2(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": errno.MissingBucket.Error(),
-		})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
-	listObjectsResult, err := Client.ListObjects(c, bucketName)
+	prefix := c.Query("prefix")
+	listObjectsResult, err := Client.ListObjects(c, bucketName, prefix)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"code":    http.StatusNotFound,
-				"message": errno.BucketNotFound.Error(),
-			})
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	result := ListBucketResult{
@@ -144,9 +133,7 @@ func listObjectsV2(c *gin.Context) {
 	for _, meta := range listObjectsResult {
 		_, _, key, _, err := object.SplitID(meta.ObjId)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 			return
 		}
 		timestamp := meta.UpdateTime.Format(time.RFC3339Nano)
@@ -166,26 +153,64 @@ func listObjectsV2(c *gin.Context) {
 func headBucket(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{
-			"code": http.StatusNotFound,
-		})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	_, err := Client.GetVolumeOperator().Get(bucketName)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"code":    http.StatusNotFound,
-				"message": errno.BucketNotFound.Error(),
-			})
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	c.Status(http.StatusOK)
+	return
+}
+
+// deleteBucket deletes an EMPTY bucket
+//
+// DELETE /{bucketName}
+func deleteBucket(c *gin.Context) {
+	bucketName := c.Param("bucketName")
+	if bucketName == "" {
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
+		return
+	}
+	_, err := Client.GetVolumeOperator().Get(bucketName)
+	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
+		return
+	}
+	credential := credentials.Credential{
+		AccessKey: "",
+		SecretKey: "",
+	}
+	bucketContent, err := Client.ListObjects(c, bucketName, "")
+	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
+		return
+	}
+	if len(bucketContent) != 0 {
+		c.XML(http.StatusConflict, BucketNotEmpty(bucketName))
+		return
+	}
+	bucketInfo := infos.GenBucketInfo(credential.GetUserID(), bucketName, credential.GetUserID())
+	err = Client.GetVolumeOperator().DeleteBucket(bucketInfo)
+	if err != nil {
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
+		return
+	}
+	c.Status(http.StatusNoContent)
 	return
 }
 
@@ -234,4 +259,12 @@ func bucketLevelPutHandler(c *gin.Context) {
 //  HeadBucket: HEAD /
 func bucketLevelHeadHandler(c *gin.Context) {
 	headBucket(c)
+}
+
+// bucketLevelDeleteHandler handles bucket level DELETE requests
+//
+// DELETE /{bucketName} Include:
+//  DeleteBucket: DELETE /
+func bucketLevelDeleteHandler(c *gin.Context) {
+	deleteBucket(c)
 }

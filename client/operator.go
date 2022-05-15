@@ -146,6 +146,24 @@ func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
 	return err
 }
 
+// DeleteBucket deletes a bucket by bucketInfo from its volume.
+//
+// The Bucket must be empty.
+func (v *VolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
+	nodeInfo := v.client.clusterInfo.NodesInfo[0]
+	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+	if err != nil {
+		return err
+	}
+	moonClient := moon.NewMoonClient(conn)
+	_, err = moonClient.ProposeInfo(context.Background(), &moon.ProposeInfoRequest{
+		Operate:  moon.ProposeInfoRequest_DELETE,
+		Id:       bucketInfo.GetID(),
+		BaseInfo: bucketInfo.BaseInfo(),
+	})
+	return err
+}
+
 type BucketOperator struct {
 	bucketInfo *infos.BucketInfo
 	client     *Client

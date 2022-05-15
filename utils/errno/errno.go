@@ -84,7 +84,7 @@ const (
 	// Gateway errors
 
 	CodeGatewayNotFound = GatewayError + iota
-	CodeBucketNotFound
+	CodeNoSuchBucket
 	CodeMissingBucketName
 	CodeMissingKey
 	CodeEmptyField
@@ -100,12 +100,13 @@ const (
 	CodeNoSuchUpload
 
 	CodeObjectNotFound
+	CodeInvalidObjectState
 )
 
 var (
 	// GatewayNotFound = newErr(CodeGatewayNotFound, "gateway not found")
 
-	BucketNotFound  = newErr(CodeBucketNotFound, "bucket not found")
+	NoSuchBucket    = newErr(CodeNoSuchBucket, "bucket not found")
 	MissingBucket   = newErr(CodeMissingBucketName, "missing bucket name")
 	MissingKey      = newErr(CodeMissingKey, "missing key")
 	EmptyField      = newErr(CodeEmptyField, "empty field")
@@ -119,7 +120,8 @@ var (
 	InvalidPartOrder = newErr(CodeInvalidPartOrder, "invalid part order")
 	NoSuchUpload     = newErr(CodeNoSuchUpload, "no such upload")
 
-	ObjectNotFound = newErr(CodeObjectNotFound, "object not found")
+	ObjectNotFound     = newErr(CodeObjectNotFound, "object not found")
+	InvalidObjectState = newErr(CodeInvalidObjectState, "invalid object state")
 )
 
 const (
