@@ -41,6 +41,9 @@ spec:
             - name: grpc-edge
               protocol: TCP
               containerPort: 3267
+            - name: http-proxy
+              protocol: TCP
+              containerPort: 8080
           volumeMounts:
             - name: host-time
               mountPath: /etc/localtime
@@ -99,5 +102,6 @@ spec:
       targetPort: 3267
     - name: http-proxy
       protocol: TCP
-      containerPort: 8080
+      port: 8080
+      targetPort: 8080
   clusterIP: None
