@@ -10,6 +10,7 @@ import (
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	"ecos/utils/logger"
 	"encoding/json"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -178,6 +179,9 @@ func (b *BucketOperator) Remove(key string) error {
 	_, err = alayaClient.DeleteMeta(context.Background(), &alaya.DeleteMetaRequest{
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
+	if err != nil {
+		logger.Errorf("delete meta: %v failed, err: %v", object.GenObjectId(b.bucketInfo, key), err)
+	}
 	return err
 }
 
