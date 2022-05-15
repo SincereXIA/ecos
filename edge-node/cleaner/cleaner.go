@@ -16,7 +16,7 @@ type Cleaner struct {
 	watcher *watcher.Watcher
 }
 
-func (c *Cleaner) removeBlock(term uint64, blockInfo *object.BlockInfo) error {
+func (c *Cleaner) RemoveBlock(term uint64, blockInfo *object.BlockInfo) error {
 	clusterInfo := c.watcher.GetCurrentClusterInfo()
 	pgID := object.GenBlockPgID(blockInfo.BlockId, clusterInfo.BlockPgNum)
 	clusterPipelines, _ := pipeline.NewClusterPipelines(&clusterInfo)
@@ -41,7 +41,7 @@ func (c *Cleaner) removeBlock(term uint64, blockInfo *object.BlockInfo) error {
 
 func (c *Cleaner) RemoveObjectBlocks(meta *object.ObjectMeta) error {
 	for _, blockInfo := range meta.Blocks {
-		err := c.removeBlock(meta.Term, blockInfo)
+		err := c.RemoveBlock(meta.Term, blockInfo)
 		if err != nil {
 			return err
 		}

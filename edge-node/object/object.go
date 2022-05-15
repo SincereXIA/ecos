@@ -18,6 +18,7 @@ func GenSlotPgID(bucketID string, slot, pgNum int32) uint64 {
 // CalculateSlot returns the slot number of the object
 // 1 <= slot number <= slotNum
 func CalculateSlot(objectKey string, slotNum int32) int32 {
+	objectKey = CleanObjectKey(objectKey)
 	m := utilsCommon.NewMapper(uint64(slotNum))
 	slot := m.MapIDtoPG(objectKey)
 	return int32(slot)
@@ -58,9 +59,9 @@ func GenObjPgID(bucketInfo *infos.BucketInfo, objectKey string, pgNum int32) (pg
 // GenObjectId Generates ObjectId for a given object
 func GenObjectId(bucketInfo *infos.BucketInfo, key string) string {
 	prefix := bucketInfo.GetID()
-	slot := CalculateSlot(key, bucketInfo.GetConfig().KeySlotNum)
 	key = path.Clean(key)
 	key = strings.Trim(key, "/")
+	slot := CalculateSlot(key, bucketInfo.GetConfig().KeySlotNum)
 	objID := path.Join(prefix, strconv.FormatInt(int64(slot), 10), key)
 	return CleanObjectKey(objID)
 }

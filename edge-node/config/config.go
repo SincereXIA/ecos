@@ -4,6 +4,7 @@ import (
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/moon"
 	"ecos/edge-node/watcher"
+	"ecos/gateway/router"
 	"ecos/utils/common"
 	"ecos/utils/config"
 	"errors"
@@ -24,6 +25,7 @@ type Config struct {
 	WatcherConfig watcher.Config
 	MoonConfig    moon.Config
 	GaiaConfig    gaia.Config
+	GatewayConfig router.Config
 }
 
 var DefaultConfig Config
@@ -37,6 +39,7 @@ func init() {
 		MoonConfig:    moon.DefaultConfig,
 		StoragePath:   "./ecos-data",
 		GaiaConfig:    gaia.DefaultConfig,
+		GatewayConfig: router.DefaultConfig,
 	}
 	DefaultConfig.WatcherConfig.SelfNodeInfo.RpcPort = rpcPort
 	DefaultConfig.WatcherConfig.SelfNodeInfo.IpAddr = ipAddr

@@ -1,11 +1,13 @@
 package io
 
 import (
+	"context"
 	agent "ecos/client/info-agent"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	common2 "ecos/messenger/common"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
@@ -13,6 +15,8 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"github.com/minio/sha256-simd"
+	"github.com/twmb/murmur3"
+	"hash"
 	"io"
 )
 
@@ -23,6 +27,7 @@ const (
 	UPLOADING
 	FAILED
 	FINISHED
+	ABORTED
 )
 
 type Block struct {
@@ -34,11 +39,11 @@ type Block struct {
 	chunks []*localChunk
 
 	// These infos are for BlockInfo
-	key         string
-	clusterInfo *infos.ClusterInfo
-	blockCount  int
-	needHash    bool
-	blockPipes  []*pipeline.Pipeline
+	key           string
+	clusterInfo   *infos.ClusterInfo
+	blockCount    int
+	blockHashType infos.BucketConfig_HashType
+	pipes         *pipeline.ClusterPipelines
 
 	// These are for Upload and Release
 	infoAgent   *agent.InfoAgent
@@ -49,7 +54,7 @@ type Block struct {
 // Upload provides a way to upload self to a given stream
 func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	// Start Upload by ControlMessage with Code BEGIN
-	pipe := b.blockPipes[b.PgId-1]
+	pipe := b.pipes.GetBlockPipeline(b.PgId)
 	start := &gaia.UploadBlockRequest{
 		Payload: &gaia.UploadBlockRequest_Message{
 			Message: &gaia.ControlMessage{
@@ -76,7 +81,7 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 			logger.Errorf("uploadBlock send chunk error: %v", err)
 			return err
 		}
-		byteCount += uint64(len(chunk.data))
+		byteCount += uint64(len(chunk.data)) - chunk.freeSize
 	}
 	if byteCount != b.BlockSize {
 		logger.Errorf("Incompatible size: Chunks: %v, Block: %v", byteCount, b.Size)
@@ -108,35 +113,36 @@ func (b *Block) genBlockHash() error {
 	if b.status != UPLOADING {
 		return errno.IllegalStatus
 	}
-	if !b.needHash {
+	if b.blockHashType == infos.BucketConfig_OFF {
 		b.BlockHash = ""
 		return nil
 	}
-	sha256h := sha256.New()
+	var h hash.Hash
+	switch b.blockHashType {
+	case infos.BucketConfig_SHA256:
+		h = sha256.New()
+	case infos.BucketConfig_MURMUR3_128:
+		h = murmur3.New128()
+	case infos.BucketConfig_MURMUR3_32:
+		h = murmur3.New32()
+	}
 	for _, chunk := range b.chunks {
-		sha256h.Write(chunk.data)
+		h.Write(chunk.data)
 	}
-	b.BlockHash = hex.EncodeToString(sha256h.Sum(nil))
+	b.BlockHash = hex.EncodeToString(h.Sum(nil))
 	return nil
-}
-
-func minSize(i int, i2 int) int {
-	if i < i2 {
-		return i
-	}
-	return i2
 }
 
 func (b *Block) updateBlockInfo() error {
 	b.BlockInfo.BlockSize = 0
 	for _, chunk := range b.chunks {
-		b.BlockInfo.BlockSize += uint64(len(chunk.data))
+		b.BlockInfo.BlockSize += uint64(len(chunk.data)) - chunk.freeSize
 	}
 	err := b.genBlockHash()
 	if err != nil {
 		return err
 	}
-	if b.needHash {
+	if b.blockHashType != infos.BucketConfig_OFF {
 		b.BlockInfo.BlockId = b.BlockInfo.BlockHash
 	} else {
 		b.BlockInfo.BlockId = GenBlockId()
@@ -161,6 +167,24 @@ func (b *Block) Close() error {
 	return nil
 }
 
+func (b *Block) Abort(uc *UploadClient) error {
+	// TODO(xiong): add context
+	res, err := uc.client.DeleteBlock(context.Background(), &gaia.DeleteBlockRequest{
+		BlockId:  b.BlockId,
+		Pipeline: b.pipes.GetBlockPipeline(b.PgId),
+		Term:     b.clusterInfo.Term,
+	})
+	if err != nil {
+		logger.Errorf("Abort block error: %v", err)
+		return err
+	}
+	if res.Status == common2.Result_FAIL {
+		logger.Errorf("Abort block error: %v", res.Message)
+		return errors.New(res.Message)
+	}
+	return nil
+}
+
 // GenBlockId Generates BlockId for the `i` th block of a specific object
 //
 // This method ensures the global unique with UUID!
@@ -173,8 +197,6 @@ func GenBlockId() string {
 // These const are for PgNum calc
 const (
 	blockPgNum = 100
-	objPgNum   = 10
-	groupNum   = 3
 )
 
 var (

@@ -18,3 +18,18 @@ const (
 	MetricsGaiaBlockPutTimer = metricsGaiaBlock + ".put.timer"
 	MetricsGaiaBlockGetTimer = metricsGaiaBlock + ".get.timer"
 )
+
+const (
+	MetricsGateway             = "ecos.node.gateway"
+	MetricsGatewayGetTimer     = MetricsGateway + ".get.timer"
+	MetricsGatewayPartGetTimer = MetricsGateway + ".part.get.timer"
+	MetricsGatewayPutTimer     = MetricsGateway + ".put.timer"
+	MetricsGatewayPartPutTimer = MetricsGateway + ".part.put.timer"
+)
+
+var MetricsGatewayLabels = []string{
+	MetricsGatewayGetTimer,
+	MetricsGatewayPartGetTimer,
+	MetricsGatewayPutTimer,
+	MetricsGatewayPartPutTimer,
+}

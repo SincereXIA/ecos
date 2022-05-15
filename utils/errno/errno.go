@@ -12,6 +12,7 @@ const (
 	MoonError
 	SunError
 	ClientError
+	GatewayError
 	CommonError
 
 	SystemError int32 = 77 * 1000
@@ -60,6 +61,11 @@ const (
 
 	CodeIllegalStatus
 	CodeRepeatedClose
+
+	CodeMethodNotAllowed
+	CodeInvalidArgument
+
+	CodeJobNotExist
 )
 
 var (
@@ -67,6 +73,53 @@ var (
 
 	IllegalStatus = newErr(CodeIllegalStatus, "block illegal status")
 	RepeatedClose = newErr(CodeRepeatedClose, "block repeated close")
+
+	MethodNotAllowed = newErr(CodeMethodNotAllowed, "method not allowed")
+	InvalidArgument  = newErr(CodeInvalidArgument, "invalid argument")
+
+	JobNotExist = newErr(CodeJobNotExist, "job not exist")
+)
+
+const (
+	// Gateway errors
+
+	CodeGatewayNotFound = GatewayError + iota
+	CodeBucketNotFound
+	CodeMissingBucketName
+	CodeMissingKey
+	CodeEmptyField
+
+	CodeMissingUploadId
+	CodeInvalidUploadId
+	CodeInvalidPartId
+	CodeFileTooLarge
+
+	CodeEntityTooSmall
+	CodeInvalidPart
+	CodeInvalidPartOrder
+	CodeNoSuchUpload
+
+	CodeObjectNotFound
+)
+
+var (
+	// GatewayNotFound = newErr(CodeGatewayNotFound, "gateway not found")
+
+	BucketNotFound  = newErr(CodeBucketNotFound, "bucket not found")
+	MissingBucket   = newErr(CodeMissingBucketName, "missing bucket name")
+	MissingKey      = newErr(CodeMissingKey, "missing key")
+	EmptyField      = newErr(CodeEmptyField, "empty field")
+	MissingUploadId = newErr(CodeMissingUploadId, "missing upload id")
+	InvalidUploadId = newErr(CodeInvalidUploadId, "invalid upload id")
+	InvalidPartId   = newErr(CodeInvalidPartId, "invalid part id")
+	FileTooLarge    = newErr(CodeFileTooLarge, "file too large")
+
+	EntityTooSmall   = newErr(CodeEntityTooSmall, "entity too small")
+	InvalidPart      = newErr(CodeInvalidPart, "invalid part")
+	InvalidPartOrder = newErr(CodeInvalidPartOrder, "invalid part order")
+	NoSuchUpload     = newErr(CodeNoSuchUpload, "no such upload")
+
+	ObjectNotFound = newErr(CodeObjectNotFound, "object not found")
 )
 
 const (

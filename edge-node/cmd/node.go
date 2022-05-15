@@ -8,6 +8,7 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
 	"ecos/edge-node/watcher"
+	gateway "ecos/gateway/router"
 	"ecos/messenger"
 	configUtil "ecos/utils/config"
 	"ecos/utils/logger"
@@ -82,6 +83,12 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	}()
 	go w.Run()
 	go a.Run()
+	go func() {
+		// Gen Gateway
+		logger.Infof("Start init Gateway ...")
+		g := gateway.NewRouter(conf.GatewayConfig)
+		_ = g.Run()
+	}()
 	logger.Infof("edge node init success")
 
 	// init Gin

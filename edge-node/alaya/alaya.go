@@ -165,6 +165,7 @@ func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common
 		return nil, err
 	}
 	pgID := objMeta.PgId
+	logger.Infof("alaya receive delete meta request, obj_id: %v, pg_id: %v", objID, pgID)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()

@@ -13,6 +13,7 @@ import (
 	"ecos/messenger"
 	"ecos/utils/logger"
 	"errors"
+	lru "github.com/hashicorp/golang-lru"
 	"path"
 	"strconv"
 )
@@ -24,7 +25,14 @@ type Client struct {
 	config      *config.ClientConfig
 	clusterInfo *infos.ClusterInfo
 	infoAgent   *info_agent.InfoAgent
+
+	factoryPool *lru.Cache
 }
+
+const (
+	// DefaultFactoryPoolSize is the default size of factory pool
+	DefaultFactoryPoolSize = 10
+)
 
 func New(config *config.ClientConfig) (*Client, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -44,16 +52,32 @@ func New(config *config.ClientConfig) (*Client, error) {
 		return nil, errors.New("get cluster info failed")
 	}
 	clusterInfo := reply.GetClusterInfo()
+
+	lruPool, err := lru.NewWithEvict(DefaultFactoryPoolSize, func(key interface{}, value interface{}) {
+		switch value.(type) {
+		case *io.EcosIOFactory:
+			err := value.(*io.EcosIOFactory).AbortAllMultipartUploadJob()
+			if err != nil {
+				return
+			}
+		}
+	})
+	if err != nil {
+		cancel()
+		logger.Errorf("create factory pool failed: %s", err.Error())
+		return nil, errors.New("create factory pool failed")
+	}
 	return &Client{
 		ctx:         ctx,
 		config:      config,
 		cancel:      cancel,
 		clusterInfo: clusterInfo,
 		infoAgent:   info_agent.NewInfoAgent(ctx, clusterInfo),
+		factoryPool: lruPool,
 	}, nil
 }
 
-func (client *Client) ListObjects(ctx context.Context, bucketName string) ([]*object.ObjectMeta, error) {
+func (client *Client) ListObjects(_ context.Context, bucketName string) ([]*object.ObjectMeta, error) {
 	userID := client.config.Credential.GetUserID()
 	bucketID := infos.GenBucketID(userID, bucketName)
 	info, err := client.infoAgent.Get(infos.InfoType_BUCKET_INFO, bucketID)
@@ -87,7 +111,19 @@ func (client *Client) ListObjects(ctx context.Context, bucketName string) ([]*ob
 }
 
 func (client *Client) GetIOFactory(bucketName string) *io.EcosIOFactory {
-	return io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
+	if ret, ok := client.factoryPool.Get(bucketName); ok && ret != nil {
+		ecosIOFactory := ret.(*io.EcosIOFactory)
+		if ecosIOFactory.IsConnected() {
+			return ecosIOFactory
+		} else {
+			client.factoryPool.Remove(bucketName)
+		}
+	}
+	ret := io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
+	if ret != nil {
+		client.factoryPool.Add(bucketName, ret)
+	}
+	return ret
 }
 
 func (client *Client) GetVolumeOperator() *VolumeOperator {

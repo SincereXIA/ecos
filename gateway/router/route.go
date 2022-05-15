@@ -5,6 +5,7 @@ import (
 	"ecos/utils/logger"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/rcrowley/go-metrics"
 	"net"
 	"net/http"
 )
@@ -24,22 +25,24 @@ func NewRouter(cfg Config) *gin.Engine {
 	InitClient(clientConfig)
 	router := gin.Default()
 	router.GET("/", hello)
+	router.GET("/metrics", getMetrics)
 	// Bucket Routes
 	bucketRouter := router.Group("/:bucketName")
 	{
-		bucketRouter.PUT("", createBucket)
-		// bucketRouter.DELETE("/", deleteBucket)
-		bucketRouter.GET("", listObjects) // listObjects and listObjectsV2
-		// bucketRouter.HEAD("/", headBucket)
+		bucketRouter.PUT("", bucketLevelPutHandler)
+		// bucketRouter.DELETE("", deleteBucket)
+		bucketRouter.GET("", bucketLevelGetHandler)
+		bucketRouter.HEAD("", bucketLevelHeadHandler)
+		bucketRouter.POST("", bucketLevelPostHandler)
 	}
 	// Object Routes
 	{
-		bucketRouter.PUT("/:key", putObject)
-		bucketRouter.DELETE("/:key", deleteObject)
-		bucketRouter.GET("/:key", getObject)
-		bucketRouter.HEAD("/:key", headObject)
+		bucketRouter.PUT("/*key", objectLevelPutHandler)
+		bucketRouter.DELETE("/*key", objectLevelDeleteHandler)
+		bucketRouter.GET("/*key", objectLevelGetHandler)
+		bucketRouter.HEAD("/*key", objectLevelHeadHandler)
+		bucketRouter.POST("/*key", objectLevelPostHandler)
 	}
-	bucketRouter.POST("", bucketLevelPostHandler)
 	return router
 }
 
@@ -59,4 +62,9 @@ func hello(c *gin.Context) {
 		}
 	}
 	c.String(http.StatusOK, "ECOS EdgeNode: %s", selfIp)
+}
+
+func getMetrics(c *gin.Context) {
+	c.Status(http.StatusOK)
+	metrics.WriteJSONOnce(metrics.DefaultRegistry, c.Writer)
 }

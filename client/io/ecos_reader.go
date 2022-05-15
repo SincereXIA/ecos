@@ -8,7 +8,9 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"fmt"
 	"io"
 	"strconv"
 	"sync"
@@ -20,17 +22,14 @@ type EcosReader struct {
 	clusterInfo *infos.ClusterInfo
 	bucketInfo  *infos.BucketInfo
 	key         string
+	pipes       *pipeline.ClusterPipelines
 
-	blockPipes     []*pipeline.Pipeline
 	curBlockIndex  int
 	curBlockOffset int
 
 	meta         *object.ObjectMeta
-	objPipes     []*pipeline.Pipeline
 	config       *config.ClientConfig
 	cachedBlocks sync.Map
-
-	blockPool *sync.Pool
 }
 
 func (r *EcosReader) genPipelines() error {
@@ -42,18 +41,18 @@ func (r *EcosReader) genPipelines() error {
 	if err != nil {
 		return err
 	}
-	r.blockPipes = pipeline.GenPipelines(*r.clusterInfo, blockPgNum, groupNum)
-	return nil
+	r.pipes, err = pipeline.NewClusterPipelines(r.clusterInfo)
+	return err
 }
 
-func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
+func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 	blockID := blockInfo.BlockId
 	if block, ok := r.cachedBlocks.Load(blockID); ok {
 		return block.([]byte), nil
 	}
 	pgID := object.GenBlockPgID(blockInfo.BlockId, r.clusterInfo.BlockPgNum)
-	gaiaServerId := r.blockPipes[pgID-1].RaftId[0]
-	info, err := r.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId, 10))
+	gaiaServerId := r.pipes.GetBlockPG(pgID)
+	info, err := r.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId[0], 10))
 	gaiaServerInfo := info.BaseInfo().GetNodeInfo()
 	if err != nil {
 		logger.Errorf("get gaia server info failed, err: %v", err)
@@ -73,8 +72,7 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		logger.Warningf("blockClient responds err: %v", err)
 		return nil, err
 	}
-	//block := make([]byte, 0, r.bucketInfo.Config.BlockSize)
-	block := r.blockPool.Get().([]byte)
+	block := make([]byte, 0, r.bucketInfo.Config.BlockSize)
 	for {
 		rs, err := res.Recv()
 		if err != nil {
@@ -95,7 +93,7 @@ func (r *EcosReader) getBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 }
 
 func (r *EcosReader) Read(p []byte) (n int, err error) {
-	if r.meta == nil || r.objPipes == nil {
+	if r.meta == nil || r.pipes == nil {
 		err = r.genPipelines()
 		if err != nil {
 			logger.Errorf("gen pipelines failed, err: %v", err)
@@ -104,78 +102,43 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 	count, pending := int64(0), len(p)
 
 	// 预计本次需要读取几个 block
-	blockSize := int(r.bucketInfo.Config.BlockSize)
-	blockNum := (pending + r.curBlockOffset) / blockSize
-	if blockNum*blockSize < pending {
-		blockNum++ // 如果最后一个 block 仍未填满，需要读取下一个 block
-	}
+	calcBlocks, err := r.calcBlocks(pending)
 	waitGroup := sync.WaitGroup{}
 
-	isEOF := true              // 是否每一个 block 都已经读取完毕
-	offset := r.curBlockOffset // 第一个 block 需要加入上次读的偏移
-	for i := 0; i < blockNum && r.curBlockIndex+i < len(r.meta.Blocks); i++ {
-		start := i * blockSize
-		end := start + blockSize
-		if end > len(p) {
-			end = len(p)
-		}
-		blockInfo := r.meta.Blocks[r.curBlockIndex+i]
+	for _, block := range calcBlocks {
+		blockInfo := r.meta.Blocks[block.blockIndex]
 		waitGroup.Add(1)
-		go func(info *object.BlockInfo, start int, end int, offset int) {
-			block, err := r.getBlock(info)
+		go func(info *object.BlockInfo, bufferL, bufferR, blockL, blockR int) {
+			block, err := r.GetBlock(info)
 			if err != nil {
 				logger.Errorf("get block failed, err: %v", err)
 				return
 			}
-			copy(p[start:end], block[offset:])
-			atomic.AddInt64(&count, int64(minSize(end-start, len(block)-offset)))
-			if end-start+offset < len(block) {
-				r.curBlockOffset = end - start + offset
-				logger.Tracef("CurBlockOffset: %d", r.curBlockOffset)
-				isEOF = false
-			} else {
-				value, ok := r.cachedBlocks.LoadAndDelete(info.BlockId) // 已经读完，释放内存
-				if ok {
-					b := value.([]byte)
-					b = b[:0] // re-slice to make block slice empty
-					r.blockPool.Put(b)
-				}
-				if offset > 0 { // 当前 block 不是从头读的，但已经读完，需要重置 offset，否则下一个 block 不会从头读
-					r.curBlockOffset = 0
-				}
-			}
+			logger.Tracef("block %10.10s size: %d", info.BlockId, len(block))
+			copy(p[bufferL:bufferR], block[blockL:blockR])
+			atomic.AddInt64(&count, int64(bufferR-bufferL))
 			waitGroup.Done()
-		}(blockInfo, start, end, offset)
-		offset = 0 // 后续 block 都是从头开始读
+			if blockR == len(block) {
+				r.cachedBlocks.Delete(info.BlockId) // Finish read, delete from cache
+			}
+		}(blockInfo, block.bufferStart, block.bufferEnd, block.blockStart, block.blockEnd)
 	}
 	waitGroup.Wait()
 	logger.Tracef("read %d bytes done", count)
 
-	if isEOF {
-		r.curBlockIndex += blockNum
-	} else {
-		r.curBlockIndex += blockNum - 1
-	}
-
-	if r.curBlockIndex > len(r.meta.Blocks) || (r.curBlockIndex == len(r.meta.Blocks) && isEOF) {
-		r.curBlockIndex = len(r.meta.Blocks) + 1
-		return int(count), io.EOF
-	}
-
-	return int(count), nil
+	return int(count), err
 }
 
 func (r *EcosReader) getObjMeta() error {
 	// use key to get pdId
 	pgId := object.GenObjPgID(r.bucketInfo, r.key, 10)
-	metaServerIdString := strconv.FormatUint(r.objPipes[pgId-1].RaftId[0], 10)
+	metaServerIdString := r.pipes.GetBlockPGNodeID(pgId)[0]
 	metaServerInfo, _ := r.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
 	metaClient, err := NewMetaClient(metaServerInfo.BaseInfo().GetNodeInfo(), r.config)
 	if err != nil {
 		logger.Errorf("New meta client failed, err: %v", err)
 		return err
 	}
-
 	objID := object.GenObjectId(r.bucketInfo, r.key)
 	r.meta, err = metaClient.GetObjMeta(objID)
 	if err != nil {
@@ -194,4 +157,95 @@ func (r *EcosReader) getHistoryClusterInfo() error {
 	}
 	r.clusterInfo = info.BaseInfo().GetClusterInfo()
 	return nil
+}
+
+type calcBlock struct {
+	blockIndex  int
+	blockStart  int
+	blockEnd    int
+	bufferStart int
+	bufferEnd   int
+}
+
+// calcBlocks 计算需要读取的 block 列表
+func (r *EcosReader) calcBlocks(expect int) ([]calcBlock, error) {
+	// 计算需要读取的 block 列表
+	var blocks []calcBlock
+	blockOffset := r.curBlockOffset
+	bufferOffset := 0
+	pending := expect
+	finish := false
+	for i := r.curBlockIndex; i < len(r.meta.Blocks) && !finish; i++ {
+		block := r.meta.Blocks[i]
+		if uint64(blockOffset+pending) >= block.BlockSize {
+			blocks = append(blocks, calcBlock{
+				blockIndex:  i,
+				blockStart:  blockOffset,
+				blockEnd:    int(block.BlockSize),
+				bufferStart: bufferOffset,
+				bufferEnd:   bufferOffset + int(block.BlockSize) - blockOffset,
+			})
+			bufferOffset += int(block.BlockSize) - blockOffset
+			blockOffset = 0
+		} else {
+			blocks = append(blocks, calcBlock{
+				blockIndex:  i,
+				blockStart:  blockOffset,
+				blockEnd:    blockOffset + pending,
+				bufferStart: bufferOffset,
+				bufferEnd:   bufferOffset + pending,
+			})
+			bufferOffset += pending
+			blockOffset += pending
+			finish = true
+		}
+		r.curBlockIndex = i
+		r.curBlockOffset = blockOffset
+		pending = expect - bufferOffset
+	}
+	if !finish {
+		return blocks, io.EOF
+	}
+	return blocks, nil
+}
+
+func (r *EcosReader) Seek(offset int64, whence int) (newOffset int64, err error) {
+	if r.meta == nil || r.pipes == nil {
+		err = r.genPipelines()
+		if err != nil {
+			logger.Errorf("gen pipelines failed, err: %v", err)
+		}
+	}
+	switch whence {
+	case io.SeekStart:
+		if newOffset = offset; newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
+			return 0, fmt.Errorf("seek out of range, offset: %d, size: %d", newOffset, r.meta.ObjSize)
+		}
+		r.curBlockIndex = 0
+		r.curBlockOffset = 0
+		_, err = r.calcBlocks(int(offset))
+		return
+	case io.SeekCurrent:
+		var curOffset int64 = 0
+		for i := 0; i <= r.curBlockIndex; i++ {
+			curOffset += int64(r.meta.Blocks[i].BlockSize)
+		}
+		if newOffset = curOffset + offset; newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
+			return 0, fmt.Errorf("seek out of range, offset: %d, size: %d", newOffset, r.meta.ObjSize)
+		}
+		_, err = r.calcBlocks(int(offset))
+		if err != nil {
+			return
+		}
+	case io.SeekEnd:
+		if newOffset = int64(r.meta.ObjSize) - offset; newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
+			return 0, fmt.Errorf("seek out of range, offset: %d, size: %d", newOffset, r.meta.ObjSize)
+		}
+		newOffset = int64(r.meta.ObjSize) - offset
+		_, err = r.calcBlocks(int(newOffset))
+		if err != nil {
+			return
+		}
+	}
+	return 0, errno.IllegalStatus
 }

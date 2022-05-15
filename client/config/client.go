@@ -7,7 +7,7 @@ import (
 )
 
 const chunkSize = 1 << 20
-const uploadTimeout = time.Second * 10
+const uploadTimeout = 0
 const uploadBuffer = 1 << 25
 
 type ObjectConfig struct {

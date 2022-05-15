@@ -1,5 +1,5 @@
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM harbor.sums.top/ecos/ecos-base:v0.1
+FROM harbor.sums.top/ecos/ecos-base:v0.2
 WORKDIR /ecos
 COPY build/bin/ecos-client .
