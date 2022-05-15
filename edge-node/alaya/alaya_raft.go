@@ -238,24 +238,38 @@ START:
 	}()
 }
 
+func (r *Raft) addNode(id uint64, data []byte) error {
+	err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
+		Type:    raftpb.ConfChangeAddNode,
+		NodeID:  id,
+		Context: data,
+	})
+	if err != nil {
+		logger.Infof("raft %v propose add node %v failed, err: %v", r.raft.ID, id, err)
+		return err
+	}
+	return nil
+}
+
 func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 	if len(NodeIDs) == 0 {
 		return nil
 	}
-RETRY_ADD:
 	for _, id := range NodeIDs {
 		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raft.ID, r.pgID, id)
 		data, _ := r.getPipeline().Marshal()
-		r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
-			Type:    raftpb.ConfChangeAddNode,
-			NodeID:  id,
-			Context: data,
-		})
+		err := r.addNode(id, data)
+		if err != nil {
+			return err
+		}
 		for {
 			select {
 			case <-time.After(time.Duration(time.Second * 5)):
 				logger.Infof("raft %v retry to add nodes", r.raft.ID)
-				goto RETRY_ADD
+				err := r.addNode(id, data)
+				if err != nil {
+					return err
+				}
 			case change := <-r.confChangeChan:
 				if change.NodeID != id {
 					r.confChangeChan <- change
@@ -266,6 +280,19 @@ RETRY_ADD:
 				}
 			}
 		}
+	}
+	return nil
+}
+
+func (r *Raft) removeNode(id uint64, data []byte) error {
+	err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
+		Type:    raftpb.ConfChangeRemoveNode,
+		NodeID:  id,
+		Context: data,
+	})
+	if err != nil {
+		logger.Errorf("raft %v propose remove node %v fail, err: %v", r.raft.ID, id, err)
+		return err
 	}
 	return nil
 }
@@ -286,28 +313,21 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 			removeSelf = true
 			continue
 		}
-	RETRY_REMOVE:
 		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raft.ID, r.pgID, id)
-		err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
-			Type:    raftpb.ConfChangeRemoveNode,
-			NodeID:  id,
-			Context: data,
-		})
-		for err != nil {
-			err = r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
-				Type:    raftpb.ConfChangeAddNode,
-				NodeID:  id,
-				Context: data,
-			})
-			runtime.Gosched()
+		err := r.removeNode(id, data)
+		if err != nil {
+			return err
 		}
 		// 检查是否 propose 了本次节点
 		flag := false
 		for {
 			select {
-			case <-time.After(time.Duration(time.Second * 2)):
+			case <-time.After(time.Second * 2):
 				logger.Infof("raft %v retry to remove node", r.raft.ID)
-				goto RETRY_REMOVE
+				err := r.removeNode(id, data)
+				if err != nil {
+					return err
+				}
 			case change := <-r.confChangeChan:
 				if change.NodeID != id {
 					r.confChangeChan <- change
