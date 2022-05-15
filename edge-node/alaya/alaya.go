@@ -414,6 +414,11 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 		if raftNode.raft.Node.Status().Lead != raftNode.getPipeline().RaftId[0] ||
 			len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
 			ok = false
+			// Print for debug
+			//logger.Infof("Assume Alaya: %v, PG: %v, leader: %v, voter: %v",
+			//	a.selfInfo.RaftId, key.(uint64), raftNode.raft.Node.Status().Lead, raftNode.getPipeline().RaftId)
+			//logger.Infof("Real Alaya: %v, PG: %v, leader: %v, voter: %v",
+			//	a.selfInfo.RaftId, key.(uint64), raftNode.raft.Node.Status().Lead, raftNode.GetVotersID())
 			return false
 		}
 		length += 1
@@ -441,11 +446,11 @@ func (a *Alaya) getPipelineReport(pgID uint64) watcher.Report {
 	if value, ok := a.PGRaftNode.Load(pgID); ok {
 		node := value.(*Raft)
 		var state watcher.PipelineReport_State
-		if node.raft.Status().Lead == 0 {
+		if node.raft.Node.Status().Lead == 0 {
 			state = watcher.PipelineReport_ERROR
 		} else if len(node.GetVotersID()) < len(node.getPipeline().RaftId) {
 			state = watcher.PipelineReport_DOWN_GRADE
-		} else if node.raft.Status().Lead != node.getPipeline().RaftId[0] {
+		} else if node.raft.Node.Status().Lead != node.getPipeline().RaftId[0] {
 			state = watcher.PipelineReport_CHANGING
 		} else {
 			state = watcher.PipelineReport_OK
