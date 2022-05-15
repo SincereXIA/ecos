@@ -12,9 +12,10 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/rcrowley/go-metrics"
 	"github.com/wxnacy/wgo/arrays"
+	"go.etcd.io/etcd/pkg/v3/idutil"
+	"go.etcd.io/etcd/pkg/v3/wait"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
-	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -34,8 +35,10 @@ type Raft struct {
 	raftChan chan raftpb.Message
 	stopChan chan uint64
 
-	metaStorage   MetaStorage
-	metaApplyChan chan *MetaOperate
+	metaStorage MetaStorage
+	//metaApplyChan chan *MetaOperate
+	w        wait.Wait
+	reqIDGen *idutil.Generator
 
 	pipeline *pipeline.Pipeline
 	// rwMutex protect pipeline
@@ -73,7 +76,9 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 		pipeline:       nowPipe,
 		stopChan:       stopChan,
 		confChangeChan: make(chan raftpb.ConfChange, 100), // TODO: not ok
-		metaApplyChan:  make(chan *MetaOperate, 100),
+		//metaApplyChan:  make(chan *MetaOperate, 123),
+		w:        wait.New(),
+		reqIDGen: idutil.NewGenerator(uint16(raftID), time.Now()),
 	}
 
 	var peers []raft.Peer
@@ -299,29 +304,33 @@ func (r *Raft) process(entry raftpb.Entry) {
 		default:
 			logger.Errorf("unsupported alaya meta operate")
 		}
-		r.metaApplyChan <- &metaOperate
+		if r.w.IsRegistered(metaOperate.OperateId) {
+			r.w.Trigger(metaOperate.OperateId, struct{}{})
+		}
 	}
 }
 
 // ProposeObjectMetaOperate Propose a request to operate object meta to raft group,
 // and wait it applied into meta storage
 func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
+	// 生成一个新的操作序列号
+	opID := r.reqIDGen.Next()
+	operate.OperateId = opID
 	bytes, _ := proto.Marshal(operate)
+	// 注册，等待 operate 被 apply
+	ch := r.w.Register(opID)
 	err := r.raft.Propose(r.ctx, bytes)
 	if err != nil {
 		logger.Warningf("raft propose err: %v", err)
 		return err
 	}
 	// TODO (zhang): Time out
-	for {
-		m := <-r.metaApplyChan
-		if operate.Operate != m.Operate || m.Meta.ObjId != operate.Meta.ObjId {
-			r.metaApplyChan <- m
-			runtime.Gosched()
-		} else {
-			return nil
-		}
+	logger.Debugf("%v pg: %v raft propose object meta: %v, wait for it apply", r.raft.Status().ID, r.pgID, operate.Meta.ObjId)
+	select {
+	case <-ch:
+		logger.Debugf("%v pg: %v raft propose object meta: %v, apply done", r.raft.Status().ID, r.pgID, operate.Meta.ObjId)
 	}
+	return nil
 }
 
 func (r *Raft) RunAskForLeader() {

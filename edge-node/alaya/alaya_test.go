@@ -79,7 +79,8 @@ func testAlaya(t *testing.T, mock bool) {
 	t.Log("Alayas init done, start run")
 	watcher.WaitAllTestWatcherOK(watchers)
 	waiteAllAlayaOK(alayas)
-	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
+	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), uint64(watchers[0].GetCurrentClusterInfo().MetaPgNum),
+		uint64(watchers[0].GetCurrentClusterInfo().MetaPgSize))
 	assertAlayasOK(t, alayas, pipelines)
 
 	bucketInfo := infos.GenBucketInfo("root", "default", "root")
@@ -90,7 +91,7 @@ func testAlaya(t *testing.T, mock bool) {
 	})
 	assert.NoError(t, err)
 
-	testMetaNum := 100
+	testMetaNum := 10000
 
 	var metas []*object.ObjectMeta
 
@@ -100,7 +101,7 @@ func testAlaya(t *testing.T, mock bool) {
 		t.Run("list all objectMeta", func(t *testing.T) {
 			var allMetas []*object.ObjectMeta
 			for i := 1; i <= int(bucketInfo.Config.KeySlotNum); i++ {
-				pgID := object.GenSlotPgID(bucketInfo.GetID(), int32(i), 10)
+				pgID := object.GenSlotPgID(bucketInfo.GetID(), int32(i), watchers[0].GetCurrentClusterInfo().MetaPgNum)
 				nodeID := pipelines[pgID-1].RaftId[0]
 				alaya := alayas[nodeID-1]
 				ms, err := alaya.ListMeta(ctx, &ListMetaRequest{
@@ -146,7 +147,8 @@ func testAlaya(t *testing.T, mock bool) {
 
 		watcher.WaitAllTestWatcherOK(watchers)
 		waiteAllAlayaOK(alayas)
-		pipelines = pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
+		pipelines = pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), uint64(watchers[0].GetCurrentClusterInfo().MetaPgNum),
+			uint64(watchers[0].GetCurrentClusterInfo().MetaPgSize))
 	})
 	assertAlayasOK(t, alayas, pipelines)
 
@@ -162,7 +164,7 @@ func testAlaya(t *testing.T, mock bool) {
 		if err != nil {
 			t.Errorf("object id split err: %v", err)
 		}
-		pgID := object.GenObjPgID(bucketInfo, key, 10)
+		pgID := object.GenObjPgID(bucketInfo, key, watchers[0].GetCurrentClusterInfo().MetaPgNum)
 		nodeIndex := pipelines[pgID-1].RaftId[0]
 		a := alayas[nodeIndex-1]
 
@@ -208,10 +210,12 @@ func genTestMetas(watchers []*watcher.Watcher,
 
 func updateMetas(t *testing.T, watchers []*watcher.Watcher,
 	alayas []Alayaer, metas []*object.ObjectMeta, bucketInfo *infos.BucketInfo) {
-	p := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
+	clusterInfo := watchers[0].GetCurrentClusterInfo()
+	clusterP, _ := pipeline.NewClusterPipelines(&clusterInfo)
+	p := clusterP.MetaPipelines
 	for _, meta := range metas {
 		_, _, key, _, err := object.SplitID(meta.ObjId)
-		pgID := object.GenObjPgID(bucketInfo, key, 10)
+		pgID := object.GenObjPgID(bucketInfo, key, watchers[0].GetCurrentClusterInfo().MetaPgNum)
 		nodeIndex := p[pgID-1].RaftId[0]
 		a := alayas[nodeIndex-1]
 		logger.Debugf("Obj: %v, pgID: %v, nodeID: %v", meta.ObjId, pgID, nodeIndex)
@@ -227,7 +231,7 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	nodeNum := len(watchers)
 	for i := 0; i < nodeNum; i++ {
 		// TODO (qiutb): apply stable meta storage
-		// metaStorageRegister := NewMemoryMetaStorageRegister()
+		//metaStorageRegister := NewMemoryMetaStorageRegister()
 		metaStorageRegister, err := NewRocksDBMetaStorageRegister(path.Join(basePath, strconv.FormatInt(int64(i), 10), "meta"))
 		if err != nil {
 			logger.Errorf("new meta storage register err: %v", err)
