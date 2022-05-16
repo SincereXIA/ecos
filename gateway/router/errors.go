@@ -277,7 +277,7 @@ func NoSuchUpload(bucketName, resPath, key string) Error {
 // NotImplemented 501
 func NotImplemented(bucketName, resPath string, key *string) Error {
 	return Error{
-		Code:       common.PtrString("NotImpelmented"),
+		Code:       common.PtrString("NotImplemented"),
 		Message:    common.PtrString("A header you provided implies functionality that is not implemented"),
 		BucketName: common.PtrString(bucketName),
 		Resource:   common.PtrString(resPath),
@@ -307,5 +307,14 @@ func RequestIsNotMultiPartContent(bucketName, resPath string) Error {
 }
 
 // SignatureDoesNotMatch 403
+func SignatureDoesNotMatch(bucketName, resPath string, key *string) Error {
+	return Error{
+		Code:       common.PtrString("SignatureDoesNotMatch"),
+		Message:    common.PtrString("The request signature we calculated does not match the signature you provided. Check your AWS Secret Access Key and signing method."),
+		BucketName: common.PtrString(bucketName),
+		Resource:   common.PtrString(resPath),
+		Key:        key,
+	}
+}
 
 // UnexpectedContent 400

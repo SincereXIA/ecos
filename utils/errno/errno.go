@@ -101,6 +101,8 @@ const (
 
 	CodeObjectNotFound
 	CodeInvalidObjectState
+
+	CodeSignatureDoesNotMatch
 )
 
 var (
@@ -122,6 +124,8 @@ var (
 
 	ObjectNotFound     = newErr(CodeObjectNotFound, "object not found")
 	InvalidObjectState = newErr(CodeInvalidObjectState, "invalid object state")
+
+	SignatureDoesNotMatch = newErr(CodeSignatureDoesNotMatch, "signature does not match")
 )
 
 const (

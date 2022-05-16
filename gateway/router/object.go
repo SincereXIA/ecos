@@ -1,6 +1,7 @@
 package router
 
 import (
+	"bufio"
 	"ecos/edge-node/object"
 	"ecos/edge-node/watcher"
 	"ecos/utils/common"
@@ -15,10 +16,24 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
+
+func parseSignature(line string) (int64, string, error) {
+	r := regexp.MustCompile("([A-Fa-f\\d]+);chunk-signature=(\\w+)\r\n")
+	res := r.FindStringSubmatch(line)
+	if len(res) != 3 {
+		return 0, "", errno.SignatureDoesNotMatch
+	}
+	length, err := strconv.ParseInt(res[1], 16, 64)
+	if err != nil {
+		return 0, "", err
+	}
+	return length, res[2], nil
+}
 
 // putObject creates a new object
 func putObject(c *gin.Context) {
@@ -43,10 +58,50 @@ func putObject(c *gin.Context) {
 		return
 	}
 	writer := factory.GetEcosWriter(key)
-	_, err = io.Copy(writer, body)
-	if err != nil {
-		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
-		return
+	// See https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
+	switch c.GetHeader("X-Amz-Content-Sha256") {
+	case "STREAMING-AWS4-HMAC-SHA256-PAYLOAD":
+		bufBody := bufio.NewReader(body)
+		for {
+			line, err := bufBody.ReadString('\n')
+			logger.Tracef("Got Signature Line: %s", line)
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+				return
+			}
+			length, _, err := parseSignature(line)
+			if err != nil {
+				if err == errno.SignatureDoesNotMatch {
+					c.XML(http.StatusBadRequest, InvalidArgument("signature", bucketName, c.Request.URL.Path, &key))
+					return
+				}
+				c.XML(http.StatusBadRequest, SignatureDoesNotMatch(bucketName, c.Request.URL.Path, &key))
+				return
+			}
+			n, err := io.CopyN(writer, bufBody, length)
+			if n != length {
+				c.XML(http.StatusPreconditionFailed, PreconditionFailed(bucketName, c.Request.URL.Path,
+					errno.IncompatibleSize.Error()+" with err "+err.Error(), &key))
+				return
+			}
+			line, err = bufBody.ReadString('\n')
+			if line != "\r\n" {
+				c.XML(http.StatusBadRequest, IncompleteBody(bucketName, c.Request.URL.Path, key))
+			}
+		}
+	case "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER":
+		logger.Warningf("not implemented")
+		fallthrough
+	case "", "UNSIGNED-PAYLOAD":
+		fallthrough
+	default:
+		if _, err := io.Copy(writer, body); err != nil {
+			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+			return
+		}
 	}
 	err = writer.Close()
 	if err != nil {
