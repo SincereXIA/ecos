@@ -119,6 +119,7 @@ func testAlaya(t *testing.T, mock bool) {
 	var newWatchers []*watcher.Watcher
 	var newRpcs []*messenger.RpcServer
 	var newAlayas []Alayaer
+	oldTerm := watchers[0].GetCurrentClusterInfo().Term
 	t.Run("add new nodes", func(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			newWatcher, newRpc := watcher.GenTestWatcher(ctx, path.Join(basePath, strconv.Itoa(nodeNum+i)), sunAddr)
@@ -146,6 +147,10 @@ func testAlaya(t *testing.T, mock bool) {
 		watchers = append(watchers, newWatchers...)
 
 		watcher.WaitAllTestWatcherOK(watchers)
+		// wait until Term changed
+		for watchers[0].GetCurrentClusterInfo().Term == oldTerm {
+			time.Sleep(100 * time.Millisecond)
+		}
 		waiteAllAlayaOK(alayas)
 		pipelines = pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), uint64(watchers[0].GetCurrentClusterInfo().MetaPgNum),
 			uint64(watchers[0].GetCurrentClusterInfo().MetaPgSize))
