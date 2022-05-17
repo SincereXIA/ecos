@@ -3,6 +3,7 @@ package moon
 import (
 	"context"
 	"ecos/edge-node/infos"
+	eraft "ecos/edge-node/raft-node"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/logger"
@@ -36,7 +37,7 @@ type Moon struct {
 	UnimplementedMoonServer
 
 	id        uint64 //raft节点的id
-	raft      *raftNode
+	raft      *eraft.RaftNode
 	SelfInfo  *infos.NodeInfo
 	ctx       context.Context //context
 	cancel    context.CancelFunc
@@ -45,10 +46,9 @@ type Moon struct {
 	infoMap  map[uint64]*infos.NodeInfo
 	leaderID uint64 // 注册时的 leader 信息
 
-	infoStorageRegister   *infos.StorageRegister
-	appliedRequestChan    chan *ProposeInfoRequest
-	appliedConfChangeChan chan raftpb.ConfChange
-	appliedConfErrorChan  chan error
+	infoStorageRegister  *infos.StorageRegister
+	appliedRequestChan   chan *ProposeInfoRequest
+	appliedConfErrorChan chan error
 
 	snapshotter *snap.Snapshotter
 
@@ -85,7 +85,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 		return nil, err
 	}
 
-	m.raft.proposeC <- string(data)
+	m.raft.ProposeC <- string(data)
 
 	// wait propose apply
 	for {
@@ -117,7 +117,7 @@ func (m *Moon) loadSnapshot() (*raftpb.Snapshot, error) {
 	return snapshot, nil
 }
 
-func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
+func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 	for commit := range commitC {
 		if commit == nil {
 			snapshot, err := m.loadSnapshot()
@@ -135,7 +135,7 @@ func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
 			continue
 		}
 
-		for _, rawData := range commit.data {
+		for _, rawData := range commit.Data {
 			var msg ProposeInfoRequest
 			data := []byte(rawData)
 			err := msg.Unmarshal(data)
@@ -158,7 +158,7 @@ func (m *Moon) readCommits(commitC <-chan *commit, errorC <-chan error) {
 			}
 			m.appliedRequestChan <- &msg
 		}
-		close(commit.applyDoneC) // TODO:
+		close(commit.ApplyDoneC)
 	}
 	if err, ok := <-errorC; ok {
 		logger.Fatalf("commit stream error: %v", err)
@@ -199,7 +199,7 @@ func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Informat
 func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
 	data, _ := nodeInfo.Marshal()
 
-	m.raft.confChangeC <- raftpb.ConfChange{
+	m.raft.ConfChangeC <- raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  nodeInfo.RaftId,
 		Context: data,
@@ -211,7 +211,7 @@ func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.Nod
 		case <-m.appliedConfErrorChan:
 			// TODO:
 			return nil
-		case <-m.appliedConfChangeChan:
+		case <-m.raft.ApplyConfChangeC:
 			// TODO:
 			return nil
 		}
@@ -230,7 +230,7 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 		return nil, errors.New("moon" + strconv.FormatUint(m.id, 10) + ": raft is not ready")
 	}
 
-	m.raft.raftChan <- *message
+	m.raft.RaftChan <- *message
 
 	return &raftpb.Message{}, nil
 }
@@ -241,18 +241,17 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 	ctx, cancel := context.WithCancel(ctx)
 
 	m := &Moon{
-		id:                    0, // set raft id after register
-		SelfInfo:              selfInfo,
-		ctx:                   ctx,
-		cancel:                cancel,
-		mutex:                 sync.RWMutex{},
-		infoMap:               make(map[uint64]*infos.NodeInfo),
-		config:                config,
-		status:                StatusInit,
-		infoStorageRegister:   register,
-		appliedRequestChan:    make(chan *ProposeInfoRequest, 100),
-		appliedConfChangeChan: make(chan raftpb.ConfChange, 100),
-		appliedConfErrorChan:  make(chan error),
+		id:                   0, // set raft id after register
+		SelfInfo:             selfInfo,
+		ctx:                  ctx,
+		cancel:               cancel,
+		mutex:                sync.RWMutex{},
+		infoMap:              make(map[uint64]*infos.NodeInfo),
+		config:               config,
+		status:               StatusInit,
+		infoStorageRegister:  register,
+		appliedRequestChan:   make(chan *ProposeInfoRequest, 100),
+		appliedConfErrorChan: make(chan error),
 	}
 	leaderInfo := config.ClusterInfo.LeaderInfo
 	if leaderInfo != nil {
@@ -281,13 +280,9 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		logger.Tracef("%d send to %v, type %v", m.id, message, message.Type)
 
 		if message.Type == raftpb.MsgSnap {
-			message.Snapshot.Metadata.ConfState = m.raft.confState
+			message.Snapshot.Metadata.ConfState = m.raft.ConfState
 		}
-		select {
-		case <-m.ctx.Done():
-			return
-		default:
-		}
+
 		// get node info
 		var nodeInfo *infos.NodeInfo
 		var ok bool
@@ -322,7 +317,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 }
 
 func (m *Moon) IsLeader() bool {
-	return m.raft.node.Status().Lead == m.id
+	return m.raft.Node.Status().Lead == m.id
 }
 
 func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
@@ -345,14 +340,9 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 
 	logger.Tracef("leaderInfo: %v", leaderInfo)
 
-	join := false
-
 	if leaderInfo != nil { // 集群中现在已经有成员，peers 只需要填写 leader
 		peers = []raft.Peer{
 			{ID: leaderInfo.RaftId},
-		}
-		if peersInfo != nil {
-			join = true
 		}
 	} else {
 		for _, nodeInfo := range m.infoMap {
@@ -360,7 +350,7 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 		}
 	}
 	readyC := make(chan bool)
-	snapshotterReady, raftNode := newRaftNode(int(m.id), m.ctx, peers, join, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
+	snapshotterReady, raftNode := eraft.NewRaftNode(int(m.id), m.ctx, peers, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
 	m.raft = raftNode
 	m.nodeReady = <-readyC
 	m.snapshotter = <-snapshotterReady
@@ -376,15 +366,17 @@ func (m *Moon) Run() {
 	go m.reportSelfInfo()
 
 	// read commits from raft into storage until error
-	go m.readCommits(m.raft.commitC, m.raft.errorC)
+	go m.readCommits(m.raft.CommitC, m.raft.ErrorC)
 
 	for {
 		select {
 		case <-m.ctx.Done():
 			m.cleanup()
 			return
-		case msgs := <-m.raft.communicationC:
+		case msgs := <-m.raft.CommunicationC:
 			go m.sendByRpc(msgs)
+		case <-m.raft.ApplyConfChangeC:
+			// DO NOTHING
 		}
 	}
 }
@@ -435,8 +427,8 @@ func (m *Moon) GetLeaderID() uint64 {
 			break
 		}
 	}
-	if m.raft.node == nil {
+	if m.raft.Node == nil {
 		return 0
 	}
-	return m.raft.node.Status().Lead
+	return m.raft.Node.Status().Lead
 }

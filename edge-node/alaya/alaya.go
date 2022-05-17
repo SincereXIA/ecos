@@ -92,6 +92,7 @@ func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
 	// check if meta belongs to this PG
 	pgID := a.calculateObjectPGID(meta.ObjId)
 	if meta.Term != a.watcher.GetCurrentTerm() {
+		logger.Errorf("meta term not match, meta term: %v, current term: %v", meta.Term, a.watcher.GetCurrentTerm())
 		return errno.TermNotMatch
 	}
 	if meta.PgId != pgID {
@@ -230,14 +231,16 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	default:
 	}
 	pgID := pgMessage.PgId
+	//logger.Debugf("alaya %v receive raft message, pg_id: %v", a.selfInfo.RaftId, pgID)
 	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
 		msgChan.(chan raftpb.Message) <- *pgMessage.Message
+		//	logger.Infof("alaya %v receive raft message than send to raft module", a.selfInfo.RaftId)
 		return &PGRaftMessage{
 			PgId:    pgMessage.PgId,
 			Message: &raftpb.Message{},
 		}, nil
 	}
-	logger.Warningf("receive raft message from: %v, but pg: %v not exist", pgMessage.Message.From, pgID)
+	logger.Warningf("%v receive raft message from: %v, but pg: %v not exist", a.selfInfo.RaftId, pgMessage.Message.From, pgID)
 	return nil, errno.PGNotExist
 }
 
@@ -270,6 +273,13 @@ func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 	defer a.mutex.Unlock()
 	a.state = UPDATING
 	oldPipelines := a.clusterPipelines
+	if clusterInfo.LastTerm != 0 {
+		info, err := a.watcher.GetClusterInfoByTerm(clusterInfo.LastTerm)
+		if err != nil {
+			logger.Errorf("get cluster info by term fail, term: %v err: %v", clusterInfo.LastTerm, err.Error())
+		}
+		oldPipelines, _ = pipeline.NewClusterPipelines(&info)
+	}
 	if clusterInfo == nil || len(clusterInfo.NodesInfo) == 0 {
 		logger.Warningf("Empty clusterInfo when alaya apply new clusterInfo")
 		return
@@ -295,7 +305,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
 
-		if raftNode.raft.Status().Lead != a.selfInfo.RaftId {
+		if raftNode.raft.Node.Status().Lead != a.selfInfo.RaftId {
 			return true
 		}
 		// if this node is leader, add new pipelines node first
@@ -383,7 +393,7 @@ func (a *Alaya) PrintPipelineInfo() {
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
 		logger.Infof("Alaya: %v, PG: %v, leader: %v, voter: %v",
-			a.selfInfo.RaftId, pgID, raftNode.raft.Status().Lead, raftNode.GetVotersID())
+			a.selfInfo.RaftId, pgID, raftNode.raft.Node.Status().Lead, raftNode.GetVotersID())
 		return true
 	})
 }
@@ -401,9 +411,14 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 	}
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
-		if raftNode.raft.Status().Lead != raftNode.getPipeline().RaftId[0] ||
+		if raftNode.raft.Node.Status().Lead != raftNode.getPipeline().RaftId[0] ||
 			len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
 			ok = false
+			// Print for debug
+			//logger.Infof("Assume Alaya: %v, PG: %v, leader: %v, voter: %v",
+			//	a.selfInfo.RaftId, key.(uint64), raftNode.raft.Node.Status().Lead, raftNode.getPipeline().RaftId)
+			//logger.Infof("Real Alaya: %v, PG: %v, leader: %v, voter: %v",
+			//	a.selfInfo.RaftId, key.(uint64), raftNode.raft.Node.Status().Lead, raftNode.GetVotersID())
 			return false
 		}
 		length += 1
@@ -431,11 +446,11 @@ func (a *Alaya) getPipelineReport(pgID uint64) watcher.Report {
 	if value, ok := a.PGRaftNode.Load(pgID); ok {
 		node := value.(*Raft)
 		var state watcher.PipelineReport_State
-		if node.raft.Status().Lead == 0 {
+		if node.raft.Node.Status().Lead == 0 {
 			state = watcher.PipelineReport_ERROR
 		} else if len(node.GetVotersID()) < len(node.getPipeline().RaftId) {
 			state = watcher.PipelineReport_DOWN_GRADE
-		} else if node.raft.Status().Lead != node.getPipeline().RaftId[0] {
+		} else if node.raft.Node.Status().Lead != node.getPipeline().RaftId[0] {
 			state = watcher.PipelineReport_CHANGING
 		} else {
 			state = watcher.PipelineReport_OK

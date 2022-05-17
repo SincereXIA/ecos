@@ -5,6 +5,7 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
 	"ecos/edge-node/pipeline"
+	eraft "ecos/edge-node/raft-node"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/utils/logger"
@@ -16,24 +17,26 @@ import (
 	"go.etcd.io/etcd/pkg/v3/wait"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
+	"path"
 	"strconv"
 	"sync"
 	"time"
 )
 
 type Raft struct {
-	pgID   uint64
 	ctx    context.Context //context
 	cancel context.CancelFunc
 
-	watcher     *watcher.Watcher
-	raftStorage *raft.MemoryStorage //raft需要的内存结构
-	raftCfg     *raft.Config        //raft需要的配置
-	raft        raft.Node
-	ticker      <-chan time.Time //定时器，提供周期时钟源和超时触发能力
+	pgID uint64
 
-	raftChan chan raftpb.Message
-	stopChan chan uint64
+	watcher *watcher.Watcher
+
+	raft        *eraft.RaftNode
+	snapshotter *snap.Snapshotter
+
+	raftAlayaChan chan raftpb.Message
+	stopChan      chan uint64
 
 	metaStorage MetaStorage
 	//metaApplyChan chan *MetaOperate
@@ -43,40 +46,24 @@ type Raft struct {
 	pipeline *pipeline.Pipeline
 	// rwMutex protect pipeline
 	rwMutex sync.RWMutex
-
-	confChangeChan chan raftpb.ConfChange
 }
 
 func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
 	watcher *watcher.Watcher, metaStorage MetaStorage,
-	raftChan chan raftpb.Message, stopChan chan uint64) *Raft {
+	raftAlayaChan chan raftpb.Message, stopChan chan uint64) *Raft {
 
 	ctx, cancel := context.WithCancel(context.Background())
-	raftStorage := raft.NewMemoryStorage()
-	ticker := time.NewTicker(time.Millisecond * 300)
 
 	r := &Raft{
-		pgID:        nowPipe.PgId,
-		ctx:         ctx,
-		cancel:      cancel,
-		watcher:     watcher,
-		raftStorage: raftStorage,
-		raftCfg: &raft.Config{
-			ID:              raftID,
-			ElectionTick:    10,
-			HeartbeatTick:   1,
-			Storage:         raftStorage,
-			MaxSizePerMsg:   1024 * 1024,
-			MaxInflightMsgs: 256,
-		},
-		ticker:      ticker.C,
-		raftChan:    raftChan,
-		metaStorage: metaStorage,
+		pgID:          nowPipe.PgId,
+		ctx:           ctx,
+		cancel:        cancel,
+		watcher:       watcher,
+		raftAlayaChan: raftAlayaChan,
+		metaStorage:   metaStorage,
 
-		pipeline:       nowPipe,
-		stopChan:       stopChan,
-		confChangeChan: make(chan raftpb.ConfChange, 100), // TODO: not ok
-		//metaApplyChan:  make(chan *MetaOperate, 123),
+		pipeline: nowPipe,
+		stopChan: stopChan,
 		w:        wait.New(),
 		reqIDGen: idutil.NewGenerator(uint16(raftID), time.Now()),
 	}
@@ -95,54 +82,130 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 			})
 		}
 	}
+	logger.Infof("%v new raft node for pg %v, peers: %v, oldP: %v", raftID, r.pgID, peers, oldP)
 
-	r.raft = raft.StartNode(r.raftCfg, peers)
+	readyC := make(chan bool)
+	// TODO: init wal base path
+	basePath := path.Join("ecos-data/alaya/", "pg"+pgIdToStr(r.pgID), strconv.FormatInt(int64(raftID), 10))
+	snapshotterReady, raftNode := eraft.NewRaftNode(int(raftID), r.ctx, peers, basePath, readyC, r.metaStorage.CreateSnapshot)
+	r.raft = raftNode
+	<-readyC
+	r.snapshotter = <-snapshotterReady
+
 	return r
+}
+
+func (r *Raft) cleanup() {
+	logger.Warningf("raft %d stopped, start cleanup", r.raft.ID)
+	// TODO:(qiutb) close cf?
+	logger.Warningf("moon %d clean up done", r.raft.ID)
 }
 
 func (r *Raft) Run() {
 	go r.RunAskForLeader()
+	go r.readCommit(r.raft.CommitC, r.raft.ErrorC)
+
 	for {
 		select {
 		case <-r.ctx.Done():
-			r.raft.Stop()
+			r.cleanup()
 			return
-		case <-r.ticker:
-			r.raft.Tick()
-		case ready := <-r.raft.Ready():
-			_ = r.raftStorage.Append(ready.Entries)
-			go r.sendMsgByRpc(ready.Messages)
-			for _, entry := range ready.CommittedEntries {
-				r.process(entry)
-				if entry.Type == raftpb.EntryConfChange {
-					var cc raftpb.ConfChange
-					_ = cc.Unmarshal(entry.Data)
-					r.raft.ApplyConfChange(cc)
-					r.CheckConfChange(&cc)
+		case msgs := <-r.raft.CommunicationC:
+			go r.sendMsgByRpc(msgs)
+		case message := <-r.raftAlayaChan:
+			//logger.Infof("%v send message %v to etcd raft", r.raft.ID, message)
+			r.raft.RaftChan <- message
+			//logger.Infof("%v send message %v to etcd raft success", r.raft.ID, message)
+		case cc := <-r.raft.ApplyConfChangeC:
+			//logger.Infof("%v apply conf change %v", r.raft.ID, cc)
+			r.CheckConfChange(&cc)
+		}
+	}
+}
+
+func (r *Raft) loadSnapshot() (*raftpb.Snapshot, error) {
+	snapshot, err := r.snapshotter.Load()
+	if err == snap.ErrNoSnapshot {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return snapshot, nil
+}
+
+func (r *Raft) readCommit(commitC <-chan *eraft.Commit, errorC <-chan error) {
+	for commit := range commitC {
+		if commit == nil {
+			snapshot, err := r.loadSnapshot()
+			if err != nil {
+				logger.Errorf("failed to load snapshot: %v", err)
+			}
+			if snapshot != nil {
+				logger.Infof("%d loading snapshot at term %d and index %d", r.raft.ID, snapshot.Metadata.Term, snapshot.Metadata.Index)
+				if err := r.metaStorage.RecoverFromSnapshot(snapshot.Data); err != nil {
+					logger.Errorf("[%v] failed to recover from snapshot: %v", r.raft.ID, err)
+				} else {
+					logger.Infof("[%v] recover from snapshot success", r.raft.ID)
 				}
 			}
-			r.raft.Advance()
-		case message := <-r.raftChan:
-			_ = r.raft.Step(r.ctx, message)
+			continue
 		}
+
+		for _, rawData := range commit.Data {
+			var metaOperate MetaOperate
+			data := []byte(rawData)
+			err := metaOperate.Unmarshal(data)
+			if err != nil {
+				logger.Warningf("alaya raft process object meta in entry err: %v", err)
+			}
+			switch metaOperate.Operate {
+			case MetaOperate_PUT:
+				meta := metaOperate.Meta
+				logger.Infof("node %v, PG: %v, New object meta: %v", r.raft.ID, r.pgID, meta.ObjId)
+				err = r.metaStorage.RecordMeta(meta)
+				if err != nil {
+					logger.Warningf("alaya record object meta err: %v", err)
+				}
+				metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Inc(1)
+			case MetaOperate_DELETE:
+				logger.Infof("delete meta: %v", metaOperate.Meta.ObjId)
+				err = r.metaStorage.Delete(metaOperate.Meta.ObjId)
+				metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Dec(1)
+			default:
+				logger.Errorf("unsupported alaya meta operate")
+			}
+			if err != nil {
+				logger.Errorf("Alaya process Alaya message err: %v", err.Error())
+			}
+			if r.w.IsRegistered(metaOperate.OperateId) {
+				r.w.Trigger(metaOperate.OperateId, struct{}{})
+			}
+		}
+		close(commit.ApplyDoneC)
+	}
+	if err, ok := <-errorC; ok {
+		logger.Fatalf("commit stream error: %v", err)
 	}
 }
 
 func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 	if len(change.Context) > 0 {
-		if r.raft.Status().Lead == r.raft.Status().ID {
-			// this message sent by propose new pipeline
-			r.confChangeChan <- *change
-		} else {
-			var p pipeline.Pipeline
-			err := p.Unmarshal(change.Context)
-			if err != nil {
-				logger.Errorf("get pipeline from conf change fail")
-			}
-			r.setPipeline(&p)
+		if change.Type == raftpb.ConfChangeRemoveNode {
+			logger.Infof("raft: %v PG: %v remove node %v and raft apply", r.raft.ID, r.pgID, change.NodeID)
 		}
+		if r.w.IsRegistered(change.NodeID) {
+			r.w.Trigger(change.NodeID, struct{}{})
+		}
+		var p pipeline.Pipeline
+		err := p.Unmarshal(change.Context)
+		if err != nil {
+			logger.Errorf("get pipeline from conf change fail")
+		}
+		r.setPipeline(&p)
+
 	}
-	if change.NodeID != r.raftCfg.ID {
+	if change.NodeID != uint64(r.raft.ID) {
 		return
 	}
 	if change.Type == raftpb.ConfChangeRemoveNode {
@@ -154,18 +217,13 @@ func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 
 func (r *Raft) ProposeNewPipeline(newP *pipeline.Pipeline, oldP *pipeline.Pipeline) {
 	r.setPipeline(newP)
-	// clear confChangeChan, to wait conf change propose
-	select {
-	case <-r.confChangeChan:
-	default:
-	}
 	go func() {
 		needAdd, needRemove := calDiff(newP.RaftId, oldP.RaftId)
 		err := r.ProposeNewNodes(needAdd)
 		if err != nil {
 			logger.Errorf("Alaya propose new nodes in PG: %v fail, err: %v", r.pgID, err)
 		}
-		if r.raft.Status().ID != r.getPipeline().RaftId[0] {
+		if r.raft.Node.Status().ID != r.getPipeline().RaftId[0] {
 			return
 		}
 		err = r.ProposeRemoveNodes(needRemove)
@@ -175,19 +233,63 @@ func (r *Raft) ProposeNewPipeline(newP *pipeline.Pipeline, oldP *pipeline.Pipeli
 	}()
 }
 
+func (r *Raft) findVoter(id uint64) bool {
+	for _, v := range r.GetVotersID() {
+		logger.Infof("id: %v, voters: %v", id, r.GetVotersID())
+		if v == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Raft) addNode(id uint64, data []byte) error {
+	logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raft.ID, r.pgID, id)
+	ch := r.w.Register(id)
+	err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
+		Type:    raftpb.ConfChangeAddNode,
+		NodeID:  id,
+		Context: data,
+	})
+	if err != nil {
+		logger.Errorf("raft: %v PG: %v propose conf change addNode: %v fail, err: %v", r.raft.ID, r.pgID, id, err)
+		return err
+	}
+	select {
+	case <-ch:
+		logger.Infof("raft: %v add node: %v success", r.raft.ID, id)
+	}
+	return nil
+}
+
 func (r *Raft) ProposeNewNodes(NodeIDs []uint64) error {
 	if len(NodeIDs) == 0 {
 		return nil
 	}
 	for _, id := range NodeIDs {
-		logger.Infof("raft: %v PG: %v propose conf change addNode: %v", r.raftCfg.ID, r.pgID, id)
 		data, _ := r.getPipeline().Marshal()
-		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
-			Type:    raftpb.ConfChangeAddNode,
-			NodeID:  id,
-			Context: data,
-		})
-		<-r.confChangeChan
+		for !r.findVoter(id) {
+			r.addNode(id, data)
+		}
+	}
+	return nil
+}
+
+func (r *Raft) removeNode(id uint64, data []byte) error {
+	logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raft.ID, r.pgID, id)
+	ch := r.w.Register(id)
+	err := r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
+		Type:    raftpb.ConfChangeRemoveNode,
+		NodeID:  id,
+		Context: data,
+	})
+	if err != nil {
+		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v fail, err: %v", r.raft.ID, r.pgID, id, err)
+		return err
+	}
+	select {
+	case <-ch:
+		logger.Infof("raft: %v remove node: %v success", r.raft.ID, id)
 	}
 	return nil
 }
@@ -204,37 +306,38 @@ func (r *Raft) ProposeRemoveNodes(NodeIDs []uint64) error {
 	removeSelf := false
 	data, _ := r.getPipeline().Marshal()
 	for _, id := range NodeIDs {
-		if id == r.raft.Status().ID {
+		if id == uint64(r.raft.ID) {
 			removeSelf = true
 			continue
 		}
-		logger.Infof("raft: %v PG: %v propose conf change removeNode: %v", r.raftCfg.ID, r.pgID, id)
-		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
-			Type:    raftpb.ConfChangeRemoveNode,
-			NodeID:  id,
-			Context: data,
-		})
-		<-r.confChangeChan
+		r.removeNode(id, data)
+		for r.findVoter(id) {
+			logger.Infof("raft: %v PG: %v do not success remove node: %v", r.raft.ID, r.pgID, id)
+			r.removeNode(id, data)
+		}
 	}
 	if removeSelf {
-		logger.Infof("raft: %v PG: %v propose conf change remove self", r.raftCfg.ID, r.pgID)
-		_ = r.raft.ProposeConfChange(r.ctx, raftpb.ConfChange{
+		logger.Infof("raft: %v PG: %v propose conf change remove self", r.raft.ID, r.pgID)
+		ch := r.w.Register(uint64(r.raft.ID))
+		_ = r.raft.Node.ProposeConfChange(r.ctx, raftpb.ConfChange{
 			Type:    raftpb.ConfChangeRemoveNode,
-			NodeID:  r.raft.Status().ID,
+			NodeID:  uint64(r.raft.ID),
 			Context: data,
 		})
-		<-r.confChangeChan
+		select {
+		case <-ch:
+			logger.Infof("raft: %v remove self success", r.raft.ID)
+		}
 	}
 	return nil
 }
 
 func (r *Raft) Stop() {
-	logger.Infof("=========STOP: node: %v, PG: %v ===========", r.raft.Status().ID, r.pgID)
+	logger.Infof("=========STOP: node: %v, PG: %v ===========", r.raft.ID, r.pgID)
 	r.stopChan <- r.pgID
 	r.cancel()
-	logger.Infof("=========STOP: node: %v, PG: %v done ===========", r.raft.Status().ID, r.pgID)
+	logger.Infof("=========STOP: node: %v, PG: %v done ===========", r.raft.ID, r.pgID)
 }
-
 func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 	req := &moon.GetInfoRequest{
 		InfoId:   strconv.FormatUint(nodeID, 10),
@@ -248,17 +351,17 @@ func (r *Raft) getNodeInfo(nodeID uint64) (*infos.NodeInfo, error) {
 }
 
 func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
-	select {
-	case <-r.ctx.Done():
-		return
-	default:
-	}
+	//logger.Infof("%v sendMsgByRpc: %v", r.raft.ID, messages)
 	for _, message := range messages {
 		select {
 		case <-r.ctx.Done():
 			return
 		default:
 		}
+		if message.Type == raftpb.MsgSnap {
+			message.Snapshot.Metadata.ConfState = r.raft.ConfState
+		}
+		//logger.Debugf("%v send msg to node: %v, msg: %v", r.raft.ID, message.To, message)
 		nodeId := message.To
 		nodeInfo, err := r.getNodeInfo(nodeId)
 		if err != nil {
@@ -281,35 +384,6 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 	}
 }
 
-func (r *Raft) process(entry raftpb.Entry) {
-	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		var metaOperate MetaOperate
-		err := proto.Unmarshal(entry.Data, &metaOperate)
-		if err != nil {
-			logger.Warningf("alaya raft process object meta in entry err: %v", err)
-		}
-		switch metaOperate.Operate {
-		case MetaOperate_PUT:
-			meta := metaOperate.Meta
-			logger.Infof("node %v, PG: %v, New object meta: %v", r.raftCfg.ID, r.pgID, meta.ObjId)
-			err = r.metaStorage.RecordMeta(meta)
-			if err != nil {
-				logger.Warningf("alaya record object meta err: %v", err)
-			}
-			metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Inc(1)
-		case MetaOperate_DELETE:
-			logger.Infof("delete meta: %v", metaOperate.Meta.ObjId)
-			err = r.metaStorage.Delete(metaOperate.Meta.ObjId)
-			metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Dec(1)
-		default:
-			logger.Errorf("unsupported alaya meta operate")
-		}
-		if r.w.IsRegistered(metaOperate.OperateId) {
-			r.w.Trigger(metaOperate.OperateId, struct{}{})
-		}
-	}
-}
-
 // ProposeObjectMetaOperate Propose a request to operate object meta to raft group,
 // and wait it applied into meta storage
 func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
@@ -319,16 +393,16 @@ func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
 	bytes, _ := proto.Marshal(operate)
 	// 注册，等待 operate 被 apply
 	ch := r.w.Register(opID)
-	err := r.raft.Propose(r.ctx, bytes)
+	err := r.raft.Node.Propose(r.ctx, bytes)
 	if err != nil {
 		logger.Warningf("raft propose err: %v", err)
 		return err
 	}
 	// TODO (zhang): Time out
-	logger.Debugf("%v pg: %v raft propose object meta: %v, wait for it apply", r.raft.Status().ID, r.pgID, operate.Meta.ObjId)
+	logger.Debugf("%v pg: %v raft propose object meta: %v, wait for it apply", r.raft.ID, r.pgID, operate.Meta.ObjId)
 	select {
 	case <-ch:
-		logger.Debugf("%v pg: %v raft propose object meta: %v, apply done", r.raft.Status().ID, r.pgID, operate.Meta.ObjId)
+		logger.Debugf("%v pg: %v raft propose object meta: %v, apply done", r.raft.ID, r.pgID, operate.Meta.ObjId)
 	}
 	return nil
 }
@@ -337,19 +411,19 @@ func (r *Raft) RunAskForLeader() {
 	for {
 		select {
 		case <-r.ctx.Done():
-			logger.Debugf("PG: %v, node%v Stop askForLeader", r.pgID, r.raftCfg.ID)
+			logger.Debugf("PG: %v, node%v Stop askForLeader", r.pgID, r.raft.ID)
 			return
 		default:
 		}
 		time.Sleep(1 * time.Second)
-		if r.raft == nil || r.raft.Status().Lead == uint64(0) || r.raft.Status().Lead == r.raftCfg.ID ||
-			r.raftCfg.ID != r.getPipeline().RaftId[0] || !r.pipelineReady() {
+		if r.raft == nil || r.raft.Node.Status().Lead == uint64(0) || r.raft.Node.Status().Lead == uint64(r.raft.ID) ||
+			uint64(r.raft.ID) != r.getPipeline().RaftId[0] || !r.pipelineReady() {
 			continue
 		} else {
 			r.askForLeader()
 			needRemove, _ := calDiff(r.GetVotersID(), r.getPipeline().RaftId)
 			if len(needRemove) > 0 {
-				logger.Infof("raft: %v, PG: %v Start remove nodes: %v", r.raft.Status().ID, r.pgID, needRemove)
+				logger.Infof("raft: %v, PG: %v Start remove nodes: %v", r.raft.ID, r.pgID, needRemove)
 				err := r.ProposeRemoveNodes(needRemove)
 				if err != nil {
 					logger.Errorf("Alaya propose remove nodes in PG: %v fail, err: %v", r.pgID, err)
@@ -360,27 +434,28 @@ func (r *Raft) RunAskForLeader() {
 }
 
 func (r *Raft) askForLeader() {
-	logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raftCfg.ID)
-	r.raft.TransferLeadership(r.ctx, r.raft.Status().Lead, r.raft.Status().ID)
+	logger.Infof("PG: %v, node%v askForLeader", r.pgID, r.raft.ID)
+	r.raft.Node.TransferLeadership(r.ctx, r.raft.Node.Status().Lead, r.raft.Node.Status().ID)
 	for {
 		if r.isLeader() {
 			return
 		}
-		logger.Infof("PG: %v, node %v not leader", r.pgID, r.raftCfg.ID)
-		r.raft.TransferLeadership(r.ctx, r.raft.Status().Lead, r.raft.Status().ID)
+		logger.Infof("PG: %v, node %v not leader", r.pgID, r.raft.ID)
+		leader := r.raft.Node.Status().Lead
+		r.raft.Node.TransferLeadership(r.ctx, leader, r.raft.Node.Status().ID)
 		time.Sleep(time.Second)
 	}
 }
 
 func (r *Raft) GetVotersID() (rs []uint64) {
-	for id := range r.raft.Status().Config.Voters.IDs() {
+	for id := range r.raft.Node.Status().Config.Voters.IDs() {
 		rs = append(rs, id)
 	}
 	return rs
 }
 
 func (r *Raft) isLeader() bool {
-	return r.raft.Status().Lead == r.raft.Status().ID
+	return r.raft.Node.Status().Lead == uint64(r.raft.ID)
 }
 
 func (r *Raft) pipelineReady() bool {

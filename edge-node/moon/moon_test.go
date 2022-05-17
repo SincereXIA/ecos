@@ -10,7 +10,6 @@ import (
 	"ecos/utils/timestamp"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"os"
 	"path"
 	"strconv"
 	"testing"
@@ -72,7 +71,7 @@ func testMoon(t *testing.T, mock bool) {
 			moons[i].Stop()
 			rpcServers[i].Stop()
 		}
-		_ = os.RemoveAll(basePath)
+		// _ = os.RemoveAll(basePath)
 	})
 
 	var leader int
