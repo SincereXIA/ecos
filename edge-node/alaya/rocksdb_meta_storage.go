@@ -135,6 +135,7 @@ func (s *RocksDBMetaStorage) CreateSnapshot() ([]byte, error) {
 	}
 
 	it := s.db.NewIteratorCF(database.ReadOpts, s.myHandler)
+	defer it.Close()
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		key := make([]byte, len(it.Key().Data()))
 		copy(key, it.Key().Data())
@@ -145,14 +146,12 @@ func (s *RocksDBMetaStorage) CreateSnapshot() ([]byte, error) {
 		it.Key().Free()
 		it.Value().Free()
 	}
-	it.Close()
 
 	snap, err := CfContent.Marshal()
 	if err != nil {
 		return nil, err
 	}
 	return snap, nil
-
 }
 
 func (s *RocksDBMetaStorage) RecoverFromSnapshot(snapshot []byte) error {

@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"sync"
 	"time"
 )
 
@@ -52,11 +53,11 @@ type RaftNode struct {
 	snapshotterReady chan *snap.Snapshotter // signals when snapshotter is ready
 
 	snapCount uint64
-
-	logger *zap.Logger
+	RwMutex   sync.RWMutex
+	logger    *zap.Logger
 }
 
-var defaultSnapshotCount uint64 = 10 // set 10 for test
+var defaultSnapshotCount uint64 = 100 // set 100 for test
 
 func NewRaftNode(id int, ctx context.Context, peers []raft.Peer, basePath string, readyC chan bool, getSnapshot func() ([]byte, error)) (chan *snap.Snapshotter, *RaftNode) {
 
@@ -83,6 +84,7 @@ func NewRaftNode(id int, ctx context.Context, peers []raft.Peer, basePath string
 
 		logger: zap.NewExample(),
 
+		RwMutex:          sync.RWMutex{},
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		// rest of structure populated after WAL replay
 
@@ -147,7 +149,9 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) (<-chan struct{}, bool) 
 			if err != nil {
 				logger.Fatalf("unmarshal conf change error: %v", err)
 			}
+			rc.RwMutex.Lock()
 			rc.ConfState = *rc.Node.ApplyConfChange(cc)
+			rc.RwMutex.Unlock()
 			//if cc.Type == raftpb.ConfChangeRemoveNode {
 			//	logger.Infof("before chan raft: %v remove %v, confState: %v", rc.ID, cc.NodeID, rc.ConfState.Voters)
 			//}
@@ -312,7 +316,7 @@ func (rc *RaftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	rc.appliedIndex = snapshotToSave.Metadata.Index
 }
 
-var snapshotCatchUpEntriesN uint64 = 10 // set 10 for test
+var snapshotCatchUpEntriesN uint64 = 100 // set 100 for test
 
 func (rc *RaftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
 	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
