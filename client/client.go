@@ -77,7 +77,7 @@ func New(config *config.ClientConfig) (*Client, error) {
 	}, nil
 }
 
-func (client *Client) ListObjects(_ context.Context, bucketName string) ([]*object.ObjectMeta, error) {
+func (client *Client) ListObjects(_ context.Context, bucketName, prefix string) ([]*object.ObjectMeta, error) {
 	userID := client.config.Credential.GetUserID()
 	bucketID := infos.GenBucketID(userID, bucketName)
 	info, err := client.infoAgent.Get(infos.InfoType_BUCKET_INFO, bucketID)
@@ -100,7 +100,7 @@ func (client *Client) ListObjects(_ context.Context, bucketName string) ([]*obje
 		}
 		alayaClient := alaya.NewAlayaClient(conn)
 		reply, err := alayaClient.ListMeta(client.ctx, &alaya.ListMetaRequest{
-			Prefix: path.Join(bucketInfo.GetID(), strconv.Itoa(i)),
+			Prefix: path.Join(bucketInfo.GetID(), strconv.Itoa(i), prefix),
 		})
 		if err != nil {
 			return nil, err
@@ -110,20 +110,20 @@ func (client *Client) ListObjects(_ context.Context, bucketName string) ([]*obje
 	return result, nil
 }
 
-func (client *Client) GetIOFactory(bucketName string) *io.EcosIOFactory {
+func (client *Client) GetIOFactory(bucketName string) (*io.EcosIOFactory, error) {
 	if ret, ok := client.factoryPool.Get(bucketName); ok && ret != nil {
 		ecosIOFactory := ret.(*io.EcosIOFactory)
 		if ecosIOFactory.IsConnected() {
-			return ecosIOFactory
+			return ecosIOFactory, nil
 		} else {
 			client.factoryPool.Remove(bucketName)
 		}
 	}
-	ret := io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
-	if ret != nil {
+	ret, err := io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
+	if err == nil && ret != nil {
 		client.factoryPool.Add(bucketName, ret)
 	}
-	return ret
+	return ret, err
 }
 
 func (client *Client) GetVolumeOperator() *VolumeOperator {

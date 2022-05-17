@@ -39,17 +39,17 @@ type EcosIOFactory struct {
 // NewEcosIOFactory Constructor for EcosIOFactory
 //
 // nodeAddr shall provide the address to get ClusterInfo from
-func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) *EcosIOFactory {
+func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) (*EcosIOFactory, error) {
 	conn, err := messenger.GetRpcConn(config.NodeAddr, config.NodePort)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	watcherClient := watcher.NewWatcherClient(conn)
 	reply, err := watcherClient.GetClusterInfo(context.Background(),
 		&watcher.GetClusterInfoRequest{Term: 0})
 	if err != nil {
 		logger.Errorf("get group info fail: %v", err)
-		return nil
+		return nil, err
 	}
 	clusterInfo := reply.GetClusterInfo()
 	// TODO: Retry?
@@ -57,7 +57,7 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 	pipes, err := pipeline.NewClusterPipelines(clusterInfo)
 	if err != nil {
 		logger.Errorf("get cluster pipelines fail: %v", err)
-		return nil
+		return nil, err
 	}
 	ret := &EcosIOFactory{
 		volumeID:   volumeID,
@@ -75,10 +75,10 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 	info, err := ret.infoAgent.Get(infos.InfoType_BUCKET_INFO, infos.GetBucketID(volumeID, bucketName))
 	if err != nil {
 		logger.Errorf("get bucket info fail: %v", err)
-		return nil
+		return nil, err
 	}
 	ret.bucketInfo = info.BaseInfo().GetBucketInfo()
-	return ret
+	return ret, err
 }
 
 func (f *EcosIOFactory) IsConnected() bool {
@@ -156,6 +156,16 @@ func (f *EcosIOFactory) AbortMultipartUploadJob(jobID string) error {
 
 // CompleteMultipartUploadJob Complete a multipart upload job
 func (f *EcosIOFactory) CompleteMultipartUploadJob(jobID string, parts ...types.CompletedPart) (string, error) {
+	// Check if the parts is in order
+	for i, part := range parts {
+		var prevPart types.CompletedPart
+		if i != 0 {
+			prevPart = parts[i-1]
+		}
+		if prevPart.PartNumber > part.PartNumber {
+			return "", errno.InvalidPartOrder
+		}
+	}
 	writer, err := f.GetMultipartUploadWriter(jobID)
 	if err != nil {
 		return "", err

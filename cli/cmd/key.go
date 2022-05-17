@@ -50,10 +50,12 @@ var keyListCmd = &cobra.Command{
 	Use:   "list bucket_name",
 	Short: "list objects in ecos bucket",
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) == 1 {
-			KeyList(args[0])
+		if len(args) == 2 {
+			KeyList(args[0], args[1])
+		} else if len(args) == 1 {
+			KeyList(args[0], "")
 		} else {
-			KeyList("default")
+			KeyList("default", "")
 		}
 	},
 	Args: cobra.RangeArgs(0, 1),
@@ -87,7 +89,11 @@ var keyDescribeCmd = &cobra.Command{
 
 func KeyGet(bucketName string, key string, path string) {
 	c := getClient()
-	factory := c.GetIOFactory(bucketName)
+	factory, err := c.GetIOFactory(bucketName)
+	if err != nil {
+		logger.Errorf("get bucket: %v error: %v", err)
+		return
+	}
 	reader := factory.GetEcosReader(key)
 
 	file, err := os.Create(path)
@@ -113,7 +119,11 @@ func KeyGet(bucketName string, key string, path string) {
 func KeyPut(bucketName string, key string, path string) {
 	var conf config.ClientConfig
 	_ = configUtil.GetConf(&conf)
-	factory := ecosIO.NewEcosIOFactory(&conf, "root", bucketName)
+	factory, err := ecosIO.NewEcosIOFactory(&conf, "root", bucketName)
+	if err != nil {
+		logger.Errorf("get bucket: %v, fail: %v", bucketName, err)
+		os.Exit(1)
+	}
 	writer := factory.GetEcosWriter(key)
 	fi, err := os.Open(path)
 	if err != nil {
@@ -139,10 +149,10 @@ func KeyPut(bucketName string, key string, path string) {
 	logger.Infof("put key: %v success", key)
 }
 
-func KeyList(bucketName string) {
+func KeyList(bucketName, prefix string) {
 	ctx := context.Background()
 	c := getClient()
-	objects, err := c.ListObjects(ctx, bucketName)
+	objects, err := c.ListObjects(ctx, bucketName, prefix)
 	if err != nil {
 		logger.Errorf("list objects fail: %v", err)
 	}

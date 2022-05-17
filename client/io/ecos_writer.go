@@ -38,9 +38,10 @@ type EcosWriter struct {
 	Status      BlockStatus
 	pipes       *pipeline.ClusterPipelines
 
-	chunks     *common.Pool
-	curChunk   *localChunk
-	chunkCount int
+	chunks        *common.Pool
+	curChunk      *localChunk
+	reserveChunks []*localChunk
+	chunkCount    int
 
 	blocks         map[int]*Block
 	curBlock       *Block
@@ -91,6 +92,10 @@ func (w *EcosWriter) getUploadStream(b *Block) (*UploadClient, error) {
 //
 // curBlock shall be nil after calling this.
 func (w *EcosWriter) commitCurBlock() {
+	for _, chunk := range w.reserveChunks {
+		w.chunks.Release(chunk)
+	}
+	w.reserveChunks = nil
 	if w.curBlock == nil {
 		return
 	}
@@ -103,12 +108,22 @@ func (w *EcosWriter) commitCurBlock() {
 // getCurChunk ensures to return with a writable localChunk
 func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 	if w.curChunk == nil {
-		chunk, err := w.chunks.Acquire()
-		if err != nil {
-			return nil, err
+		if len(w.reserveChunks) == 0 {
+			chunks, err := w.chunks.AcquireMultiple(int(w.bucketInfo.Config.BlockSize / w.config.Object.ChunkSize))
+			if err != nil {
+				return nil, err
+			}
+			for _, chunk := range chunks {
+				w.reserveChunks = append(w.reserveChunks, chunk.(*localChunk))
+			}
 		}
-		w.curChunk = chunk.(*localChunk)
+		w.curChunk = w.reserveChunks[0]
 		w.chunkCount++
+		if len(w.reserveChunks) > 1 {
+			w.reserveChunks = w.reserveChunks[1:]
+		} else {
+			w.reserveChunks = nil
+		}
 	}
 	return w.curChunk, nil
 }
@@ -122,6 +137,9 @@ func (w *EcosWriter) commitCurChunk() {
 	}
 	block := w.getCurBlock()
 	block.chunks = append(block.chunks, w.curChunk)
+	if len(block.chunks) == int(w.bucketInfo.Config.BlockSize/w.config.Object.ChunkSize) {
+		w.commitCurBlock()
+	}
 	w.curChunk = nil
 }
 
@@ -429,7 +447,7 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 			return "", errno.InvalidArgument
 		}
 		if _, ok := w.blocks[int(part.PartNumber)]; !ok {
-			return "", errno.InvalidArgument
+			return "", errno.InvalidPart
 		}
 		pendingMap[part.PartNumber] = true
 	}
@@ -496,12 +514,19 @@ func (w *EcosWriter) GetPartBlockInfo(partID int32) (*object.BlockInfo, error) {
 		return nil, errno.MethodNotAllowed
 	}
 	if w.Status != READING {
-		return nil, errno.RepeatedClose
+		return nil, errno.MethodNotAllowed
 	}
 	if partID < 0 || partID >= int32(len(w.partIDs)) {
 		return nil, errno.InvalidArgument
 	}
-	return &w.blocks[int(partID)].BlockInfo, nil
+	targetBlock := w.blocks[int(partID)]
+	if targetBlock == nil {
+		return nil, errno.InvalidPart
+	}
+	if targetBlock.status != FINISHED {
+		return nil, errno.InvalidObjectState
+	}
+	return &targetBlock.BlockInfo, nil
 }
 
 func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {

@@ -48,40 +48,25 @@ func (p *Pool) Acquire() (io.Closer, error) {
 	return r, nil
 }
 
-// Release 将一个使用后的资源池释放回池里
-func (p *Pool) Release(r io.Closer) {
-	p.m.Lock() //确保本操作和Close操作安全
+// AcquireMultiple 从池中获取多个资源
+func (p *Pool) AcquireMultiple(count int) ([]io.Closer, error) {
+	p.m.Lock()
 	defer p.m.Unlock()
-	if p.closed { //如果资源池已经关闭，销毁这个资源
-		err := r.Close()
+	ret := make([]io.Closer, 0, count)
+	for i := 0; i < count; i++ {
+		res, err := p.Acquire()
 		if err != nil {
-			logger.Warningf("Pool Release Err: %#v", err)
+			for _, r := range ret {
+				p.Release(r)
+			}
+			return nil, err
 		}
-		return
+		ret = append(ret, res)
 	}
-	select {
-	case p.resources <- r: //试图将这个资源放入队列
-		logger.Tracef("Release: In Queue")
-	default: //如果队列已满，则关闭这个资源
-		logger.Tracef("Release: Closing")
-		err := r.Close()
-		if err != nil {
-			logger.Warningf("Pool Release Err: %#v", err)
-		}
-	}
+	return ret, nil
 }
 
-// Close 会让资源池停止工作，并关闭所有的资源
-func (p *Pool) Close() {
-	p.m.Lock() //确保本操作与release操作安全
-	defer p.m.Unlock()
-	if p.closed {
-		return
-	}
-	p.closed = true    //将池关闭
-	close(p.resources) //在清空通道里的资源前，将通道关闭，如果不这样做，会发生死锁
-	//关闭资源
-	for r := range p.resources {
-		_ = r.Close()
-	}
+// Release 将一个使用后的资源池释放回池里
+func (p *Pool) Release(r io.Closer) {
+	p.resources <- r
 }

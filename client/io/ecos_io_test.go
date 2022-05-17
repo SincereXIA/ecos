@@ -83,7 +83,7 @@ func TestEcosWriterAndReader(t *testing.T) {
 			conf := config.DefaultConfig
 			conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
 			conf.NodePort = watchers[0].GetSelfInfo().RpcPort
-			factory := NewEcosIOFactory(&conf, "root", "default")
+			factory, _ := NewEcosIOFactory(&conf, "root", "default")
 			data := genTestData(tt.args.objectSize)
 			testBigBufferWriteRead(t, tt.args.key+"big", data, factory)
 			testSmallBufferWriteRead(t, tt.args.key+"small", data, factory, 1024*1024)

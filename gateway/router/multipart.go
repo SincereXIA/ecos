@@ -2,6 +2,7 @@ package router
 
 import (
 	"bytes"
+	"ecos/edge-node/object"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"encoding/xml"
@@ -11,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type InitiateMultipartUploadResult struct {
@@ -35,16 +37,24 @@ func parsePartID(partID string) (int32, error) {
 func createMultipartUpload(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
-	uploadId := Client.GetIOFactory(bucketName).CreateMultipartUploadJob(key)
-	c.Header("Server", "Ecos")
+	factory, err := Client.GetIOFactory(bucketName)
+	if err != nil {
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+		return
+	}
+	uploadId := factory.CreateMultipartUploadJob(key)
 	c.XML(http.StatusOK, InitiateMultipartUploadResult{
 		Bucket:   &bucketName,
 		Key:      &key,
@@ -56,42 +66,51 @@ func createMultipartUpload(c *gin.Context) {
 func uploadPart(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	uploadId := c.Query("uploadId")
 	if uploadId == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadId.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("uploadId", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	partID, err := parsePartID(c.Query("partNumber"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidPartId.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("partNumber", bucketName, c.Request.URL.Path, nil))
 		return
 	}
-	if c.Request.ContentLength == 0 || c.Request.Body == http.NoBody {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.EmptyField.Error()})
+	if c.Request.ContentLength < 5<<20 {
+		c.XML(http.StatusBadRequest, EntityTooSmall(bucketName, c.Request.URL.Path, key))
 		return
 	}
-	if c.Request.ContentLength > 5*1024*1024*1024 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.FileTooLarge.Error()})
+	if c.Request.ContentLength > 5<<30 {
+		c.XML(http.StatusBadRequest, EntityTooLarge(bucketName, c.Request.URL.Path, key))
 		return
 	}
-	writer, err := Client.GetIOFactory(bucketName).GetMultipartUploadWriter(uploadId)
+	factory, err := Client.GetIOFactory(bucketName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidUploadId.Error()})
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+		return
+	}
+	writer, err := factory.GetMultipartUploadWriter(uploadId)
+	if err == errno.NoSuchUpload {
+		c.XML(http.StatusNotFound, NoSuchUpload(bucketName, c.Request.URL.Path, key))
 		return
 	}
 	eTag, err := writer.WritePart(partID, c.Request.Body)
 	if err != nil {
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
-	c.Header("Server", "Ecos")
 	c.Header("ETag", eTag)
 	c.Status(http.StatusOK)
 }
@@ -107,26 +126,34 @@ type ListPartsResult struct {
 func listParts(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	uploadId := c.Query("uploadId")
 	if uploadId == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadId.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("uploadId", bucketName, c.Request.URL.Path, nil))
 		return
 	}
-	writer, err := Client.GetIOFactory(bucketName).GetMultipartUploadWriter(uploadId)
+	factory, err := Client.GetIOFactory(bucketName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidUploadId.Error()})
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+		return
+	}
+	writer, err := factory.GetMultipartUploadWriter(uploadId)
+	if err == errno.NoSuchUpload {
+		c.XML(http.StatusNotFound, NoSuchUpload(bucketName, c.Request.URL.Path, key))
 		return
 	}
 	parts := writer.ListParts()
-	c.Header("Server", "Ecos")
 	c.XML(http.StatusOK, ListPartsResult{
 		Bucket:   &bucketName,
 		Key:      &key,
@@ -139,46 +166,73 @@ func listParts(c *gin.Context) {
 func getPart(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	uploadId := c.Query("uploadId")
 	if uploadId == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadId.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("uploadId", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	partID, err := parsePartID(c.Query("partNumber"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidPartId.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("partNumber", bucketName, c.Request.URL.Path, nil))
 		return
 	}
-	writer, err := Client.GetIOFactory(bucketName).GetMultipartUploadWriter(uploadId)
+	factory, err := Client.GetIOFactory(bucketName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidUploadId.Error()})
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+		return
+	}
+	writer, err := factory.GetMultipartUploadWriter(uploadId)
+	if err != nil {
+		if err == errno.NoSuchUpload {
+			c.XML(http.StatusNotFound, NoSuchUpload(bucketName, c.Request.URL.Path, key))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	blockInfo, err := writer.GetPartBlockInfo(partID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidPartId.Error()})
-		return
+		switch err {
+		case errno.MethodNotAllowed:
+			c.XML(http.StatusMethodNotAllowed, MethodNotAllowed(bucketName, c.Request.URL.Path, &key))
+			return
+		case errno.InvalidArgument:
+			c.XML(http.StatusBadRequest, InvalidArgument("partNumber", bucketName, c.Request.URL.Path, nil))
+			return
+		case errno.InvalidPart:
+			c.XML(http.StatusNotFound, InvalidPart(bucketName, c.Request.URL.Path, key))
+			return
+		case errno.InvalidObjectState:
+			c.XML(http.StatusConflict, InvalidObjectState(bucketName, c.Request.URL.Path, key))
+			return
+		default:
+			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+			return
+		}
 	}
-	reader := Client.GetIOFactory(bucketName).GetEcosReader(key)
+	reader := factory.GetEcosReader(key)
 	content, err := reader.GetBlock(blockInfo)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err})
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
 	if uint64(len(content)) != blockInfo.BlockSize {
-		c.JSON(http.StatusPreconditionFailed, gin.H{"error": errno.IncompatibleSize.Error()})
+		c.XML(http.StatusPreconditionFailed, PreconditionFailed(bucketName, c.Request.URL.Path, "Incompatible Part Size", &key))
 		return
 	}
 	fullReader := bytes.NewReader(content)
-	c.Header("Server", "Ecos")
 	c.DataFromReader(http.StatusOK, int64(blockInfo.BlockSize), "application/octet-stream", fullReader, nil)
 }
 
@@ -202,29 +256,50 @@ type CompleteMultipartUploadResult struct {
 func completeMultipartUpload(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	uploadId := c.Query("uploadId")
 	if uploadId == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadId.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("uploadId", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	var completeRequest CompleteMultipartUpload
 	err := xml.NewDecoder(c.Request.Body).Decode(&completeRequest)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.EmptyField.Error()})
+		c.XML(http.StatusBadRequest, MalformedXML(bucketName, c.Request.URL.Path, &key))
 		return
 	}
-	etag, err := Client.GetIOFactory(bucketName).CompleteMultipartUploadJob(uploadId)
+	factory, err := Client.GetIOFactory(bucketName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
+	}
+	etag, err := factory.CompleteMultipartUploadJob(uploadId)
+	if err != nil {
+		switch err {
+		case errno.InvalidPartOrder:
+			c.XML(http.StatusBadRequest, InvalidPartOrder(bucketName, c.Request.URL.Path, key))
+			return
+		case errno.NoSuchUpload:
+			c.XML(http.StatusNotFound, NoSuchUpload(bucketName, c.Request.URL.Path, key))
+			return
+		case errno.InvalidPart:
+			c.XML(http.StatusNotFound, InvalidPart(bucketName, c.Request.URL.Path, key))
+			return
+		default:
+			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+			return
+		}
 	}
 	c.XML(http.StatusOK, CompleteMultipartUploadResult{
 		Location: common.PtrString(fmt.Sprintf("%s/%s", bucketName, key)),
@@ -232,33 +307,46 @@ func completeMultipartUpload(c *gin.Context) {
 		Key:      common.PtrString(key),
 		ETag:     common.PtrString(etag),
 	})
-	c.Header("Server", "Ecos")
 }
 
 // abortMultipartUpload aborts a multipart upload
 func abortMultipartUpload(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKey.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("key", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	uploadId := c.Query("uploadId")
 	if uploadId == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadId.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("uploadId", bucketName, c.Request.URL.Path, nil))
 		return
 	}
-	err := Client.GetIOFactory(bucketName).AbortMultipartUploadJob(uploadId)
+	factory, err := Client.GetIOFactory(bucketName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
-	c.Header("Server", "Ecos")
-	c.Status(http.StatusOK)
+	err = factory.AbortMultipartUploadJob(uploadId)
+	if err != nil {
+		switch err {
+		case errno.NoSuchUpload:
+			c.XML(http.StatusNotFound, NoSuchUpload(bucketName, c.Request.URL.Path, key))
+			return
+		default:
+			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
+			return
+		}
+	}
+	c.Status(http.StatusNoContent)
 }
 
 type ListMultipartUploadsResult struct {
@@ -278,34 +366,52 @@ type ListMultipartUploadsResult struct {
 func listMultipartUploads(c *gin.Context) {
 	bucketName := c.Param("bucketName")
 	if bucketName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": errno.MissingBucket.Error()})
+		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
 		return
 	}
 	prefix := c.Query("prefix")
 	//keyMarker := c.Query("keyMarker")
 	//if keyMarker == "" {
-	//	c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingKeyMarker.Error()})
+	//	c.XML(http.StatusBadRequest, gin.H{"error": errno.MissingKeyMarker.Error()})
 	//	return
 	//}
 	//uploadIdMarker := c.Query("uploadIdMarker")
 	//if uploadIdMarker == "" {
-	//	c.JSON(http.StatusBadRequest, gin.H{"error": errno.MissingUploadIdMarker.Error()})
+	//	c.XML(http.StatusBadRequest, gin.H{"error": errno.MissingUploadIdMarker.Error()})
 	//	return
 	//}
-	uploads, err := Client.GetIOFactory(bucketName).ListMultipartUploadJob()
+	factory, err := Client.GetIOFactory(bucketName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
+			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
+			return
+		}
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
+	}
+	uploads, err := factory.ListMultipartUploadJob()
+	if err != nil {
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
+		return
+	}
+	var uploadsWithPrefix []types.MultipartUpload
+	for _, upload := range uploads {
+		if prefix != "" {
+			prefix = object.CleanObjectKey(prefix)
+		}
+		if strings.HasPrefix(object.CleanObjectKey(*upload.Key), prefix) {
+			uploadsWithPrefix = append(uploadsWithPrefix, upload)
+		}
 	}
 	ret := ListMultipartUploadsResult{
 		Bucket:      common.PtrString(bucketName),
 		IsTruncated: common.PtrBool(false),
-		Uploads:     uploads,
+		Uploads:     uploadsWithPrefix,
 	}
 	delimiter := c.Query("delimiter")
 	maxUploads, err := strconv.Atoi(c.Query("maxUploads"))
 	if maxUploads < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errno.InvalidArgument.Error()})
+		c.XML(http.StatusBadRequest, InvalidArgument("maxUploads", bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	if maxUploads > 0 {

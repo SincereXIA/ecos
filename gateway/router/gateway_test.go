@@ -471,7 +471,7 @@ func testListMultipartUploads(t *testing.T, client *s3.Client, bucketName string
 		return
 	}
 	if wantLength > 0 {
-		assert.Equal(t, len(listMultipartUploadsOutput.Uploads), wantLength)
+		assert.Equal(t, wantLength, len(listMultipartUploadsOutput.Uploads))
 	}
 }
 
