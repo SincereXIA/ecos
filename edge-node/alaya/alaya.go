@@ -15,6 +15,7 @@ import (
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"sync"
+	"time"
 )
 
 type Alayaer interface {
@@ -105,6 +106,7 @@ func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
 // RecordObjectMeta record object meta to MetaStorage
 // 将对象元数据存储到 MetaStorage
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
+	timeStart := time.Now()
 	err := a.checkObject(meta)
 	if err != nil {
 		return nil, err
@@ -131,6 +133,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 		}
 		logger.Infof("Alaya record object meta success, obj_id: %v, size: %v", meta.ObjId, meta.ObjSize)
 	}
+	metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaPutTimer, nil).UpdateSince(timeStart)
 
 	return &common.Result{
 		Status: common.Result_OK,
@@ -139,6 +142,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 
 func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
 	// clear meta object id
+	timeStart := time.Now()
 	objID := object.CleanObjectKey(req.ObjId)
 	pgID := a.calculateObjectPGID(objID)
 	storage, err := a.MetaStorageRegister.GetStorage(pgID)
@@ -154,6 +158,7 @@ func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.Obje
 		logger.Errorf("alaya get metaStorage by objID failed, err: %v", err)
 		return nil, err
 	}
+	metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaGetTimer, nil).UpdateSince(timeStart)
 	return objMeta, nil
 }
 
@@ -231,10 +236,8 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	default:
 	}
 	pgID := pgMessage.PgId
-	//logger.Debugf("alaya %v receive raft message, pg_id: %v", a.selfInfo.RaftId, pgID)
 	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
 		msgChan.(chan raftpb.Message) <- *pgMessage.Message
-		//	logger.Infof("alaya %v receive raft message than send to raft module", a.selfInfo.RaftId)
 		return &PGRaftMessage{
 			PgId:    pgMessage.PgId,
 			Message: &raftpb.Message{},
@@ -414,11 +417,6 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 		if raftNode.raft.Node.Status().Lead != raftNode.getPipeline().RaftId[0] ||
 			len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
 			ok = false
-			// Print for debug
-			//logger.Infof("Assume Alaya: %v, PG: %v, leader: %v, voter: %v",
-			//	a.selfInfo.RaftId, key.(uint64), raftNode.raft.Node.Status().Lead, raftNode.getPipeline().RaftId)
-			//logger.Infof("Real Alaya: %v, PG: %v, leader: %v, voter: %v",
-			//	a.selfInfo.RaftId, key.(uint64), raftNode.raft.Node.Status().Lead, raftNode.GetVotersID())
 			return false
 		}
 		length += 1
