@@ -58,6 +58,23 @@ func NewEcosIOFactory(ctx context.Context, config *config.ClientConfig, volumeID
 	return ret, err
 }
 
+func (f *EcosIOFactory) GetLatestClusterInfo() error {
+	conn, err := messenger.GetRpcConn(f.config.NodeAddr, f.config.NodePort)
+	if err != nil {
+		return err
+	}
+	watcherClient := watcher.NewWatcherClient(conn)
+	reply, err := watcherClient.GetClusterInfo(context.Background(),
+		&watcher.GetClusterInfoRequest{Term: 0})
+	if err != nil {
+		logger.Errorf("get group info fail: %v", err)
+		return err
+	}
+	clusterInfo := reply.GetClusterInfo()
+	*(f.clusterInfo) = *clusterInfo
+	return nil
+}
+
 func (f *EcosIOFactory) IsConnected() bool {
 	return f.bucketInfo != nil
 }
