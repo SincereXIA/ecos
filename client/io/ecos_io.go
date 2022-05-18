@@ -53,7 +53,6 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 	}
 	clusterInfo := reply.GetClusterInfo()
 	// TODO: Retry?
-	// TODO: Get pgNum, groupNum from moon
 	pipes, err := pipeline.NewClusterPipelines(clusterInfo)
 	if err != nil {
 		logger.Errorf("get cluster pipelines fail: %v", err)

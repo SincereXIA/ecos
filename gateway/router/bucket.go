@@ -4,16 +4,11 @@ import (
 	"ecos/client/credentials"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
-	"ecos/utils/errno"
 	"encoding/xml"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"strings"
 	"time"
 )
-
-// TODO: DeleteBucket
-//	 ShowBucketStat
 
 type CreateBucketConfiguration struct {
 	LocationConstraint *string `xml:"locationConstraint"`
@@ -21,9 +16,8 @@ type CreateBucketConfiguration struct {
 
 // createBucket creates a new bucket
 func createBucket(c *gin.Context) {
-	bucketName := c.Param("bucketName")
-	if bucketName == "" {
-		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
+	bucketName, err := parseBucket(c)
+	if err != nil {
 		return
 	}
 	if bucketName == "default" {
@@ -44,7 +38,7 @@ func createBucket(c *gin.Context) {
 		SecretKey: "",
 	}
 	bucketInfo := infos.GenBucketInfo(credential.GetUserID(), bucketName, credential.GetUserID())
-	err := volOp.CreateBucket(bucketInfo)
+	err = volOp.CreateBucket(bucketInfo)
 	if err != nil {
 		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
@@ -76,18 +70,8 @@ type ListBucketResult struct {
 
 // listObjects lists objects
 func listObjects(c *gin.Context) {
-	bucketName := c.Param("bucketName")
-	if bucketName == "" {
-		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
-	}
-	prefix := c.Query("prefix")
-	listObjectsResult, err := Client.ListObjects(c, bucketName, prefix)
+	listObjectsResult, bucketName, err := listBucket(c)
 	if err != nil {
-		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
-			return
-		}
-		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	result := ListBucketResult{
@@ -112,19 +96,8 @@ func listObjects(c *gin.Context) {
 
 // listObjectsV2 lists objects
 func listObjectsV2(c *gin.Context) {
-	bucketName := c.Param("bucketName")
-	if bucketName == "" {
-		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
-		return
-	}
-	prefix := c.Query("prefix")
-	listObjectsResult, err := Client.ListObjects(c, bucketName, prefix)
+	listObjectsResult, bucketName, err := listBucket(c)
 	if err != nil {
-		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
-			return
-		}
-		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	result := ListBucketResult{
@@ -151,18 +124,8 @@ func listObjectsV2(c *gin.Context) {
 //
 // HEAD /{bucketName}
 func headBucket(c *gin.Context) {
-	bucketName := c.Param("bucketName")
-	if bucketName == "" {
-		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
-		return
-	}
-	_, err := Client.GetVolumeOperator().Get(bucketName)
+	_, _, err := getBucketOperator(c)
 	if err != nil {
-		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
-			return
-		}
-		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
 	}
 	c.Status(http.StatusOK)
@@ -173,34 +136,15 @@ func headBucket(c *gin.Context) {
 //
 // DELETE /{bucketName}
 func deleteBucket(c *gin.Context) {
-	bucketName := c.Param("bucketName")
-	if bucketName == "" {
-		c.XML(http.StatusBadRequest, InvalidBucketName(nil))
-		return
-	}
-	_, err := Client.GetVolumeOperator().Get(bucketName)
-	if err != nil {
-		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
-			return
-		}
-		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
-		return
-	}
 	credential := credentials.Credential{
 		AccessKey: "",
 		SecretKey: "",
 	}
-	bucketContent, err := Client.ListObjects(c, bucketName, "")
+	listObjectsResult, bucketName, err := listBucket(c)
 	if err != nil {
-		if strings.Contains(err.Error(), errno.InfoNotFound.Error()) {
-			c.XML(http.StatusNotFound, NoSuchBucket(bucketName))
-			return
-		}
-		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 		return
 	}
-	if len(bucketContent) != 0 {
+	if len(listObjectsResult) != 0 {
 		c.XML(http.StatusConflict, BucketNotEmpty(bucketName))
 		return
 	}

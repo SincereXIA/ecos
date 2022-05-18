@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"hash"
 	"io"
+	"time"
 )
 
 type localChunk struct {
@@ -252,7 +253,8 @@ func (w *EcosWriter) Abort() error {
 	for i := 0; i < w.blockCount; i++ {
 		block := <-w.finishedBlocks
 		logger.Debugf("block aborted: %v", block.BlockId)
-		// TODO: Delete block from block server
+		// Abort Blocks
+		go w.abortBlock(block)
 	}
 	return nil
 }
@@ -363,23 +365,11 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	if partID < 1 || partID > 10000 {
 		return "", errno.InvalidArgument
 	}
-	// TODO: Delete duplicate part
 	noDuplicate := w.addPartID(partID)
 	if !noDuplicate {
 		victim := w.blocks[int(partID)]
 		logger.Tracef("Delete duplicate part %v", victim.PartId)
-		node, err := w.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(victim.PgId)[0])
-		if err != nil {
-			return "", err
-		}
-		client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.config)
-		if err != nil {
-			return "", err
-		}
-		err = victim.Abort(client)
-		if err != nil {
-			return "", err
-		}
+		go w.abortBlock(victim)
 	}
 	w.blocks[int(partID)] = w.getNewBlock()
 	w.blocks[int(partID)].blockCount = int(partID)
@@ -403,7 +393,6 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 			if err == io.EOF {
 				break
 			}
-			// TODO: Abort
 			return "", err
 		}
 	}
@@ -605,4 +594,27 @@ func (w *EcosWriter) uploadMeta(meta *object.ObjectMeta) error {
 	}
 	logger.Infof("Upload ObjectMeta for %v: success", w.key)
 	return nil
+}
+
+func (w *EcosWriter) abortBlock(block *Block) {
+	node, err := w.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
+	if err != nil {
+		logger.Warningf("Abort Block: get node info failed: %v", err)
+	}
+	client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.config)
+	if err != nil {
+		logger.Warningf("Abort Block: get node info failed: %v", err)
+	}
+	abortResult := make(chan error)
+	go func() {
+		abortResult <- block.Abort(client)
+	}()
+	select {
+	case err := <-abortResult:
+		if err != nil {
+			logger.Warningf("Abort Block: %v", err)
+		}
+	case <-time.After(time.Second * 10):
+		logger.Warningf("Abort Block: %v", errno.BlockOperationTimeout)
+	}
 }

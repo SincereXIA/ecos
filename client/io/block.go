@@ -7,7 +7,7 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
-	common2 "ecos/messenger/common"
+	messengerCommon "ecos/messenger/common"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
@@ -168,7 +168,6 @@ func (b *Block) Close() error {
 }
 
 func (b *Block) Abort(uc *UploadClient) error {
-	// TODO(xiong): add context
 	res, err := uc.client.DeleteBlock(context.Background(), &gaia.DeleteBlockRequest{
 		BlockId:  b.BlockId,
 		Pipeline: b.pipes.GetBlockPipeline(b.PgId),
@@ -178,7 +177,7 @@ func (b *Block) Abort(uc *UploadClient) error {
 		logger.Errorf("Abort block error: %v", err)
 		return err
 	}
-	if res.Status == common2.Result_FAIL {
+	if res.Status == messengerCommon.Result_FAIL {
 		logger.Errorf("Abort block error: %v", res.Message)
 		return errors.New(res.Message)
 	}

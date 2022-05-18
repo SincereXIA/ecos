@@ -12,6 +12,7 @@ import (
 	"ecos/messenger"
 	"ecos/utils/logger"
 	"encoding/json"
+	"errors"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -101,19 +102,17 @@ type VolumeOperator struct {
 	client   *Client
 }
 
-func (v *VolumeOperator) Remove(key string) error {
-	//TODO implement me
-	panic("implement me")
+// Remove Deprecated
+func (v *VolumeOperator) Remove(_ string) error {
+	return errors.New("remove is deprecated, use DeleteBucket instead")
 }
 
 func (v *VolumeOperator) State() (string, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("volume operator does not support state")
 }
 
 func (v *VolumeOperator) Info() (interface{}, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("volume operator does not support info")
 }
 
 func (v *VolumeOperator) Get(key string) (Operator, error) {
@@ -268,11 +267,11 @@ func (o *ObjectOperator) List(prefix string) ([]Operator, error) {
 }
 
 func (o *ObjectOperator) Get(key string) (Operator, error) {
-	panic("implement me")
+	panic("object operator can not get")
 }
 
 func (o *ObjectOperator) Remove(key string) error {
-	panic("implement me")
+	panic("object operator can not remove")
 }
 
 func (o *ObjectOperator) State() (string, error) {
@@ -301,7 +300,7 @@ func interfaceToJson(data interface{}) (string, error) {
 		return "marshal data error", err
 	}
 	var pretty bytes.Buffer
-	err = json.Indent(&pretty, []byte(jsonData), "", "  ")
+	err = json.Indent(&pretty, jsonData, "", "  ")
 	if err != nil {
 		return "indent data error", err
 	}

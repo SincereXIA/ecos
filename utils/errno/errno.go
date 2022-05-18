@@ -66,6 +66,8 @@ const (
 	CodeInvalidArgument
 
 	CodeJobNotExist
+
+	CodeBlockOperationTimeout
 )
 
 var (
@@ -78,6 +80,8 @@ var (
 	InvalidArgument  = newErr(CodeInvalidArgument, "invalid argument")
 
 	JobNotExist = newErr(CodeJobNotExist, "job not exist")
+
+	BlockOperationTimeout = newErr(CodeBlockOperationTimeout, "block operation timeout")
 )
 
 const (
