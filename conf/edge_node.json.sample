@@ -16,6 +16,24 @@
   "GaiaConfig": {
     "BasePath": "./ecos-data/gaia"
   },
+  "GatewayConfig": {
+      "Host": "localhost",
+      "Port": 3267,
+      "EnableAuth": false,
+      "ClientConfig": {
+        "Credential": {
+          "AccessKey": "root",
+          "SecretKey": "root"
+        },
+        "Object": {
+          "ChunkSize": 10485760
+        },
+        "UploadTimeout": 0,
+        "UploadBuffer": 33554432,
+        "NodeAddr": "ecos-edge-dev.ecos.svc.cluster.local",
+        "NodePort": 3267
+      }
+  },
   "AlayaConfig": {
     "BasePath": "/data/ecos/alaya/"
   }

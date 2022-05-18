@@ -25,6 +25,7 @@ type Config struct {
 	AlayaConfig   alaya.Config
 	WatcherConfig watcher.Config
 	MoonConfig    moon.Config
+	AlayaConfig   alaya.Config
 	GaiaConfig    gaia.Config
 	GatewayConfig router.Config
 }
