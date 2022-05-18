@@ -216,7 +216,7 @@ func genTestMetas(watchers []*watcher.Watcher,
 func updateMetas(t *testing.T, watchers []*watcher.Watcher,
 	alayas []Alayaer, metas []*object.ObjectMeta, bucketInfo *infos.BucketInfo) {
 	clusterInfo := watchers[0].GetCurrentClusterInfo()
-	clusterP, _ := pipeline.NewClusterPipelines(&clusterInfo)
+	clusterP, _ := pipeline.NewClusterPipelines(clusterInfo)
 	p := clusterP.MetaPipelines
 	ctx := context.Background()
 	for _, meta := range metas {

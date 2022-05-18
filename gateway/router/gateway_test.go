@@ -155,7 +155,7 @@ func TestGateway(t *testing.T) {
 		testListObjects(t, client, bucketName, false, 0)
 		testHeadObject(t, client, bucketName, "testDeleteObject.obj", true)
 		// Delete non-exist object
-		// testDeleteObject(t, client, "default", "testPUTObject2.obj", true)
+		// testDeleteObject(t, client, "default", "testPUTObject2.obj", false)
 		testListObjects(t, client, bucketName, false, 0)
 	})
 

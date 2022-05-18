@@ -23,7 +23,8 @@ import (
 
 // EcosIOFactory Generates EcosWriter with ClientConfig
 type EcosIOFactory struct {
-	ctx context.Context
+	ctx   context.Context
+	mutex sync.RWMutex
 
 	volumeID   string
 	bucketName string
@@ -68,8 +69,8 @@ func NewEcosIOFactory(ctx context.Context, config *config.ClientConfig, volumeID
 
 		infoAgent:   agent.NewInfoAgent(context.Background(), clusterInfo),
 		clusterInfo: clusterInfo,
-		config:      config,
 		pipes:       pipes,
+		config:      config,
 	}
 	maxChunk := uint(ret.config.UploadBuffer / ret.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(ret.newLocalChunk, maxChunk, int(maxChunk))
@@ -110,13 +111,9 @@ func (f *EcosIOFactory) GetEcosWriter(key string) *EcosWriter {
 	}
 	return &EcosWriter{
 		ctx:            f.ctx,
-		infoAgent:      f.infoAgent,
-		clusterInfo:    f.clusterInfo,
-		bucketInfo:     f.bucketInfo,
+		f:              f,
 		key:            key,
-		config:         f.config,
 		Status:         READING,
-		pipes:          f.pipes,
 		chunks:         f.chunkPool,
 		blocks:         map[int]*Block{},
 		objHash:        objHash,
@@ -217,11 +214,8 @@ func (f *EcosIOFactory) ListMultipartUploadJob() ([]types.MultipartUpload, error
 func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 	return &EcosReader{
 		ctx:           f.ctx,
-		infoAgent:     f.infoAgent,
-		clusterInfo:   f.clusterInfo,
-		bucketInfo:    f.bucketInfo,
+		f:             f,
 		key:           key,
-		pipes:         f.pipes,
 		curBlockIndex: 0,
 		meta:          nil,
 		config:        f.config,

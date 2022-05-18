@@ -310,7 +310,7 @@ func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 		if err != nil {
 			logger.Errorf("get cluster info by term fail, term: %v err: %v", clusterInfo.LastTerm, err.Error())
 		}
-		oldPipelines, _ = pipeline.NewClusterPipelines(&info)
+		oldPipelines, _ = pipeline.NewClusterPipelines(info)
 	}
 	if clusterInfo == nil || len(clusterInfo.NodesInfo) == 0 {
 		logger.Warningf("Empty clusterInfo when alaya apply new clusterInfo")
@@ -318,7 +318,7 @@ func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 	}
 	logger.Infof("Alaya: %v receive new cluster info, term: %v, node num: %v", a.selfInfo.RaftId,
 		clusterInfo.Term, len(clusterInfo.NodesInfo))
-	p, err := pipeline.NewClusterPipelines(clusterInfo)
+	p, err := pipeline.NewClusterPipelines(*clusterInfo)
 	if err != nil {
 		logger.Errorf("Alaya: %v create new cluster pipelines failed, err: %v", a.selfInfo.RaftId, err)
 		return

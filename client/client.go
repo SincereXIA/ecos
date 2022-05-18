@@ -16,6 +16,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"path"
 	"strconv"
+	"sync"
 )
 
 type Client struct {
@@ -27,6 +28,8 @@ type Client struct {
 	infoAgent   *info_agent.InfoAgent
 
 	factoryPool *lru.Cache
+
+	mutex sync.RWMutex
 }
 
 const (
@@ -75,6 +78,11 @@ func New(config *config.ClientConfig) (*Client, error) {
 		infoAgent:   info_agent.NewInfoAgent(ctx, clusterInfo),
 		factoryPool: lruPool,
 	}, nil
+}
+
+func (client *Client) GetClusterInfo() {
+	client.mutex.RLock()
+	defer client.mutex.RUnlock()
 }
 
 func (client *Client) ListObjects(_ context.Context, bucketName, prefix string) ([]*object.ObjectMeta, error) {

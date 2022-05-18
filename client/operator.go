@@ -72,7 +72,7 @@ func (c *ClusterOperator) State() (string, error) {
 	})
 	state, _ := protoToJson(report)
 
-	clusterPipelines, err := pipeline.NewClusterPipelines(c.client.clusterInfo)
+	clusterPipelines, err := pipeline.NewClusterPipelines(*c.client.clusterInfo)
 	if err != nil {
 		return "", err
 	}
@@ -204,7 +204,7 @@ func (b *BucketOperator) List(prefix string) ([]Operator, error) {
 
 func (b *BucketOperator) getAlayaClient(key string) (alaya.AlayaClient, error) {
 	pgID := object.GenObjPgID(b.bucketInfo, key, b.client.clusterInfo.MetaPgNum)
-	cp, err := pipeline.NewClusterPipelines(b.client.clusterInfo)
+	cp, err := pipeline.NewClusterPipelines(*b.client.clusterInfo)
 	if err != nil {
 		return nil, err
 	}
