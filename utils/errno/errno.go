@@ -29,6 +29,7 @@ var (
 	PGNotExist          = newErr(CodePgNotExist, "place group not exist")
 	MetaNotExist        = newErr(CodeMetaNotExist, "meta data not exist")
 	MetaStorageNotExist = newErr(CodeMetaStorageNotExist, "meta data storage not exist")
+	TermNotExist        = newErr(CodeMetaNotExist, "term not exist")
 )
 
 /* MOON error */

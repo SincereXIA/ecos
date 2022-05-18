@@ -1,8 +1,10 @@
 package io
 
 import (
+	"context"
 	"ecos/client/config"
 	agent "ecos/client/info-agent"
+	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -33,6 +35,8 @@ func (c *localChunk) Close() error {
 // EcosWriter When creating an object, use EcosWriter as a Writer
 // EcosWriter.Write can take []byte as input to create Chunk and Block for Object
 type EcosWriter struct {
+	ctx context.Context
+
 	infoAgent   *agent.InfoAgent
 	clusterInfo *infos.ClusterInfo
 	bucketInfo  *infos.BucketInfo
@@ -327,7 +331,7 @@ func (w *EcosWriter) CommitPartialMeta() error {
 	}
 	meta := w.genPartialMeta(w.key)
 	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	metaClient, err := NewMetaClient(metaServerNode, w.config)
+	metaClient, err := NewMetaClient(w.ctx, metaServerNode, w.config)
 	if err != nil {
 		logger.Errorf("Update Multipart Object Failed: %v", err)
 		return err
@@ -594,7 +598,8 @@ func (w *EcosWriter) uploadBlock(i int, block *Block) {
 // uploadMeta will upload meta info of an object.
 func (w *EcosWriter) uploadMeta(meta *object.ObjectMeta) error {
 	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	metaClient, err := NewMetaClient(metaServerNode, w.config)
+	ctx, _ := alaya.SetTermToContext(w.ctx, w.clusterInfo.Term)
+	metaClient, err := NewMetaClient(ctx, metaServerNode, w.config)
 	if err != nil {
 		logger.Errorf("Upload Object Failed: %v", err)
 		return err

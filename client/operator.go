@@ -227,7 +227,8 @@ func (b *BucketOperator) Remove(key string) error {
 	if err != nil {
 		return err
 	}
-	_, err = alayaClient.DeleteMeta(context.Background(), &alaya.DeleteMetaRequest{
+	ctx, _ := alaya.SetTermToContext(context.Background(), b.client.clusterInfo.Term)
+	_, err = alayaClient.DeleteMeta(ctx, &alaya.DeleteMetaRequest{
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
 	if err != nil {

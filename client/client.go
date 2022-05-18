@@ -99,7 +99,8 @@ func (client *Client) ListObjects(_ context.Context, bucketName, prefix string) 
 			return nil, err
 		}
 		alayaClient := alaya.NewAlayaClient(conn)
-		reply, err := alayaClient.ListMeta(client.ctx, &alaya.ListMetaRequest{
+		ctx, _ := alaya.SetTermToContext(client.ctx, client.clusterInfo.Term)
+		reply, err := alayaClient.ListMeta(ctx, &alaya.ListMetaRequest{
 			Prefix: path.Join(bucketInfo.GetID(), strconv.Itoa(i), prefix),
 		})
 		if err != nil {
@@ -119,7 +120,7 @@ func (client *Client) GetIOFactory(bucketName string) (*io.EcosIOFactory, error)
 			client.factoryPool.Remove(bucketName)
 		}
 	}
-	ret, err := io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
+	ret, err := io.NewEcosIOFactory(client.ctx, client.config, client.config.Credential.GetUserID(), bucketName)
 	if err == nil && ret != nil {
 		client.factoryPool.Add(bucketName, ret)
 	}

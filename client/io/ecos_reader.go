@@ -4,6 +4,7 @@ import (
 	"context"
 	"ecos/client/config"
 	agent "ecos/client/info-agent"
+	"ecos/edge-node/alaya"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
@@ -21,6 +22,7 @@ import (
 )
 
 type EcosReader struct {
+	ctx         context.Context
 	infoAgent   *agent.InfoAgent
 	clusterInfo *infos.ClusterInfo
 	bucketInfo  *infos.BucketInfo
@@ -143,7 +145,8 @@ func (r *EcosReader) getObjMeta() error {
 	pgId := object.GenObjPgID(r.bucketInfo, r.key, 10)
 	metaServerIdString := r.pipes.GetBlockPGNodeID(pgId)[0]
 	metaServerInfo, _ := r.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
-	metaClient, err := NewMetaClient(metaServerInfo.BaseInfo().GetNodeInfo(), r.config)
+	ctx, _ := alaya.SetTermToContext(r.ctx, r.clusterInfo.Term)
+	metaClient, err := NewMetaClient(ctx, metaServerInfo.BaseInfo().GetNodeInfo(), r.config)
 	if err != nil {
 		logger.Errorf("New meta client failed, err: %v", err)
 		return err

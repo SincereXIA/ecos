@@ -23,6 +23,8 @@ import (
 
 // EcosIOFactory Generates EcosWriter with ClientConfig
 type EcosIOFactory struct {
+	ctx context.Context
+
 	volumeID   string
 	bucketName string
 
@@ -40,7 +42,7 @@ type EcosIOFactory struct {
 // NewEcosIOFactory Constructor for EcosIOFactory
 //
 // nodeAddr shall provide the address to get ClusterInfo from
-func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) (*EcosIOFactory, error) {
+func NewEcosIOFactory(ctx context.Context, config *config.ClientConfig, volumeID, bucketName string) (*EcosIOFactory, error) {
 	conn, err := messenger.GetRpcConn(config.NodeAddr, config.NodePort)
 	if err != nil {
 		return nil, err
@@ -60,6 +62,7 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 		return nil, err
 	}
 	ret := &EcosIOFactory{
+		ctx:        ctx,
 		volumeID:   volumeID,
 		bucketName: bucketName,
 
@@ -106,6 +109,7 @@ func (f *EcosIOFactory) GetEcosWriter(key string) *EcosWriter {
 		objHash = nil
 	}
 	return &EcosWriter{
+		ctx:            f.ctx,
 		infoAgent:      f.infoAgent,
 		clusterInfo:    f.clusterInfo,
 		bucketInfo:     f.bucketInfo,
@@ -212,6 +216,7 @@ func (f *EcosIOFactory) ListMultipartUploadJob() ([]types.MultipartUpload, error
 // GetEcosReader provide a EcosWriter for object associated with key
 func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 	return &EcosReader{
+		ctx:           f.ctx,
 		infoAgent:     f.infoAgent,
 		clusterInfo:   f.clusterInfo,
 		bucketInfo:    f.bucketInfo,
