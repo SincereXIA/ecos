@@ -18,6 +18,7 @@ import (
 	"hash"
 	"io"
 	"sync"
+	"time"
 )
 
 // EcosIOFactory Generates EcosWriter with ClientConfig
@@ -116,6 +117,7 @@ func (f *EcosIOFactory) GetEcosWriter(key string) *EcosWriter {
 		blocks:         map[int]*Block{},
 		objHash:        objHash,
 		finishedBlocks: make(chan *Block),
+		startTime:      time.Now(),
 	}
 }
 
@@ -218,5 +220,6 @@ func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 		curBlockIndex: 0,
 		meta:          nil,
 		config:        f.config,
+		startTime:     time.Now(),
 	}
 }

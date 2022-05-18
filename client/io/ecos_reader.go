@@ -8,13 +8,16 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"fmt"
+	"github.com/rcrowley/go-metrics"
 	"io"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type EcosReader struct {
@@ -30,6 +33,9 @@ type EcosReader struct {
 	meta         *object.ObjectMeta
 	config       *config.ClientConfig
 	cachedBlocks sync.Map
+
+	// For Go Metrics
+	startTime time.Time
 }
 
 func (r *EcosReader) genPipelines() error {
@@ -126,6 +132,9 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 	waitGroup.Wait()
 	logger.Tracef("read %d bytes done", count)
 
+	if err == io.EOF {
+		metrics.GetOrRegisterTimer(watcher.MetricsClientGetTimer, nil).UpdateSince(r.startTime)
+	}
 	return int(count), err
 }
 

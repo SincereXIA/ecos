@@ -6,12 +6,14 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"encoding/hex"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/rcrowley/go-metrics"
 	"hash"
 	"io"
 	"time"
@@ -55,6 +57,9 @@ type EcosWriter struct {
 	// for multipart upload
 	partObject bool
 	partIDs    []int32
+
+	// For Go Metrics
+	startTime time.Time
 }
 
 // getCurBlock ensures to return with a Block can put new Chunk in
@@ -236,6 +241,7 @@ func (w *EcosWriter) Close() error {
 		return err
 	}
 	w.Status = FINISHED
+	metrics.GetOrRegisterTimer(watcher.MetricsClientPutTimer, nil).UpdateSince(w.startTime)
 	return nil
 }
 
@@ -454,6 +460,7 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 		return "", err
 	}
 	w.Status = FINISHED
+	metrics.GetOrRegisterTimer(watcher.MetricsClientPartPutTimer, nil).UpdateSince(w.startTime)
 	return hex.EncodeToString(w.objHash.Sum(nil)), nil
 }
 

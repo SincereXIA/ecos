@@ -27,12 +27,12 @@ const (
 	MetricsGatewayPartPutTimer = MetricsGateway + ".part.put.timer"
 )
 
-var MetricsGatewayLabels = []string{
-	MetricsGatewayGetTimer,
-	MetricsGatewayPartGetTimer,
-	MetricsGatewayPutTimer,
-	MetricsGatewayPartPutTimer,
-}
+const (
+	MetricsClient             = "ecos.node.client"
+	MetricsClientGetTimer     = MetricsClient + ".get.timer"
+	MetricsClientPutTimer     = MetricsClient + ".put.timer"
+	MetricsClientPartPutTimer = MetricsClient + ".part.put.timer"
+)
 
 const (
 	MetricsSystem                              = "ecos.node.system"
