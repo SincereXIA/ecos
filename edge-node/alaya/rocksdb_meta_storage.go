@@ -222,7 +222,7 @@ func NewRocksDBMetaStorageRegister(basePath string) (*RocksDBMetaStorageRegister
 	}
 	return &RocksDBMetaStorageRegister{
 		basePath:    basePath,
-		cfHandleMap: make(map[string]*gorocksdb.ColumnFamilyHandle, 0),
+		cfHandleMap: handleMap,
 		cfNames:     cfNames,
 		db:          db,
 		storageMap:  make(map[uint64]*RocksDBMetaStorage, 0),

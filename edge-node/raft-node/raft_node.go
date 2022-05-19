@@ -294,6 +294,7 @@ func (rc *RaftNode) stop() {
 
 func (rc *RaftNode) cleanup() {
 	rc.Node.Stop()
+	rc.wal.Close()
 	close(rc.CommitC)
 	close(rc.ErrorC)
 }

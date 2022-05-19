@@ -1,6 +1,7 @@
 package config
 
 import (
+	"ecos/edge-node/alaya"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/moon"
 	"ecos/edge-node/watcher"
@@ -19,9 +20,9 @@ const httpPort = 3268
 
 type Config struct {
 	config.Config
-	HttpPort    uint64
-	StoragePath string
-
+	HttpPort      uint64
+	StoragePath   string
+	AlayaConfig   alaya.Config
 	WatcherConfig watcher.Config
 	MoonConfig    moon.Config
 	GaiaConfig    gaia.Config
@@ -37,6 +38,7 @@ func init() {
 		HttpPort:      httpPort,
 		WatcherConfig: watcher.DefaultConfig,
 		MoonConfig:    moon.DefaultConfig,
+		AlayaConfig:   alaya.DefaultConfig,
 		StoragePath:   "./ecos-data",
 		GaiaConfig:    gaia.DefaultConfig,
 		GatewayConfig: router.DefaultConfig,

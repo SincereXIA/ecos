@@ -7,6 +7,7 @@ import (
 	"errors"
 	gorocksdb "github.com/SUMStudio/grocksdb"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -19,6 +20,28 @@ type RocksDBInfoStorage struct {
 
 	getSnapshot         func() ([]byte, error)
 	recoverFromSnapshot func(snapshot []byte) error
+}
+
+func (s *RocksDBInfoStorage) List(prefix string) ([]Information, error) {
+	result := make([]Information, 0)
+	it := s.db.NewIteratorCF(database.ReadOpts, s.myHandler)
+	defer it.Close()
+
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		key := string(it.Key().Data())
+		if strings.HasPrefix(key, prefix) {
+			metaData := it.Value()
+			baseInfo := &BaseInfo{}
+			err := baseInfo.Unmarshal(metaData.Data())
+			if err != nil {
+				logger.Errorf("Rocksdb Info Storage", "List", "Unmarshal error: "+err.Error())
+				return nil, err
+			}
+			result = append(result, baseInfo)
+			metaData.Free()
+		}
+	}
+	return result, nil
 }
 
 func (s *RocksDBInfoStorage) GetSnapshot() ([]byte, error) {

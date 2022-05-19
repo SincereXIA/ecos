@@ -12,6 +12,7 @@ type Storage interface {
 	Update(info Information) error
 	Delete(id string) error
 	Get(id string) (Information, error)
+	List(prefix string) ([]Information, error)
 	GetAll() ([]Information, error)
 	GetSnapshot() ([]byte, error)
 	RecoverFromSnapshot(snapshot []byte) error

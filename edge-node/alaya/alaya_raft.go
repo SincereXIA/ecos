@@ -27,6 +27,7 @@ import (
 type Raft struct {
 	ctx    context.Context //context
 	cancel context.CancelFunc
+	config *Config
 
 	pgID uint64
 
@@ -48,7 +49,7 @@ type Raft struct {
 	rwMutex sync.RWMutex
 }
 
-func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline,
+func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline, config *Config,
 	watcher *watcher.Watcher, metaStorage MetaStorage,
 	raftAlayaChan chan raftpb.Message, stopChan chan uint64) *Raft {
 
@@ -57,6 +58,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 	r := &Raft{
 		pgID:          nowPipe.PgId,
 		ctx:           ctx,
+		config:        config,
 		cancel:        cancel,
 		watcher:       watcher,
 		raftAlayaChan: raftAlayaChan,
@@ -86,7 +88,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 
 	readyC := make(chan bool)
 	// TODO: init wal base path
-	basePath := path.Join("ecos-data/alaya/", "pg"+pgIdToStr(r.pgID), strconv.FormatInt(int64(raftID), 10))
+	basePath := path.Join(config.BasePath, "pg"+pgIdToStr(r.pgID), strconv.FormatInt(int64(raftID), 10))
 	snapshotterReady, raftNode := eraft.NewRaftNode(int(raftID), r.ctx, peers, basePath, readyC, r.metaStorage.CreateSnapshot)
 	r.raft = raftNode
 	<-readyC

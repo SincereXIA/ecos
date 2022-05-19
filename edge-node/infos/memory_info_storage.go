@@ -10,6 +10,17 @@ type MemoryInfoStorage struct {
 	onUpdateMap sync.Map
 }
 
+func (s *MemoryInfoStorage) List(prefix string) ([]Information, error) {
+	var infos []Information
+	s.kvStorage.Range(func(key, value interface{}) bool {
+		if key.(string)[:len(prefix)] == prefix {
+			infos = append(infos, value.(Information))
+		}
+		return true
+	})
+	return infos, nil
+}
+
 func (s *MemoryInfoStorage) GetAll() ([]Information, error) {
 	var result []Information
 	s.kvStorage.Range(func(key, value interface{}) bool {
