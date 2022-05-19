@@ -54,7 +54,7 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 		//metaStorage := alaya.NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
 		metaStorageRegister := alaya.NewMemoryMetaStorageRegister()
 		alayaConfig := alaya.DefaultConfig
-		a := alaya.NewAlaya(ctx, watchers[i], alayaConfig, metaStorageRegister, rpcServers[i])
+		a := alaya.NewAlaya(ctx, watchers[i], &alayaConfig, metaStorageRegister, rpcServers[i])
 		alayas = append(alayas, a)
 	}
 	return alayas

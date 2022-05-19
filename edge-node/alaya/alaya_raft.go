@@ -27,7 +27,7 @@ import (
 type Raft struct {
 	ctx    context.Context //context
 	cancel context.CancelFunc
-	config Config
+	config *Config
 
 	pgID uint64
 
@@ -49,7 +49,7 @@ type Raft struct {
 	rwMutex sync.RWMutex
 }
 
-func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline, config Config,
+func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline, config *Config,
 	watcher *watcher.Watcher, metaStorage MetaStorage,
 	raftAlayaChan chan raftpb.Message, stopChan chan uint64) *Raft {
 

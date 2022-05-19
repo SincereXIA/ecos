@@ -242,7 +242,7 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 		if err != nil {
 			logger.Errorf("new meta storage register err: %v", err)
 		}
-		a := NewAlaya(ctx, watchers[i], alayaConfig, metaStorageRegister, rpcServers[i])
+		a := NewAlaya(ctx, watchers[i], &alayaConfig, metaStorageRegister, rpcServers[i])
 		alayas = append(alayas, a)
 	}
 	return alayas

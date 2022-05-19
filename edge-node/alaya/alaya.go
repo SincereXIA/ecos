@@ -32,7 +32,7 @@ type Alayaer interface {
 type Alaya struct {
 	UnimplementedAlayaServer
 
-	config Config
+	config *Config
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -344,7 +344,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 	}
 }
 
-func NewAlaya(ctx context.Context, watcher *watcher.Watcher, config Config,
+func NewAlaya(ctx context.Context, watcher *watcher.Watcher, config *Config,
 	metaStorageRegister MetaStorageRegister, rpcServer *messenger.RpcServer) Alayaer {
 	ctx, cancel := context.WithCancel(ctx)
 	c := cleaner.NewCleaner(ctx, watcher)
