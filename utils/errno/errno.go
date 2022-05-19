@@ -68,6 +68,9 @@ const (
 
 	CodeJobNotExist
 
+	CodeConnectionIssue
+	CodeClusterInfo
+
 	CodeBlockOperationTimeout
 )
 
@@ -81,6 +84,9 @@ var (
 	InvalidArgument  = newErr(CodeInvalidArgument, "invalid argument")
 
 	JobNotExist = newErr(CodeJobNotExist, "job not exist")
+
+	ConnectionIssue = newErr(CodeConnectionIssue, "connect to edge node failed")
+	ClusterInfoErr  = newErr(CodeClusterInfo, "get cluster info failed")
 
 	BlockOperationTimeout = newErr(CodeBlockOperationTimeout, "block operation timeout")
 )

@@ -4,15 +4,23 @@ import (
 	"context"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	"ecos/utils/errno"
+	"ecos/utils/logger"
+	"sync"
 )
 
 type InfoAgent struct {
-	ctx                context.Context
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	nodeAddr string
+	nodePort uint64
+
+	mutex              sync.RWMutex
 	currentClusterInfo *infos.ClusterInfo
 	*infos.StorageRegister
-
-	cancel context.CancelFunc
 }
 
 func (agent *InfoAgent) GetStorage(infoType infos.InfoType) infos.Storage {
@@ -57,13 +65,56 @@ func (agent *InfoAgent) Get(infoType infos.InfoType, id string) (infos.Informati
 	return result.GetBaseInfo(), err
 }
 
-func NewInfoAgent(ctx context.Context, currentClusterInfo *infos.ClusterInfo) *InfoAgent {
+// GetCurClusterInfo Returns current ClusterInfo
+func (agent *InfoAgent) GetCurClusterInfo() infos.ClusterInfo {
+	agent.mutex.RLock()
+	defer agent.mutex.RUnlock()
+	return *agent.currentClusterInfo
+}
+
+// UpdateCurClusterInfo Updates current ClusterInfo
+func (agent *InfoAgent) UpdateCurClusterInfo() error {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+	conn, err := messenger.GetRpcConn(agent.nodeAddr, agent.nodePort)
+	if err != nil {
+		logger.Errorf("connect to node failed: %s", err.Error())
+		return err
+	}
+	watcherClient := watcher.NewWatcherClient(conn)
+	reply, err := watcherClient.GetClusterInfo(agent.ctx,
+		&watcher.GetClusterInfoRequest{Term: 0})
+	if err != nil {
+		logger.Errorf("get cluster info failed: %s", err.Error())
+		return err
+	}
+	agent.currentClusterInfo = reply.GetClusterInfo()
+	return nil
+}
+
+func NewInfoAgent(ctx context.Context, nodeAddr string, nodePort uint64) (*InfoAgent, error) {
+	conn, err := messenger.GetRpcConn(nodeAddr, nodePort)
+	if err != nil {
+		logger.Errorf("connect to node failed: %s", err.Error())
+		return nil, errno.ConnectionIssue
+	}
+	watcherClient := watcher.NewWatcherClient(conn)
+	reply, err := watcherClient.GetClusterInfo(ctx,
+		&watcher.GetClusterInfoRequest{Term: 0})
+	if err != nil {
+		logger.Errorf("get cluster info failed: %s", err.Error())
+		return nil, errno.ClusterInfoErr
+	}
+	clusterInfo := reply.GetClusterInfo()
 	builder := infos.NewStorageRegisterBuilder(infos.NewMemoryInfoFactory())
 	ctx, cancel := context.WithCancel(ctx)
 	return &InfoAgent{
 		ctx:                ctx,
 		cancel:             cancel,
-		currentClusterInfo: currentClusterInfo,
+		mutex:              sync.RWMutex{},
+		currentClusterInfo: clusterInfo,
+		nodeAddr:           nodeAddr,
+		nodePort:           nodePort,
 		StorageRegister:    builder.GetStorageRegister(),
-	}
+	}, nil
 }

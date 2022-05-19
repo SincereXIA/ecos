@@ -40,10 +40,10 @@ type Block struct {
 
 	// These infos are for BlockInfo
 	key           string
-	clusterInfo   *infos.ClusterInfo
+	clusterInfo   infos.ClusterInfo
 	blockCount    int
 	blockHashType infos.BucketConfig_HashType
-	pipes         *pipeline.ClusterPipelines
+	pipes         pipeline.ClusterPipelines
 
 	// These are for Upload and Release
 	infoAgent   *agent.InfoAgent

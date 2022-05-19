@@ -5,6 +5,7 @@ import (
 	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
+	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/utils/common"
 	"ecos/utils/errno"
@@ -45,6 +46,8 @@ type EcosWriter struct {
 	reserveChunks []*localChunk
 	chunkCount    int
 
+	clusterInfo    infos.ClusterInfo
+	pipes          pipeline.ClusterPipelines
 	blocks         map[int]*Block
 	curBlock       *Block
 	blockCount     int
@@ -80,7 +83,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 func (w *EcosWriter) getUploadStream(b *Block) (*UploadClient, error) {
 	w.f.mutex.RLock()
 	defer w.f.mutex.RUnlock()
-	nodes := w.f.pipes.GetBlockPGNodeID(b.PgId)
+	nodes := w.pipes.GetBlockPGNodeID(b.PgId)
 	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, nodes[0])
 	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo(), w.f.config)
 	if err != nil {
@@ -196,7 +199,7 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 		UpdateTime: timestamp.Now(),
 		PgId:       pgID,
 		Blocks:     nil,
-		Term:       w.f.getClusterInfo().Term,
+		Term:       w.clusterInfo.Term,
 		MetaData:   nil,
 	}
 	if w.f.bucketInfo.Config.ObjectHashType != infos.BucketConfig_OFF {
@@ -312,7 +315,7 @@ func (w *EcosWriter) genPartialMeta(objectKey string) *object.ObjectMeta {
 		UpdateTime: timestamp.Now(),
 		PgId:       pgID,
 		Blocks:     blocks,
-		Term:       w.f.clusterInfo.Term,
+		Term:       w.clusterInfo.Term,
 		MetaData:   nil,
 	}
 	meta.ObjHash = w.genPartialHash()
@@ -378,7 +381,7 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	if !noDuplicate {
 		victim := w.blocks[int(partID)]
 		logger.Tracef("Delete duplicate part %v", victim.PartId)
-		node, err := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.f.pipes.GetBlockPGNodeID(victim.PgId)[0])
+		node, err := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(victim.PgId)[0])
 		if err != nil {
 			return "", err
 		}
@@ -495,7 +498,7 @@ func (w *EcosWriter) AbortMultiPart() error {
 	errBlocks := make([]int32, 0, len(w.partIDs))
 	for _, partID := range w.partIDs {
 		block := w.blocks[int(partID)]
-		node, err1 := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.f.pipes.GetBlockPGNodeID(block.PgId)[0])
+		node, err1 := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
 		if err1 != nil {
 			err = err1
 			errBlocks = append(errBlocks, partID)
@@ -546,7 +549,7 @@ func (w *EcosWriter) GetPartBlockInfo(partID int32) (*object.BlockInfo, error) {
 func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {
 	w.f.mutex.RLock()
 	defer w.f.mutex.RUnlock()
-	nodeId := w.f.pipes.GetMetaPGNodeID(pgID)[0]
+	nodeId := w.pipes.GetMetaPGNodeID(pgID)[0]
 	logger.Infof("META PG: %v, NODE: %v", pgID, nodeId)
 	nodeInfo, _ := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, nodeId)
 	return nodeInfo.BaseInfo().GetNodeInfo()
@@ -560,9 +563,9 @@ func (w *EcosWriter) getNewBlock() *Block {
 		chunks:      nil,
 		key:         w.key,
 		infoAgent:   w.f.infoAgent,
-		clusterInfo: &clusterInfo,
+		clusterInfo: w.clusterInfo,
 		blockCount:  w.blockCount,
-		pipes:       w.f.pipes,
+		pipes:       w.pipes,
 		uploadCount: 0,
 		delFunc: func(self *Block) {
 			// Release Chunks
@@ -614,7 +617,7 @@ func (w *EcosWriter) uploadBlock(i int, block *Block) {
 func (w *EcosWriter) uploadMeta(meta *object.ObjectMeta) error {
 retry:
 	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	ctx, _ := alaya.SetTermToContext(w.ctx, w.f.getClusterInfo().Term)
+	ctx, _ := alaya.SetTermToContext(w.ctx, w.f.infoAgent.GetCurClusterInfo().Term)
 	metaClient, err := NewMetaClient(ctx, metaServerNode, w.f.config)
 	if err != nil {
 		logger.Errorf("Upload Object Failed: %v", err)
@@ -624,7 +627,10 @@ retry:
 	if err != nil {
 		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
 			logger.Warningf("Term not match, retry")
-			w.f.updateClusterInfo()
+			err = w.f.infoAgent.UpdateCurClusterInfo()
+			if err != nil {
+				return err
+			}
 			goto retry
 		}
 		logger.Errorf("Upload Object Failed: %v with Error %v", result, err)

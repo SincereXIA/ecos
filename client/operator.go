@@ -10,6 +10,7 @@ import (
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 type Operator interface {
@@ -45,7 +47,7 @@ func (c *ClusterOperator) Remove(key string) error {
 }
 
 func (c *ClusterOperator) Info() (interface{}, error) {
-	leaderInfo := c.client.clusterInfo.LeaderInfo
+	leaderInfo := c.client.infoAgent.GetCurClusterInfo().LeaderInfo
 	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
 	if err != nil {
 		return "", err
@@ -56,8 +58,8 @@ func (c *ClusterOperator) Info() (interface{}, error) {
 }
 
 func (c *ClusterOperator) State() (string, error) {
-	clusterInfo := c.client.clusterInfo
-	leaderInfo := c.client.clusterInfo.LeaderInfo
+	clusterInfo := c.client.infoAgent.GetCurClusterInfo()
+	leaderInfo := clusterInfo.LeaderInfo
 	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
 	if err != nil {
 		return "", err
@@ -72,7 +74,7 @@ func (c *ClusterOperator) State() (string, error) {
 	})
 	state, _ := protoToJson(report)
 
-	clusterPipelines, err := pipeline.NewClusterPipelines(*c.client.clusterInfo)
+	clusterPipelines, err := pipeline.NewClusterPipelines(clusterInfo)
 	if err != nil {
 		return "", err
 	}
@@ -116,7 +118,7 @@ func (v *VolumeOperator) Info() (interface{}, error) {
 }
 
 func (v *VolumeOperator) Get(key string) (Operator, error) {
-	nodeInfo := v.client.clusterInfo.NodesInfo[0]
+	nodeInfo := v.client.infoAgent.GetCurClusterInfo().NodesInfo[0]
 	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 	if err != nil {
 		return nil, err
@@ -136,7 +138,7 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 }
 
 func (v *VolumeOperator) List(key string) ([]Operator, error) {
-	nodeInfo := v.client.clusterInfo.NodesInfo[0]
+	nodeInfo := v.client.infoAgent.GetCurClusterInfo().NodesInfo[0]
 	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 	if err != nil {
 		return nil, err
@@ -160,7 +162,7 @@ func (v *VolumeOperator) List(key string) ([]Operator, error) {
 }
 
 func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
-	nodeInfo := v.client.clusterInfo.NodesInfo[0]
+	nodeInfo := v.client.infoAgent.GetCurClusterInfo().NodesInfo[0]
 	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 	if err != nil {
 		return err
@@ -178,7 +180,7 @@ func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
 //
 // The Bucket must be empty.
 func (v *VolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
-	nodeInfo := v.client.clusterInfo.NodesInfo[0]
+	nodeInfo := v.client.infoAgent.GetCurClusterInfo().NodesInfo[0]
 	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 	if err != nil {
 		return err
@@ -203,8 +205,8 @@ func (b *BucketOperator) List(prefix string) ([]Operator, error) {
 }
 
 func (b *BucketOperator) getAlayaClient(key string) (alaya.AlayaClient, error) {
-	pgID := object.GenObjPgID(b.bucketInfo, key, b.client.clusterInfo.MetaPgNum)
-	cp, err := pipeline.NewClusterPipelines(*b.client.clusterInfo)
+	pgID := object.GenObjPgID(b.bucketInfo, key, b.client.infoAgent.GetCurClusterInfo().MetaPgNum)
+	cp, err := pipeline.NewClusterPipelines(b.client.infoAgent.GetCurClusterInfo())
 	if err != nil {
 		return nil, err
 	}
@@ -223,15 +225,24 @@ func (b *BucketOperator) getAlayaClient(key string) (alaya.AlayaClient, error) {
 }
 
 func (b *BucketOperator) Remove(key string) error {
+retry:
 	alayaClient, err := b.getAlayaClient(key)
 	if err != nil {
 		return err
 	}
-	ctx, _ := alaya.SetTermToContext(context.Background(), b.client.clusterInfo.Term)
+	ctx, _ := alaya.SetTermToContext(context.Background(), b.client.infoAgent.GetCurClusterInfo().Term)
 	_, err = alayaClient.DeleteMeta(ctx, &alaya.DeleteMetaRequest{
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
+			logger.Warningf("term not match, retry")
+			err = b.client.infoAgent.UpdateCurClusterInfo()
+			if err != nil {
+				return err
+			}
+			goto retry
+		}
 		logger.Warningf("delete meta: %v failed, err: %v", object.GenObjectId(b.bucketInfo, key), err)
 	}
 	return err
@@ -246,6 +257,7 @@ func (b *BucketOperator) Info() (interface{}, error) {
 }
 
 func (b *BucketOperator) Get(key string) (Operator, error) {
+retry:
 	alayaClient, err := b.getAlayaClient(key)
 	if err != nil {
 		return nil, err
@@ -254,6 +266,14 @@ func (b *BucketOperator) Get(key string) (Operator, error) {
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
+			logger.Warningf("term not match, retry")
+			err = b.client.infoAgent.UpdateCurClusterInfo()
+			if err != nil {
+				return nil, err
+			}
+			goto retry
+		}
 		return nil, err
 	}
 	return &ObjectOperator{meta: reply}, nil

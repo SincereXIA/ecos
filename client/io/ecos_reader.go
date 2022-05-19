@@ -25,12 +25,12 @@ type EcosReader struct {
 	f   *EcosIOFactory
 
 	clusterInfo *infos.ClusterInfo
-	key         string
 	pipes       *pipeline.ClusterPipelines
 
 	curBlockIndex  int
 	curBlockOffset int
 
+	key          string
 	meta         *object.ObjectMeta
 	cachedBlocks sync.Map
 
@@ -143,9 +143,10 @@ retry:
 	// use key to get pdId
 	pgId := object.GenObjPgID(r.f.bucketInfo, r.key, 10)
 	// Use Latest ClusterInfo and Pipeline
-	metaServerIdString := r.f.pipes.GetBlockPGNodeID(pgId)[0]
+	pipes, _ := pipeline.NewClusterPipelines(r.f.infoAgent.GetCurClusterInfo())
+	metaServerIdString := pipes.GetBlockPGNodeID(pgId)[0]
 	metaServerInfo, _ := r.f.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
-	ctx, _ := alaya.SetTermToContext(r.ctx, r.f.getClusterInfo().Term)
+	ctx, _ := alaya.SetTermToContext(r.ctx, r.f.infoAgent.GetCurClusterInfo().Term)
 	metaClient, err := NewMetaClient(ctx, metaServerInfo.BaseInfo().GetNodeInfo(), r.f.config)
 	if err != nil {
 		logger.Errorf("New meta client failed, err: %v", err)
@@ -155,7 +156,10 @@ retry:
 	r.meta, err = metaClient.GetObjMeta(objID)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
-			r.f.updateClusterInfo()
+			err = r.f.infoAgent.UpdateCurClusterInfo()
+			if err != nil {
+				return err
+			}
 			goto retry
 		}
 		logger.Errorf("get objMeta failed, err: %v", err)
