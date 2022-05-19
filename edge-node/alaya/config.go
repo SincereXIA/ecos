@@ -1,5 +1,13 @@
 package alaya
 
 type Config struct {
-	basePath string
+	BasePath string
+}
+
+var DefaultConfig Config
+
+func init() {
+	DefaultConfig = Config{
+		BasePath: "./ecos-data/alaya/",
+	}
 }

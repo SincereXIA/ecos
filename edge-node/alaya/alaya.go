@@ -32,6 +32,8 @@ type Alayaer interface {
 type Alaya struct {
 	UnimplementedAlayaServer
 
+	config Config
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -342,11 +344,12 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 	}
 }
 
-func NewAlaya(ctx context.Context, watcher *watcher.Watcher,
+func NewAlaya(ctx context.Context, watcher *watcher.Watcher, config Config,
 	metaStorageRegister MetaStorageRegister, rpcServer *messenger.RpcServer) Alayaer {
 	ctx, cancel := context.WithCancel(ctx)
 	c := cleaner.NewCleaner(ctx, watcher)
 	a := Alaya{
+		config:              config,
 		ctx:                 ctx,
 		cancel:              cancel,
 		PGMessageChans:      sync.Map{},
@@ -492,7 +495,7 @@ func (a *Alaya) makeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pip
 		logger.Fatalf("Alaya: %v, create meta storage for pg: %v err: %v", a.selfInfo.RaftId, pgID, err)
 	}
 	a.PGRaftNode.Store(pgID,
-		NewAlayaRaft(a.selfInfo.RaftId, p, oldP, a.watcher, storage,
+		NewAlayaRaft(a.selfInfo.RaftId, p, oldP, a.config, a.watcher, storage,
 			c.(chan raftpb.Message), a.raftNodeStopChan))
 	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.selfInfo.RaftId, pgID)
 	metrics.GetOrRegisterCounter(watcher.MetricsAlayaPipelineCount, nil).Inc(1)

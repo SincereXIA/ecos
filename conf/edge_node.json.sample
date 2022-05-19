@@ -15,5 +15,8 @@
   },
   "GaiaConfig": {
     "BasePath": "./ecos-data/gaia"
+  },
+  "AlayaConfig": {
+    "BasePath": "/data/ecos/alaya/"
   }
 }

@@ -67,8 +67,9 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	//dbBasePath := path.Join(conf.StoragePath, "/db")
 	//metaDBPath := path.Join(dbBasePath, "/meta")
 	//metaStorage := alaya.NewStableMetaStorage(metaDBPath)
+	alayaCofig := alaya.DefaultConfig
 	metaStorageRegister := alaya.NewMemoryMetaStorageRegister()
-	a := alaya.NewAlaya(ctx, w, metaStorageRegister, rpc)
+	a := alaya.NewAlaya(ctx, w, alayaCofig, metaStorageRegister, rpc)
 
 	// Gen Gaia
 	logger.Infof("Start init Gaia ...")
