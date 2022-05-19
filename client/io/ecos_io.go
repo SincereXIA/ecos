@@ -21,8 +21,7 @@ import (
 
 // EcosIOFactory Generates EcosWriter with ClientConfig
 type EcosIOFactory struct {
-	ctx   context.Context
-	mutex sync.RWMutex
+	ctx context.Context
 
 	infoAgent  *agent.InfoAgent
 	config     *config.ClientConfig
@@ -191,9 +190,9 @@ func (f *EcosIOFactory) ListMultipartUploadJob() ([]types.MultipartUpload, error
 // GetEcosReader provide a EcosWriter for object associated with key
 func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 	return &EcosReader{
-		ctx:           f.ctx,
-		f:             f,
-		key:           key,
-		startTime:     time.Now(),
+		ctx:       f.ctx,
+		f:         f,
+		key:       key,
+		startTime: time.Now(),
 	}
 }

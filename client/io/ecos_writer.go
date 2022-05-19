@@ -81,8 +81,6 @@ func (w *EcosWriter) getCurBlock() *Block {
 
 // getUploadStream returns a new upload stream
 func (w *EcosWriter) getUploadStream(b *Block) (*UploadClient, error) {
-	w.f.mutex.RLock()
-	defer w.f.mutex.RUnlock()
 	nodes := w.pipes.GetBlockPGNodeID(b.PgId)
 	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, nodes[0])
 	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo(), w.f.config)
@@ -366,8 +364,6 @@ func (w *EcosWriter) addPartID(partID int32) bool {
 
 // WritePart will write data to EcosWriter.blocks[partID]
 func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
-	w.f.mutex.RLock()
-	defer w.f.mutex.RUnlock()
 	if !w.partObject {
 		return "", errno.MethodNotAllowed
 	}
@@ -428,6 +424,7 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 		return "", err
 	}
 	go w.uploadBlock(int(partID), w.blocks[int(partID)])
+	metrics.GetOrRegisterTimer(watcher.MetricsClientPartPutTimer, nil).UpdateSince(w.startTime)
 	return w.blocks[int(partID)].BlockId, nil
 }
 
@@ -479,14 +476,11 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 		return "", err
 	}
 	w.Status = FINISHED
-	metrics.GetOrRegisterTimer(watcher.MetricsClientPartPutTimer, nil).UpdateSince(w.startTime)
 	return hex.EncodeToString(w.objHash.Sum(nil)), nil
 }
 
 // AbortMultiPart will abort EcosWriter for multipart upload.
 func (w *EcosWriter) AbortMultiPart() error {
-	w.f.mutex.RLock()
-	defer w.f.mutex.RUnlock()
 	if !w.partObject {
 		return errno.MethodNotAllowed
 	}
@@ -547,8 +541,6 @@ func (w *EcosWriter) GetPartBlockInfo(partID int32) (*object.BlockInfo, error) {
 }
 
 func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {
-	w.f.mutex.RLock()
-	defer w.f.mutex.RUnlock()
 	nodeId := w.pipes.GetMetaPGNodeID(pgID)[0]
 	logger.Infof("META PG: %v, NODE: %v", pgID, nodeId)
 	nodeInfo, _ := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, nodeId)
@@ -641,11 +633,11 @@ retry:
 }
 
 func (w *EcosWriter) abortBlock(block *Block) {
-	node, err := w.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
+	node, err := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
 	if err != nil {
 		logger.Warningf("Abort Block: get node info failed: %v", err)
 	}
-	client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.config)
+	client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.f.config)
 	if err != nil {
 		logger.Warningf("Abort Block: get node info failed: %v", err)
 	}
