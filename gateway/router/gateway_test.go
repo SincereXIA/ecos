@@ -74,6 +74,11 @@ func TestGateway(t *testing.T) {
 	test10MBBuffer := genTestData(10 << 20)
 	reader := bytes.NewReader(test10MBBuffer)
 
+	// Test ListAllBuckets
+	t.Run("ListAllBuckets", func(t *testing.T) {
+		testListAllBuckets(t, client, 1) // ["default"]
+	})
+
 	// Create a test bucket
 	t.Run("CreateBucket", func(t *testing.T) {
 		bucketName := "test"
@@ -244,6 +249,18 @@ func TestGateway(t *testing.T) {
 		testListMultipartUploads(t, client, bucketName, false, 0)
 		testListObjects(t, client, bucketName, false, 1)
 	})
+}
+
+func testListAllBuckets(t *testing.T, client *s3.Client, wantLength int) {
+	listBucketsOutput, err := client.ListBuckets(context.TODO(), nil)
+	if err != nil {
+		t.Errorf("Failed to list buckets: %v", err)
+	}
+	assert.Equal(t, wantLength, len(listBucketsOutput.Buckets))
+	t.Log("ListAllBuckets:")
+	for _, bucket := range listBucketsOutput.Buckets {
+		t.Logf("\tBucket: %s, CreationDate: %s", *bucket.Name, bucket.CreationDate)
+	}
 }
 
 func testCreateBucket(t *testing.T, client *s3.Client, bucketName string, wantErr bool) {

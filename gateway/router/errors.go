@@ -114,7 +114,7 @@ func InvalidArgument(keyName, bucketName, resPath string, key *string) Error {
 func InvalidBucketName(bucketName *string) Error {
 	return Error{
 		Code:       common.PtrString("InvalidBucketName"),
-		Message:    common.PtrString(fmt.Sprintf("The specified bucket is not valid.")),
+		Message:    common.PtrString("The specified bucket is not valid."),
 		BucketName: bucketName,
 	}
 }
