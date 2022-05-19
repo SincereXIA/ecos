@@ -54,9 +54,9 @@ func New(config *config.ClientConfig) (*Client, error) {
 	clusterInfo := reply.GetClusterInfo()
 
 	lruPool, err := lru.NewWithEvict(DefaultFactoryPoolSize, func(key interface{}, value interface{}) {
-		switch value.(type) {
+		switch inter := value.(type) {
 		case *io.EcosIOFactory:
-			err := value.(*io.EcosIOFactory).AbortAllMultipartUploadJob()
+			err := inter.AbortAllMultipartUploadJob()
 			if err != nil {
 				return
 			}

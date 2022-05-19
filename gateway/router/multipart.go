@@ -409,7 +409,7 @@ func listMultipartUploads(c *gin.Context) {
 		Uploads:     uploadsWithPrefix,
 	}
 	delimiter := c.Query("delimiter")
-	maxUploads, err := strconv.Atoi(c.Query("maxUploads"))
+	maxUploads, _ := strconv.Atoi(c.Query("maxUploads"))
 	if maxUploads < 0 {
 		c.XML(http.StatusBadRequest, InvalidArgument("maxUploads", bucketName, c.Request.URL.Path, nil))
 		return

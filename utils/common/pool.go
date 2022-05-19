@@ -14,7 +14,6 @@ type Pool struct {
 	factory   func() (io.Closer, error)
 	curCount  int
 	maxCount  int
-	closed    bool
 }
 
 // NewPool 创建一个用来管理资源的池，这个池需要一个可以分配新资源的函数，并规定池的大小

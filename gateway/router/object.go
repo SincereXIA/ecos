@@ -61,7 +61,7 @@ func putObject(c *gin.Context) {
 				return
 			}
 			line, err = bufBody.ReadString('\n')
-			if line != "\r\n" {
+			if line != "\r\n" || err != nil {
 				c.XML(http.StatusBadRequest, IncompleteBody(bucketName, c.Request.URL.Path, key))
 			}
 		}
@@ -215,6 +215,7 @@ func getObject(c *gin.Context) {
 		}
 		c.Status(http.StatusPartialContent)
 		c.Header("Last-Modified", meta.UpdateTime.Format(http.TimeFormat))
+		c.Header("Content-Range", ranges[0].contentRange(int64(meta.ObjSize)))
 		_, err = io.CopyN(c.Writer, reader, ranges[0].length)
 		if err != nil {
 			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
@@ -286,12 +287,7 @@ type CopyObjectResult struct {
 }
 
 func parseSrcKey(src string) (bucket, key string, err error) {
-	if strings.HasPrefix(src, "/") {
-		src = src[1:]
-	}
-	if strings.HasSuffix(src, "/") {
-		src = src[:len(src)-1]
-	}
+	src = strings.Trim(src, "/")
 	if strings.Contains(src, "/") {
 		result := strings.SplitN(src, "/", 2)
 		bucket = result[0]

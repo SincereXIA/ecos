@@ -45,8 +45,5 @@ func InitParentPath(filePath string) error {
 // PathExists Check if a directory exists, return true means Exits, return false means Not Exits.
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
-	if err == nil {
-		return true
-	}
-	return false
+	return err == nil
 }

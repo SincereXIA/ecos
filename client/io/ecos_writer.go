@@ -559,9 +559,13 @@ func (w *EcosWriter) getNewBlock() *Block {
 // uploadBlock will upload a Block to Object Storage.
 func (w *EcosWriter) uploadBlock(i int, block *Block) {
 	err := block.Close()
+	if err != nil {
+		logger.Warningf("block close error: %v", err)
+		return
+	}
 	client, err := w.getUploadStream(block)
 	if err != nil {
-		logger.Errorf("Failed to get upload stream: %v", err)
+		logger.Warningf("Failed to get upload stream: %v", err)
 		return
 	}
 	// TODO (xiong): if upload is failed, now writer never can be close or writer won't know, we should fix it.

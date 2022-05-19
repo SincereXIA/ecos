@@ -129,7 +129,6 @@ func headBucket(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusOK)
-	return
 }
 
 // deleteBucket deletes an EMPTY bucket
