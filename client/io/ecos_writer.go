@@ -376,6 +376,7 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 		victim := w.blocks[int(partID)]
 		logger.Tracef("Delete duplicate part %v", victim.PartId)
 		go w.abortBlock(victim)
+		delete(w.blocks, int(partID))
 	}
 	w.blocks[int(partID)] = w.getNewBlock()
 	w.blocks[int(partID)].blockCount = int(partID)
