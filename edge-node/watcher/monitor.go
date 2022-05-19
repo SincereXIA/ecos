@@ -25,7 +25,7 @@ type Monitor interface {
 	GetNodeReport(nodeId uint64) *NodeStatusReport
 	GetEventChannel() <-chan *Event
 	Register(name string, reporter Reporter) error
-	stop()
+	Stop()
 }
 
 type Event struct {
@@ -275,7 +275,7 @@ func (m *NodeMonitor) Run() {
 	go m.pushToPrometheus()
 }
 
-func (m *NodeMonitor) stop() {
+func (m *NodeMonitor) Stop() {
 	m.cancel()
 	m.timer.Stop()
 }

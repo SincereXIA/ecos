@@ -22,7 +22,6 @@ type Config struct {
 	config.Config
 	HttpPort      uint64
 	StoragePath   string
-	AlayaConfig   alaya.Config
 	WatcherConfig watcher.Config
 	MoonConfig    moon.Config
 	AlayaConfig   alaya.Config

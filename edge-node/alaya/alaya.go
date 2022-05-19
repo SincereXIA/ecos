@@ -98,6 +98,7 @@ func (a *Alaya) checkClientTerm(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 	if clientTerm != a.watcher.GetCurrentTerm() {
+		logger.Warningf("client term %d not equal current term %d", clientTerm, a.watcher.GetCurrentTerm())
 		return 0, errno.TermNotMatch
 	}
 	return clientTerm, nil

@@ -290,6 +290,12 @@ func (w *Watcher) Run() {
 	logger.Infof("moon init success, NodeID: %v", w.GetSelfInfo().RaftId)
 }
 
+func (w *Watcher) Stop() {
+	w.Monitor.Stop()
+	w.moon.Stop()
+	w.cancelFunc()
+}
+
 func (w *Watcher) processMonitor() {
 	c := w.Monitor.GetEventChannel()
 	for {
