@@ -21,7 +21,7 @@ func (e Error) Error() string {
 func BucketAlreadyExists(bucketName string) Error {
 	return Error{
 		Code:       common.PtrString("BucketAlreadyExists"),
-		Message:    common.PtrString(fmt.Sprintf("The requested bucket name is not available. The bucket namespace is shared by all users of the system. Please select a different name and try again.")),
+		Message:    common.PtrString("The requested bucket name is not available. The bucket namespace is shared by all users of the system. Please select a different name and try again."),
 		BucketName: common.PtrString(bucketName),
 	}
 }
@@ -30,7 +30,7 @@ func BucketAlreadyExists(bucketName string) Error {
 func BucketAlreadyOwnedByYou(bucketName string) Error {
 	return Error{
 		Code:       common.PtrString("BucketAlreadyOwnedByYou"),
-		Message:    common.PtrString(fmt.Sprintf("The bucket you tried to create already exists, and you own it.")),
+		Message:    common.PtrString("The bucket you tried to create already exists, and you own it."),
 		BucketName: common.PtrString(bucketName),
 	}
 }
@@ -39,7 +39,7 @@ func BucketAlreadyOwnedByYou(bucketName string) Error {
 func BucketNotEmpty(bucketName string) Error {
 	return Error{
 		Code:       common.PtrString("BucketNotEmpty"),
-		Message:    common.PtrString(fmt.Sprintf("The bucket you tried to delete is not empty.")),
+		Message:    common.PtrString("The bucket you tried to delete is not empty."),
 		BucketName: common.PtrString(bucketName),
 	}
 }

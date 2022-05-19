@@ -8,13 +8,16 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"fmt"
+	"github.com/rcrowley/go-metrics"
 	"io"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type EcosReader struct {
@@ -30,6 +33,9 @@ type EcosReader struct {
 	meta         *object.ObjectMeta
 	config       *config.ClientConfig
 	cachedBlocks sync.Map
+
+	// For Go Metrics
+	startTime time.Time
 }
 
 func (r *EcosReader) genPipelines() error {
@@ -126,6 +132,9 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 	waitGroup.Wait()
 	logger.Tracef("read %d bytes done", count)
 
+	if err == io.EOF {
+		metrics.GetOrRegisterTimer(watcher.MetricsClientGetTimer, nil).UpdateSince(r.startTime)
+	}
 	return int(count), err
 }
 
@@ -210,42 +219,37 @@ func (r *EcosReader) calcBlocks(expect int) ([]calcBlock, error) {
 }
 
 func (r *EcosReader) Seek(offset int64, whence int) (newOffset int64, err error) {
+	errFmt := "seek out of range, offset: %d, size: %d"
 	if r.meta == nil || r.pipes == nil {
 		err = r.genPipelines()
 		if err != nil {
 			logger.Errorf("gen pipelines failed, err: %v", err)
+			return 0, err
 		}
+	}
+	var curOffset int64 = 0
+	for i := 0; i <= r.curBlockIndex; i++ {
+		curOffset += int64(r.meta.Blocks[i].BlockSize)
 	}
 	switch whence {
 	case io.SeekStart:
-		if newOffset = offset; newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
-			return 0, fmt.Errorf("seek out of range, offset: %d, size: %d", newOffset, r.meta.ObjSize)
-		}
+		newOffset = offset
 		r.curBlockIndex = 0
 		r.curBlockOffset = 0
-		_, err = r.calcBlocks(int(offset))
-		return
 	case io.SeekCurrent:
-		var curOffset int64 = 0
-		for i := 0; i <= r.curBlockIndex; i++ {
-			curOffset += int64(r.meta.Blocks[i].BlockSize)
-		}
-		if newOffset = curOffset + offset; newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
-			return 0, fmt.Errorf("seek out of range, offset: %d, size: %d", newOffset, r.meta.ObjSize)
-		}
-		_, err = r.calcBlocks(int(offset))
-		if err != nil {
-			return
-		}
+		newOffset = curOffset + offset
 	case io.SeekEnd:
-		if newOffset = int64(r.meta.ObjSize) - offset; newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
-			return 0, fmt.Errorf("seek out of range, offset: %d, size: %d", newOffset, r.meta.ObjSize)
-		}
 		newOffset = int64(r.meta.ObjSize) - offset
-		_, err = r.calcBlocks(int(newOffset))
-		if err != nil {
-			return
-		}
+		offset = newOffset - curOffset
+	default:
+		return 0, errno.IllegalStatus
 	}
-	return 0, errno.IllegalStatus
+	_, err = r.calcBlocks(int(offset))
+	if err != nil {
+		return
+	}
+	if newOffset < 0 || newOffset > int64(r.meta.ObjSize) {
+		return 0, fmt.Errorf(errFmt, newOffset, r.meta.ObjSize)
+	}
+	return
 }

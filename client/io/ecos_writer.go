@@ -6,14 +6,17 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"encoding/hex"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/rcrowley/go-metrics"
 	"hash"
 	"io"
+	"time"
 )
 
 type localChunk struct {
@@ -54,6 +57,9 @@ type EcosWriter struct {
 	// for multipart upload
 	partObject bool
 	partIDs    []int32
+
+	// For Go Metrics
+	startTime time.Time
 }
 
 // getCurBlock ensures to return with a Block can put new Chunk in
@@ -235,6 +241,7 @@ func (w *EcosWriter) Close() error {
 		return err
 	}
 	w.Status = FINISHED
+	metrics.GetOrRegisterTimer(watcher.MetricsClientPutTimer, nil).UpdateSince(w.startTime)
 	return nil
 }
 
@@ -252,7 +259,8 @@ func (w *EcosWriter) Abort() error {
 	for i := 0; i < w.blockCount; i++ {
 		block := <-w.finishedBlocks
 		logger.Debugf("block aborted: %v", block.BlockId)
-		// TODO: Delete block from block server
+		// Abort Blocks
+		go w.abortBlock(block)
 	}
 	return nil
 }
@@ -363,23 +371,12 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	if partID < 1 || partID > 10000 {
 		return "", errno.InvalidArgument
 	}
-	// TODO: Delete duplicate part
 	noDuplicate := w.addPartID(partID)
 	if !noDuplicate {
 		victim := w.blocks[int(partID)]
 		logger.Tracef("Delete duplicate part %v", victim.PartId)
-		node, err := w.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(victim.PgId)[0])
-		if err != nil {
-			return "", err
-		}
-		client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.config)
-		if err != nil {
-			return "", err
-		}
-		err = victim.Abort(client)
-		if err != nil {
-			return "", err
-		}
+		go w.abortBlock(victim)
+		delete(w.blocks, int(partID))
 	}
 	w.blocks[int(partID)] = w.getNewBlock()
 	w.blocks[int(partID)].blockCount = int(partID)
@@ -403,7 +400,6 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 			if err == io.EOF {
 				break
 			}
-			// TODO: Abort
 			return "", err
 		}
 	}
@@ -465,6 +461,7 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 		return "", err
 	}
 	w.Status = FINISHED
+	metrics.GetOrRegisterTimer(watcher.MetricsClientPartPutTimer, nil).UpdateSince(w.startTime)
 	return hex.EncodeToString(w.objHash.Sum(nil)), nil
 }
 
@@ -563,9 +560,13 @@ func (w *EcosWriter) getNewBlock() *Block {
 // uploadBlock will upload a Block to Object Storage.
 func (w *EcosWriter) uploadBlock(i int, block *Block) {
 	err := block.Close()
+	if err != nil {
+		logger.Warningf("block close error: %v", err)
+		return
+	}
 	client, err := w.getUploadStream(block)
 	if err != nil {
-		logger.Errorf("Failed to get upload stream: %v", err)
+		logger.Warningf("Failed to get upload stream: %v", err)
 		return
 	}
 	// TODO (xiong): if upload is failed, now writer never can be close or writer won't know, we should fix it.
@@ -605,4 +606,27 @@ func (w *EcosWriter) uploadMeta(meta *object.ObjectMeta) error {
 	}
 	logger.Infof("Upload ObjectMeta for %v: success", w.key)
 	return nil
+}
+
+func (w *EcosWriter) abortBlock(block *Block) {
+	node, err := w.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
+	if err != nil {
+		logger.Warningf("Abort Block: get node info failed: %v", err)
+	}
+	client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.config)
+	if err != nil {
+		logger.Warningf("Abort Block: get node info failed: %v", err)
+	}
+	abortResult := make(chan error)
+	go func() {
+		abortResult <- block.Abort(client)
+	}()
+	select {
+	case err := <-abortResult:
+		if err != nil {
+			logger.Warningf("Abort Block: %v", err)
+		}
+	case <-time.After(time.Second * 10):
+		logger.Warningf("Abort Block: %v", errno.BlockOperationTimeout)
+	}
 }

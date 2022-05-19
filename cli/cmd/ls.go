@@ -22,6 +22,5 @@ var lsCmd = &cobra.Command{
 			return
 		}
 		fmt.Println("syntax error")
-		return
 	},
 }

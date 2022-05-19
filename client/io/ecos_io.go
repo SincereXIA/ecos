@@ -18,6 +18,7 @@ import (
 	"hash"
 	"io"
 	"sync"
+	"time"
 )
 
 // EcosIOFactory Generates EcosWriter with ClientConfig
@@ -53,7 +54,6 @@ func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) 
 	}
 	clusterInfo := reply.GetClusterInfo()
 	// TODO: Retry?
-	// TODO: Get pgNum, groupNum from moon
 	pipes, err := pipeline.NewClusterPipelines(clusterInfo)
 	if err != nil {
 		logger.Errorf("get cluster pipelines fail: %v", err)
@@ -117,6 +117,7 @@ func (f *EcosIOFactory) GetEcosWriter(key string) *EcosWriter {
 		blocks:         map[int]*Block{},
 		objHash:        objHash,
 		finishedBlocks: make(chan *Block),
+		startTime:      time.Now(),
 	}
 }
 
@@ -219,5 +220,6 @@ func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 		curBlockIndex: 0,
 		meta:          nil,
 		config:        f.config,
+		startTime:     time.Now(),
 	}
 }
