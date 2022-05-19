@@ -88,6 +88,14 @@ func TestClient(t *testing.T) {
 		time.Sleep(time.Second)
 	})
 
+	t.Run("list bucket", func(t *testing.T) {
+		bucketInfo := infos.GenBucketInfo("root", "test", "root")
+		err = client.GetVolumeOperator().CreateBucket(bucketInfo)
+		buckets, err := client.GetVolumeOperator().List("")
+		assert.NoError(t, err, "Failed to list buckets")
+		assert.Equal(t, 2, len(buckets), "bucket count not match")
+	})
+
 	t.Run("test metrics", func(t *testing.T) {
 		metaPutTime := metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaPutTimer, nil).Mean()
 		t.Logf("meta put time: %v", metaPutTime)

@@ -14,6 +14,8 @@ service Moon {
   rpc ProposeInfo(ProposeInfoRequest) returns (ProposeInfoReply) {};
   // GetInfo 从对应 InfoStorage 中取得 Info
   rpc GetInfo(GetInfoRequest) returns (GetInfoReply) {};
+  // ListInfo 从对应 InfoStorage 中取得指定前缀的 Info 列表
+  rpc ListInfo(ListInfoRequest) returns (ListInfoReply) {};
 }
 
 message ProposeInfoRequest {
@@ -42,4 +44,14 @@ message GetInfoRequest {
 message GetInfoReply {
   Result result = 1;
   BaseInfo base_info = 2;
+}
+
+message ListInfoRequest {
+  InfoType info_type = 2;
+  string prefix = 3;
+}
+
+message ListInfoReply {
+  Result result = 1;
+  repeated BaseInfo base_infos = 2;
 }

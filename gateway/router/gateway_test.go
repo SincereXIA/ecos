@@ -231,11 +231,11 @@ func TestGateway(t *testing.T) {
 		lastContent, _ := io.ReadAll(partFile[0])
 		fullContent = append(fullContent, lastContent...)
 		result := bytes.Compare(fullContent, content)
-		assert.True(t, result == 0)
-		if result != 0 {
-			t.Log("Expected: \n", string(fullContent))
-			t.Log("Actual: \n", string(content))
-		}
+		assert.Zero(t, result)
+		//if result != 0 {
+		//	t.Log("Expected: \n", string(fullContent))
+		//	t.Log("Actual: \n", string(content))
+		//}
 
 		uploadId = testCreateMultipartUpload(t, client, bucketName, "testMultipartUpload2.obj", false)
 		_, _ = reader.Seek(0, io.SeekStart)

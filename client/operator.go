@@ -21,6 +21,7 @@ import (
 
 type Operator interface {
 	Get(key string) (Operator, error)
+	List(prefix string) ([]Operator, error)
 	Remove(key string) error
 	State() (string, error)
 	Info() (interface{}, error)
@@ -28,6 +29,10 @@ type Operator interface {
 
 type ClusterOperator struct {
 	client *Client
+}
+
+func (c *ClusterOperator) List(prefix string) ([]Operator, error) {
+	panic("implement me")
 }
 
 func (c *ClusterOperator) Get(key string) (Operator, error) {
@@ -131,6 +136,30 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 	}, err
 }
 
+func (v *VolumeOperator) List(key string) ([]Operator, error) {
+	nodeInfo := v.client.clusterInfo.NodesInfo[0]
+	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+	if err != nil {
+		return nil, err
+	}
+	moonClient := moon.NewMoonClient(conn)
+	reply, err := moonClient.ListInfo(context.Background(), &moon.ListInfoRequest{
+		InfoType: infos.InfoType_BUCKET_INFO,
+		Prefix:   infos.GenBucketID(v.volumeID, key),
+	})
+	if err != nil {
+		return nil, err
+	}
+	var buckets []Operator
+	for _, info := range reply.BaseInfos {
+		buckets = append(buckets, &BucketOperator{
+			bucketInfo: info.GetBucketInfo(),
+			client:     v.client,
+		})
+	}
+	return buckets, nil
+}
+
 func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
 	nodeInfo := v.client.clusterInfo.NodesInfo[0]
 	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
@@ -167,6 +196,11 @@ func (v *VolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
 type BucketOperator struct {
 	bucketInfo *infos.BucketInfo
 	client     *Client
+}
+
+func (b *BucketOperator) List(prefix string) ([]Operator, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (b *BucketOperator) getAlayaClient(key string) (alaya.AlayaClient, error) {
@@ -227,6 +261,10 @@ func (b *BucketOperator) Get(key string) (Operator, error) {
 
 type ObjectOperator struct {
 	meta *object.ObjectMeta
+}
+
+func (o *ObjectOperator) List(prefix string) ([]Operator, error) {
+	panic("implement me")
 }
 
 func (o *ObjectOperator) Get(key string) (Operator, error) {
