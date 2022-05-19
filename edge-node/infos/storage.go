@@ -93,6 +93,17 @@ func (register *StorageRegister) Get(infoType InfoType, id string) (Information,
 	return InvalidInfo{}, errno.InfoTypeNotSupport
 }
 
+// List will return the Information requested from corresponding Storage
+// by prefix, the Storage must Register before.
+func (register *StorageRegister) List(infoType InfoType, prefix string) ([]Information, error) {
+	register.rwMutex.RLock()
+	defer register.rwMutex.RUnlock()
+	if storage, ok := register.storageMap[infoType]; ok {
+		return storage.List(prefix)
+	}
+	return nil, errno.InfoTypeNotSupport
+}
+
 // GetSnapshot will return a snapshot of all Information from corresponding Storage
 func (register *StorageRegister) GetSnapshot() ([]byte, error) {
 	register.rwMutex.RLock()

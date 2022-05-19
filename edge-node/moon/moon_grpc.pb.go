@@ -25,6 +25,8 @@ type MoonClient interface {
 	ProposeInfo(ctx context.Context, in *ProposeInfoRequest, opts ...grpc.CallOption) (*ProposeInfoReply, error)
 	// GetInfo 从对应 InfoStorage 中取得 Info
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoReply, error)
+	// ListInfo 从对应 InfoStorage 中取得指定前缀的 Info 列表
+	ListInfo(ctx context.Context, in *ListInfoRequest, opts ...grpc.CallOption) (*ListInfoReply, error)
 }
 
 type moonClient struct {
@@ -62,6 +64,15 @@ func (c *moonClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...gr
 	return out, nil
 }
 
+func (c *moonClient) ListInfo(ctx context.Context, in *ListInfoRequest, opts ...grpc.CallOption) (*ListInfoReply, error) {
+	out := new(ListInfoReply)
+	err := c.cc.Invoke(ctx, "/messenger.Moon/ListInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MoonServer is the server API for Moon service.
 // All implementations must embed UnimplementedMoonServer
 // for forward compatibility
@@ -72,6 +83,8 @@ type MoonServer interface {
 	ProposeInfo(context.Context, *ProposeInfoRequest) (*ProposeInfoReply, error)
 	// GetInfo 从对应 InfoStorage 中取得 Info
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoReply, error)
+	// ListInfo 从对应 InfoStorage 中取得指定前缀的 Info 列表
+	ListInfo(context.Context, *ListInfoRequest) (*ListInfoReply, error)
 	mustEmbedUnimplementedMoonServer()
 }
 
@@ -87,6 +100,9 @@ func (UnimplementedMoonServer) ProposeInfo(context.Context, *ProposeInfoRequest)
 }
 func (UnimplementedMoonServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
+}
+func (UnimplementedMoonServer) ListInfo(context.Context, *ListInfoRequest) (*ListInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListInfo not implemented")
 }
 func (UnimplementedMoonServer) mustEmbedUnimplementedMoonServer() {}
 
@@ -155,6 +171,24 @@ func _Moon_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Moon_ListInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MoonServer).ListInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/messenger.Moon/ListInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MoonServer).ListInfo(ctx, req.(*ListInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Moon_ServiceDesc is the grpc.ServiceDesc for Moon service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -173,6 +207,10 @@ var Moon_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetInfo",
 			Handler:    _Moon_GetInfo_Handler,
+		},
+		{
+			MethodName: "ListInfo",
+			Handler:    _Moon_ListInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

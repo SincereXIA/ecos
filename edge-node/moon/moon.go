@@ -185,6 +185,27 @@ func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoRepl
 	}, nil
 }
 
+func (m *Moon) ListInfo(ctx context.Context, request *ListInfoRequest) (*ListInfoReply, error) {
+	if m.isStopped() {
+		return nil, errors.New("moon is stopped")
+	}
+	result, err := m.infoStorageRegister.List(request.InfoType, request.Prefix)
+	if err != nil {
+		logger.Warningf("list info from storage register fail: %v", err)
+		return nil, err
+	}
+	baseInfos := make([]*infos.BaseInfo, 0, len(result))
+	for _, info := range result {
+		baseInfos = append(baseInfos, info.BaseInfo())
+	}
+	return &ListInfoReply{
+		Result: &common.Result{
+			Status: common.Result_OK,
+		},
+		BaseInfos: baseInfos,
+	}, nil
+}
+
 func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Information, error) {
 	if m.isStopped() {
 		return nil, errors.New("moon is stopped")

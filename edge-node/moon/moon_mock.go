@@ -94,6 +94,21 @@ func (mr *MockInfoControllerMockRecorder) IsLeader() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLeader", reflect.TypeOf((*MockInfoController)(nil).IsLeader))
 }
 
+// ListInfo mocks base method.
+func (m *MockInfoController) ListInfo(arg0 context.Context, arg1 *ListInfoRequest) (*ListInfoReply, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListInfo", arg0, arg1)
+	ret0, _ := ret[0].(*ListInfoReply)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListInfo indicates an expected call of ListInfo.
+func (mr *MockInfoControllerMockRecorder) ListInfo(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListInfo", reflect.TypeOf((*MockInfoController)(nil).ListInfo), arg0, arg1)
+}
+
 // NodeInfoChanged mocks base method.
 func (m *MockInfoController) NodeInfoChanged(nodeInfo *infos.NodeInfo) {
 	m.ctrl.T.Helper()

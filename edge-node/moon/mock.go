@@ -4,6 +4,7 @@ import (
 	"context"
 	"ecos/edge-node/infos"
 	"ecos/messenger"
+	"ecos/messenger/common"
 	"github.com/golang/mock/gomock"
 	"sync"
 )
@@ -46,6 +47,24 @@ func (state *State) GetInfo(_ context.Context, req *GetInfoRequest) (*GetInfoRep
 	}, nil
 }
 
+func (state *State) ListInfo(_ context.Context, req *ListInfoRequest) (*ListInfoReply, error) {
+	infoType := req.InfoType
+	result, err := state.InfoStorageRegister.List(infoType, req.Prefix)
+	if err != nil {
+		return nil, err
+	}
+	baseInfos := make([]*infos.BaseInfo, 0, len(result))
+	for _, info := range result {
+		baseInfos = append(baseInfos, info.BaseInfo())
+	}
+	return &ListInfoReply{
+		Result: &common.Result{
+			Status: common.Result_OK,
+		},
+		BaseInfos: baseInfos,
+	}, nil
+}
+
 func (state *State) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	state.mutex.Lock()
 	defer state.mutex.Unlock()
@@ -73,5 +92,6 @@ func InitMock(m *MockInfoController, rpcServer *messenger.RpcServer,
 	m.EXPECT().ProposeConfChangeAddNode(gomock.Any(), gomock.Any()).AnyTimes()
 	m.EXPECT().GetLeaderID().DoAndReturn(state.GetLeaderID).AnyTimes()
 	m.EXPECT().Stop().AnyTimes()
+	m.EXPECT().ListInfo(gomock.Any(), gomock.Any()).DoAndReturn(state.ListInfo).AnyTimes()
 	RegisterMoonServer(rpcServer, m)
 }
