@@ -2,9 +2,12 @@ package router
 
 import (
 	"ecos/utils/logger"
+	"encoding/xml"
 	"github.com/gin-gonic/gin"
 	"github.com/rcrowley/go-metrics"
+	timeout "github.com/vearne/gin-timeout"
 	"net/http"
+	"time"
 )
 
 func NewRouter(cfg Config) *gin.Engine {
@@ -21,6 +24,18 @@ func NewRouter(cfg Config) *gin.Engine {
 	}
 	InitClient(clientConfig)
 	router := gin.Default()
+	timeoutMsg, _ := xml.Marshal(RequestTimeout(nil))
+	router.Use(timeout.Timeout(
+		timeout.WithTimeout(time.Minute),
+		timeout.WithErrorHttpCode(http.StatusRequestTimeout),
+		timeout.WithDefaultMsg(string(timeoutMsg)),
+		timeout.WithCallBack(func(r *http.Request) {
+			logger.Warningf("timeout happen, url: %s", r.URL.String())
+		})))
+	router.Use(func(c *gin.Context) {
+		c.Header("Server", "ECOS")
+		c.Header("Accept-Ranges", "bytes")
+	})
 	router.GET("/", listBuckets)
 	router.HEAD("/", getMetrics)
 	// Bucket Routes
@@ -40,10 +55,6 @@ func NewRouter(cfg Config) *gin.Engine {
 		bucketRouter.HEAD("/*key", objectLevelHeadHandler)
 		bucketRouter.POST("/*key", objectLevelPostHandler)
 	}
-	router.Use(func(c *gin.Context) {
-		c.Header("Server", "ECOS")
-		c.Header("Accept-Ranges", "bytes")
-	})
 	return router
 }
 

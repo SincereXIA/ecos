@@ -306,6 +306,15 @@ func RequestIsNotMultiPartContent(bucketName, resPath string) Error {
 	}
 }
 
+// RequestTimeout 408
+func RequestTimeout(resPath *string) Error {
+	return Error{
+		Code:     common.PtrString("RequestTimeout"),
+		Message:  common.PtrString("Your socket connection to the server was not read from or written to within the timeout period."),
+		Resource: resPath,
+	}
+}
+
 // SignatureDoesNotMatch 403
 func SignatureDoesNotMatch(bucketName, resPath string, key *string) Error {
 	return Error{
