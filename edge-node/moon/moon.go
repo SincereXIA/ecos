@@ -97,6 +97,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 			runtime.Gosched()
 		}
 	}
+	logger.Infof("propose info request: %v SUCCESS", request.Id)
 
 	return &ProposeInfoReply{
 		Result: &common.Result{
@@ -271,7 +272,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 		config:               config,
 		status:               StatusInit,
 		infoStorageRegister:  register,
-		appliedRequestChan:   make(chan *ProposeInfoRequest, 100),
+		appliedRequestChan:   make(chan *ProposeInfoRequest, 10000),
 		appliedConfErrorChan: make(chan error),
 	}
 	leaderInfo := config.ClusterInfo.LeaderInfo

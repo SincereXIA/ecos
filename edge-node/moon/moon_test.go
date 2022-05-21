@@ -107,7 +107,30 @@ func testMoon(t *testing.T, mock bool) {
 		}
 		_, err := moon.ProposeInfo(context.Background(), request)
 		assert.NoError(t, err)
-		time.Sleep(time.Second * 1)
+	})
+
+	t.Run("propose bucket info", func(t *testing.T) {
+		for i := 0; i < 200; i++ {
+			moon := moons[leader-1]
+			request := &ProposeInfoRequest{
+				Operate: ProposeInfoRequest_ADD,
+				Id:      "/root/bucket" + strconv.Itoa(i),
+				BaseInfo: &infos.BaseInfo{
+					Info: &infos.BaseInfo_BucketInfo{
+						BucketInfo: &infos.BucketInfo{
+							VolumeId:   "/root/",
+							BucketName: "bucket" + strconv.Itoa(i),
+							UserId:     "root",
+							GroupId:    "root",
+							Mode:       0,
+							Config:     nil,
+						},
+					},
+				},
+			}
+			_, err := moon.ProposeInfo(context.Background(), request)
+			assert.NoError(t, err)
+		}
 	})
 
 	t.Run("get info", func(t *testing.T) {

@@ -57,7 +57,7 @@ type RaftNode struct {
 	logger    *zap.Logger
 }
 
-var defaultSnapshotCount uint64 = 100 // set 100 for test
+var defaultSnapshotCount uint64 = 2000 // set 100 for test
 
 func NewRaftNode(id int, ctx context.Context, peers []raft.Peer, basePath string, readyC chan bool, getSnapshot func() ([]byte, error)) (chan *snap.Snapshotter, *RaftNode) {
 
@@ -317,7 +317,7 @@ func (rc *RaftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	rc.appliedIndex = snapshotToSave.Metadata.Index
 }
 
-var snapshotCatchUpEntriesN uint64 = 100 // set 100 for test
+var snapshotCatchUpEntriesN uint64 = 2000 // set 100 for test
 
 func (rc *RaftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
 	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
