@@ -54,7 +54,7 @@ func TestClient(t *testing.T) {
 	objectSize := 1024 * 1024 * 10 //10M
 	for i := 0; i < objectNum; i++ {
 		data := genTestData(objectSize)
-		writer := factory.GetEcosWriter("/test" + strconv.Itoa(i) + "/ecos-test")
+		writer := factory.GetEcosWriter("/test1" + strconv.Itoa(i) + "/ecos-test")
 		size, err := writer.Write(data)
 		if err != nil {
 			t.Errorf("Failed to write data: %v", err)
@@ -64,6 +64,39 @@ func TestClient(t *testing.T) {
 		assert.Equal(t, objectSize, size, "data size not match")
 	}
 
+	t.Run("test term change", func(t *testing.T) {
+		oldTerm := watchers[0].GetCurrentTerm()
+		watchers[8].Monitor.Stop()
+		//watcher.WaitAllTestWatcherOK(watchers[0:8])
+		for oldTerm == watchers[0].GetCurrentTerm() {
+			time.Sleep(time.Second)
+		}
+	})
+
+	t.Run("put object", func(t *testing.T) {
+		for i := 0; i < objectNum; i++ {
+			data := genTestData(objectSize)
+			writer := factory.GetEcosWriter("/test2" + strconv.Itoa(i) + "/ecos-test")
+			size, err := writer.Write(data)
+			if err != nil {
+				t.Errorf("Failed to write data: %v", err)
+			}
+			err = writer.Close()
+			assert.NoError(t, err, "Failed to write data")
+			assert.Equal(t, objectSize, size, "data size not match")
+		}
+	})
+
+	t.Run("get object", func(t *testing.T) {
+		reader := factory.GetEcosReader("/test20/ecos-test")
+		data := make([]byte, objectSize)
+		size, err := reader.Read(data)
+		if err != nil && err != io.EOF {
+			t.Errorf("Failed to read data: %v", err)
+		}
+		assert.Equal(t, objectSize, size, "data size not match")
+	})
+
 	t.Run("test get cluster report", func(t *testing.T) {
 		operator := client.GetClusterOperator()
 		state, err := operator.State()
@@ -71,8 +104,8 @@ func TestClient(t *testing.T) {
 		t.Log(state)
 	})
 
-	t.Run("test get object meta", func(t *testing.T) {
-		meta, err := client.ListObjects(ctx, bucketName, "")
+	t.Run("test list object meta", func(t *testing.T) {
+		meta, err := client.ListObjects(ctx, bucketName, "/test1")
 		assert.NoError(t, err, "Failed to list objects")
 		assert.Equal(t, objectNum, len(meta), "object count not match")
 	})
@@ -81,9 +114,9 @@ func TestClient(t *testing.T) {
 		operator := client.GetVolumeOperator()
 		bucket, err := operator.Get("default")
 		assert.NoError(t, err, "Failed to get bucket")
-		err = bucket.Remove("/test0/ecos-test")
+		err = bucket.Remove("/test10/ecos-test")
 		assert.NoError(t, err, "Failed to remove object")
-		_, err = bucket.Get("/test0/ecos-test")
+		_, err = bucket.Get("/test10/ecos-test")
 		assert.Error(t, err, "get removed object should fail")
 		time.Sleep(time.Second)
 	})
@@ -95,7 +128,6 @@ func TestClient(t *testing.T) {
 		assert.NoError(t, err, "Failed to list buckets")
 		assert.Equal(t, 2, len(buckets), "bucket count not match")
 	})
-
 	t.Run("test metrics", func(t *testing.T) {
 		metaPutTime := metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaPutTimer, nil).Mean()
 		t.Logf("meta put time: %v", metaPutTime)

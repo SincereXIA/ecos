@@ -1,7 +1,6 @@
 package router
 
 import (
-	"ecos/client/config"
 	"ecos/utils/logger"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -15,7 +14,7 @@ func NewRouter(cfg Config) *gin.Engine {
 		logger.Errorf("Client already initialized")
 		return nil
 	}
-	clientConfig := config.DefaultConfig
+	clientConfig := cfg.ClientConfig
 	if cfg.Host != "" {
 		clientConfig.NodeAddr = cfg.Host
 	}

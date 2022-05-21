@@ -2,8 +2,7 @@ package io
 
 import (
 	"context"
-	"ecos/client/config"
-	agent "ecos/client/info-agent"
+	"ecos/edge-node/alaya"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
@@ -15,23 +14,24 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type EcosReader struct {
-	infoAgent   *agent.InfoAgent
+	ctx context.Context
+	f   *EcosIOFactory
+
 	clusterInfo *infos.ClusterInfo
-	bucketInfo  *infos.BucketInfo
-	key         string
 	pipes       *pipeline.ClusterPipelines
 
 	curBlockIndex  int
 	curBlockOffset int
 
+	key          string
 	meta         *object.ObjectMeta
-	config       *config.ClientConfig
 	cachedBlocks sync.Map
 
 	// For Go Metrics
@@ -47,7 +47,7 @@ func (r *EcosReader) genPipelines() error {
 	if err != nil {
 		return err
 	}
-	r.pipes, err = pipeline.NewClusterPipelines(r.clusterInfo)
+	r.pipes, err = pipeline.NewClusterPipelines(*r.clusterInfo)
 	return err
 }
 
@@ -58,13 +58,13 @@ func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 	}
 	pgID := object.GenBlockPgID(blockInfo.BlockId, r.clusterInfo.BlockPgNum)
 	gaiaServerId := r.pipes.GetBlockPG(pgID)
-	info, err := r.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId[0], 10))
+	info, err := r.f.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId[0], 10))
 	gaiaServerInfo := info.BaseInfo().GetNodeInfo()
 	if err != nil {
 		logger.Errorf("get gaia server info failed, err: %v", err)
 	}
 	logger.Debugf("get block %10.10s from %v", blockID, gaiaServerInfo.RaftId)
-	client, err := NewGaiaClient(gaiaServerInfo, r.config)
+	client, err := NewGaiaClient(gaiaServerInfo, r.f.config)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		logger.Warningf("blockClient responds err: %v", err)
 		return nil, err
 	}
-	block := make([]byte, 0, r.bucketInfo.Config.BlockSize)
+	block := make([]byte, 0, r.f.bucketInfo.Config.BlockSize)
 	for {
 		rs, err := res.Recv()
 		if err != nil {
@@ -139,18 +139,29 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *EcosReader) getObjMeta() error {
+retry:
 	// use key to get pdId
-	pgId := object.GenObjPgID(r.bucketInfo, r.key, 10)
-	metaServerIdString := r.pipes.GetBlockPGNodeID(pgId)[0]
-	metaServerInfo, _ := r.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
-	metaClient, err := NewMetaClient(metaServerInfo.BaseInfo().GetNodeInfo(), r.config)
+	pgId := object.GenObjPgID(r.f.bucketInfo, r.key, 10)
+	// Use Latest ClusterInfo and Pipeline
+	pipes, _ := pipeline.NewClusterPipelines(r.f.infoAgent.GetCurClusterInfo())
+	metaServerIdString := pipes.GetBlockPGNodeID(pgId)[0]
+	metaServerInfo, _ := r.f.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
+	ctx, _ := alaya.SetTermToContext(r.ctx, r.f.infoAgent.GetCurClusterInfo().Term)
+	metaClient, err := NewMetaClient(ctx, metaServerInfo.BaseInfo().GetNodeInfo(), r.f.config)
 	if err != nil {
 		logger.Errorf("New meta client failed, err: %v", err)
 		return err
 	}
-	objID := object.GenObjectId(r.bucketInfo, r.key)
+	objID := object.GenObjectId(r.f.bucketInfo, r.key)
 	r.meta, err = metaClient.GetObjMeta(objID)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
+			err = r.f.infoAgent.UpdateCurClusterInfo()
+			if err != nil {
+				return err
+			}
+			goto retry
+		}
 		logger.Errorf("get objMeta failed, err: %v", err)
 		return err
 	}
@@ -159,7 +170,7 @@ func (r *EcosReader) getObjMeta() error {
 }
 
 func (r *EcosReader) getHistoryClusterInfo() error {
-	info, err := r.infoAgent.Get(infos.InfoType_CLUSTER_INFO, strconv.FormatUint(r.meta.Term, 10))
+	info, err := r.f.infoAgent.Get(infos.InfoType_CLUSTER_INFO, strconv.FormatUint(r.meta.Term, 10))
 	if err != nil {
 		logger.Errorf("get term %v cluster info failed, err: %v", r.meta.Term, err)
 		return err

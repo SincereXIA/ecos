@@ -19,7 +19,7 @@ type Cleaner struct {
 func (c *Cleaner) RemoveBlock(term uint64, blockInfo *object.BlockInfo) error {
 	clusterInfo := c.watcher.GetCurrentClusterInfo()
 	pgID := object.GenBlockPgID(blockInfo.BlockId, clusterInfo.BlockPgNum)
-	clusterPipelines, _ := pipeline.NewClusterPipelines(&clusterInfo)
+	clusterPipelines, _ := pipeline.NewClusterPipelines(clusterInfo)
 	gaiaID := clusterPipelines.GetBlockPG(pgID)[0]
 	info, err := c.watcher.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaID, 10))
 	if err != nil {

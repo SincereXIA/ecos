@@ -73,7 +73,7 @@ func (a *Alaya) getRaftNode(pgID uint64) *Raft {
 	return raft.(*Raft)
 }
 
-func (a *Alaya) calculateObjectPGID(objectID string) uint64 {
+func (a *Alaya) calculateObjectPGID(term uint64, objectID string) uint64 {
 	_, bucketID, key, _, err := object.SplitID(objectID)
 	if err != nil {
 		return 0
@@ -84,20 +84,32 @@ func (a *Alaya) calculateObjectPGID(objectID string) uint64 {
 		return 0
 	}
 	bucketInfo := info.BaseInfo().GetBucketInfo()
-	pgID := object.GenObjPgID(bucketInfo, key, a.watcher.GetCurrentClusterInfo().MetaPgNum)
+	clusterInfo, err := a.watcher.GetClusterInfoByTerm(term)
+	if err != nil {
+		return 0
+	}
+	pgID := object.GenObjPgID(bucketInfo, key, clusterInfo.MetaPgNum)
 	return pgID
 }
 
-func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
+func (a *Alaya) checkClientTerm(ctx context.Context) (uint64, error) {
+	clientTerm, err := GetTermFromContext(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if clientTerm != a.watcher.GetCurrentTerm() {
+		logger.Warningf("client term %d not equal current term %d", clientTerm, a.watcher.GetCurrentTerm())
+		return 0, errno.TermNotMatch
+	}
+	return clientTerm, nil
+}
+
+func (a *Alaya) checkObject(term uint64, meta *object.ObjectMeta) (err error) {
 	// clear meta object id
 	meta.ObjId = object.CleanObjectKey(meta.ObjId)
 
 	// check if meta belongs to this PG
-	pgID := a.calculateObjectPGID(meta.ObjId)
-	if meta.Term != a.watcher.GetCurrentTerm() {
-		logger.Errorf("meta term not match, meta term: %v, current term: %v", meta.Term, a.watcher.GetCurrentTerm())
-		return errno.TermNotMatch
-	}
+	pgID := a.calculateObjectPGID(term, meta.ObjId)
 	if meta.PgId != pgID {
 		logger.Warningf("meta pgID %d not match calculated pgID %d", meta.PgId, pgID)
 		return errno.PgNotMatch
@@ -109,7 +121,11 @@ func (a *Alaya) checkObject(meta *object.ObjectMeta) (err error) {
 // 将对象元数据存储到 MetaStorage
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
 	timeStart := time.Now()
-	err := a.checkObject(meta)
+	term, err := a.checkClientTerm(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = a.checkObject(term, meta)
 	if err != nil {
 		return nil, err
 	}
@@ -142,11 +158,15 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 	}, nil
 }
 
-func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
+func (a *Alaya) GetObjectMeta(ctx context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
 	// clear meta object id
 	timeStart := time.Now()
+	term, err := a.checkClientTerm(ctx)
+	if err != nil {
+		return nil, err
+	}
 	objID := object.CleanObjectKey(req.ObjId)
-	pgID := a.calculateObjectPGID(objID)
+	pgID := a.calculateObjectPGID(term, objID)
 	storage, err := a.MetaStorageRegister.GetStorage(pgID)
 	if err != nil {
 		return nil, err
@@ -166,6 +186,10 @@ func (a *Alaya) GetObjectMeta(_ context.Context, req *MetaRequest) (*object.Obje
 
 // DeleteMeta delete meta from metaStorage, and request delete object blocks
 func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common.Result, error) {
+	_, err := GetTermFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	objID := object.CleanObjectKey(req.ObjId)
 	objMeta, err := a.GetObjectMeta(ctx, &MetaRequest{ObjId: objID})
 	if err != nil {
@@ -207,7 +231,11 @@ func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common
 	}, nil
 }
 
-func (a *Alaya) ListMeta(_ context.Context, req *ListMetaRequest) (*ObjectMetaList, error) {
+func (a *Alaya) ListMeta(ctx context.Context, req *ListMetaRequest) (*ObjectMetaList, error) {
+	_, err := GetTermFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	storages := a.MetaStorageRegister.GetAllStorage()
 	var metasList [][]*object.ObjectMeta
 	for _, storage := range storages {
@@ -283,7 +311,7 @@ func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 		if err != nil {
 			logger.Errorf("get cluster info by term fail, term: %v err: %v", clusterInfo.LastTerm, err.Error())
 		}
-		oldPipelines, _ = pipeline.NewClusterPipelines(&info)
+		oldPipelines, _ = pipeline.NewClusterPipelines(info)
 	}
 	if clusterInfo == nil || len(clusterInfo.NodesInfo) == 0 {
 		logger.Warningf("Empty clusterInfo when alaya apply new clusterInfo")
@@ -291,7 +319,7 @@ func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 	}
 	logger.Infof("Alaya: %v receive new cluster info, term: %v, node num: %v", a.selfInfo.RaftId,
 		clusterInfo.Term, len(clusterInfo.NodesInfo))
-	p, err := pipeline.NewClusterPipelines(clusterInfo)
+	p, err := pipeline.NewClusterPipelines(*clusterInfo)
 	if err != nil {
 		logger.Errorf("Alaya: %v create new cluster pipelines failed, err: %v", a.selfInfo.RaftId, err)
 		return

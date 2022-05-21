@@ -7,8 +7,6 @@ import (
 	agent "ecos/client/info-agent"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/pipeline"
-	"ecos/edge-node/watcher"
-	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
@@ -23,15 +21,12 @@ import (
 
 // EcosIOFactory Generates EcosWriter with ClientConfig
 type EcosIOFactory struct {
-	volumeID   string
-	bucketName string
+	ctx context.Context
 
-	infoAgent   *agent.InfoAgent
-	config      *config.ClientConfig
-	clusterInfo *infos.ClusterInfo
-	pipes       *pipeline.ClusterPipelines
-	bucketInfo  *infos.BucketInfo
-	chunkPool   *common.Pool
+	infoAgent  *agent.InfoAgent
+	config     *config.ClientConfig
+	bucketInfo *infos.BucketInfo
+	chunkPool  *common.Pool
 
 	// for multipart upload
 	multipartJobs sync.Map
@@ -40,33 +35,15 @@ type EcosIOFactory struct {
 // NewEcosIOFactory Constructor for EcosIOFactory
 //
 // nodeAddr shall provide the address to get ClusterInfo from
-func NewEcosIOFactory(config *config.ClientConfig, volumeID, bucketName string) (*EcosIOFactory, error) {
-	conn, err := messenger.GetRpcConn(config.NodeAddr, config.NodePort)
+func NewEcosIOFactory(ctx context.Context, config *config.ClientConfig, volumeID, bucketName string) (*EcosIOFactory, error) {
+	infoAgent, err := agent.NewInfoAgent(ctx, config.NodeAddr, config.NodePort)
 	if err != nil {
-		return nil, err
-	}
-	watcherClient := watcher.NewWatcherClient(conn)
-	reply, err := watcherClient.GetClusterInfo(context.Background(),
-		&watcher.GetClusterInfoRequest{Term: 0})
-	if err != nil {
-		logger.Errorf("get group info fail: %v", err)
-		return nil, err
-	}
-	clusterInfo := reply.GetClusterInfo()
-	// TODO: Retry?
-	pipes, err := pipeline.NewClusterPipelines(clusterInfo)
-	if err != nil {
-		logger.Errorf("get cluster pipelines fail: %v", err)
 		return nil, err
 	}
 	ret := &EcosIOFactory{
-		volumeID:   volumeID,
-		bucketName: bucketName,
-
-		infoAgent:   agent.NewInfoAgent(context.Background(), clusterInfo),
-		clusterInfo: clusterInfo,
-		config:      config,
-		pipes:       pipes,
+		ctx:       ctx,
+		infoAgent: infoAgent,
+		config:    config,
 	}
 	maxChunk := uint(ret.config.UploadBuffer / ret.config.Object.ChunkSize)
 	chunkPool, _ := common.NewPool(ret.newLocalChunk, maxChunk, int(maxChunk))
@@ -105,15 +82,16 @@ func (f *EcosIOFactory) GetEcosWriter(key string) *EcosWriter {
 	default:
 		objHash = nil
 	}
+	clusterInfo := f.infoAgent.GetCurClusterInfo()
+	pipes, _ := pipeline.NewClusterPipelines(clusterInfo)
 	return &EcosWriter{
-		infoAgent:      f.infoAgent,
-		clusterInfo:    f.clusterInfo,
-		bucketInfo:     f.bucketInfo,
+		ctx:            f.ctx,
+		f:              f,
 		key:            key,
-		config:         f.config,
 		Status:         READING,
-		pipes:          f.pipes,
 		chunks:         f.chunkPool,
+		clusterInfo:    clusterInfo,
+		pipes:          *pipes,
 		blocks:         map[int]*Block{},
 		objHash:        objHash,
 		finishedBlocks: make(chan *Block),
@@ -212,14 +190,9 @@ func (f *EcosIOFactory) ListMultipartUploadJob() ([]types.MultipartUpload, error
 // GetEcosReader provide a EcosWriter for object associated with key
 func (f *EcosIOFactory) GetEcosReader(key string) *EcosReader {
 	return &EcosReader{
-		infoAgent:     f.infoAgent,
-		clusterInfo:   f.clusterInfo,
-		bucketInfo:    f.bucketInfo,
-		key:           key,
-		pipes:         f.pipes,
-		curBlockIndex: 0,
-		meta:          nil,
-		config:        f.config,
-		startTime:     time.Now(),
+		ctx:       f.ctx,
+		f:         f,
+		key:       key,
+		startTime: time.Now(),
 	}
 }

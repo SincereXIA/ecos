@@ -119,7 +119,7 @@ func KeyGet(bucketName string, key string, path string) {
 func KeyPut(bucketName string, key string, path string) {
 	var conf config.ClientConfig
 	_ = configUtil.GetConf(&conf)
-	factory, err := ecosIO.NewEcosIOFactory(&conf, "root", bucketName)
+	factory, err := ecosIO.NewEcosIOFactory(context.Background(), &conf, "root", bucketName)
 	if err != nil {
 		logger.Errorf("get bucket: %v, fail: %v", bucketName, err)
 		os.Exit(1)

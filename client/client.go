@@ -3,30 +3,33 @@ package client
 import (
 	"context"
 	"ecos/client/config"
-	info_agent "ecos/client/info-agent"
+	agent "ecos/client/info-agent"
 	"ecos/client/io"
 	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
-	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"errors"
 	lru "github.com/hashicorp/golang-lru"
 	"path"
 	"strconv"
+	"strings"
+	"sync"
 )
 
 type Client struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	config      *config.ClientConfig
-	clusterInfo *infos.ClusterInfo
-	infoAgent   *info_agent.InfoAgent
+	config    *config.ClientConfig
+	infoAgent *agent.InfoAgent
 
 	factoryPool *lru.Cache
+
+	mutex sync.RWMutex
 }
 
 const (
@@ -36,23 +39,11 @@ const (
 
 func New(config *config.ClientConfig) (*Client, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-
-	conn, err := messenger.GetRpcConn(config.NodeAddr, config.NodePort)
+	infoAgent, err := agent.NewInfoAgent(ctx, config.NodeAddr, config.NodePort)
 	if err != nil {
 		cancel()
-		logger.Errorf("connect to node failed: %s", err.Error())
-		return nil, errors.New("connect to edge node failed")
+		return nil, err
 	}
-	watcherClient := watcher.NewWatcherClient(conn)
-	reply, err := watcherClient.GetClusterInfo(context.Background(),
-		&watcher.GetClusterInfoRequest{Term: 0})
-	if err != nil {
-		cancel()
-		logger.Errorf("get cluster info failed: %s", err.Error())
-		return nil, errors.New("get cluster info failed")
-	}
-	clusterInfo := reply.GetClusterInfo()
-
 	lruPool, err := lru.NewWithEvict(DefaultFactoryPoolSize, func(key interface{}, value interface{}) {
 		switch inter := value.(type) {
 		case *io.EcosIOFactory:
@@ -71,8 +62,7 @@ func New(config *config.ClientConfig) (*Client, error) {
 		ctx:         ctx,
 		config:      config,
 		cancel:      cancel,
-		clusterInfo: clusterInfo,
-		infoAgent:   info_agent.NewInfoAgent(ctx, clusterInfo),
+		infoAgent:   infoAgent,
 		factoryPool: lruPool,
 	}, nil
 }
@@ -85,10 +75,12 @@ func (client *Client) ListObjects(_ context.Context, bucketName, prefix string) 
 		return nil, err
 	}
 	bucketInfo := info.BaseInfo().GetBucketInfo()
-	p := pipeline.GenMetaPipelines(*client.clusterInfo)
+retry:
+	clusterInfo := client.infoAgent.GetCurClusterInfo()
+	p := pipeline.GenMetaPipelines(clusterInfo)
 	var result []*object.ObjectMeta
 	for i := 1; int32(i) <= bucketInfo.Config.KeySlotNum; i++ {
-		pgID := object.GenSlotPgID(bucketInfo.GetID(), int32(i), client.clusterInfo.MetaPgNum)
+		pgID := object.GenSlotPgID(bucketInfo.GetID(), int32(i), clusterInfo.MetaPgNum)
 		nodeID := p[pgID-1].RaftId[0]
 		info, err := client.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
 		if err != nil {
@@ -99,11 +91,20 @@ func (client *Client) ListObjects(_ context.Context, bucketName, prefix string) 
 			return nil, err
 		}
 		alayaClient := alaya.NewAlayaClient(conn)
-		reply, err := alayaClient.ListMeta(client.ctx, &alaya.ListMetaRequest{
+		ctx, _ := alaya.SetTermToContext(client.ctx, clusterInfo.Term)
+		reply, err := alayaClient.ListMeta(ctx, &alaya.ListMetaRequest{
 			Prefix: path.Join(bucketInfo.GetID(), strconv.Itoa(i), prefix),
 		})
 		if err != nil {
-			return nil, err
+			if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
+				logger.Warningf("term not match, retry")
+				err = client.infoAgent.UpdateCurClusterInfo()
+				if err != nil {
+					return nil, err
+				}
+				result = nil
+				goto retry
+			}
 		}
 		result = append(result, reply.Metas...)
 	}
@@ -119,7 +120,7 @@ func (client *Client) GetIOFactory(bucketName string) (*io.EcosIOFactory, error)
 			client.factoryPool.Remove(bucketName)
 		}
 	}
-	ret, err := io.NewEcosIOFactory(client.config, client.config.Credential.GetUserID(), bucketName)
+	ret, err := io.NewEcosIOFactory(client.ctx, client.config, client.config.Credential.GetUserID(), bucketName)
 	if err == nil && ret != nil {
 		client.factoryPool.Add(bucketName, ret)
 	}

@@ -1,8 +1,8 @@
 package io
 
 import (
-	"ecos/client/config"
-	agent "ecos/client/info-agent"
+	"context"
+	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -16,6 +16,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"hash"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -33,19 +34,20 @@ func (c *localChunk) Close() error {
 // EcosWriter When creating an object, use EcosWriter as a Writer
 // EcosWriter.Write can take []byte as input to create Chunk and Block for Object
 type EcosWriter struct {
-	infoAgent   *agent.InfoAgent
-	clusterInfo *infos.ClusterInfo
-	bucketInfo  *infos.BucketInfo
-	key         string
-	config      *config.ClientConfig
-	Status      BlockStatus
-	pipes       *pipeline.ClusterPipelines
+	ctx context.Context
+
+	f *EcosIOFactory
+
+	key    string
+	Status BlockStatus
 
 	chunks        *common.Pool
 	curChunk      *localChunk
 	reserveChunks []*localChunk
 	chunkCount    int
 
+	clusterInfo    infos.ClusterInfo
+	pipes          pipeline.ClusterPipelines
 	blocks         map[int]*Block
 	curBlock       *Block
 	blockCount     int
@@ -64,9 +66,9 @@ type EcosWriter struct {
 
 // getCurBlock ensures to return with a Block can put new Chunk in
 func (w *EcosWriter) getCurBlock() *Block {
-	blockSize := w.bucketInfo.Config.BlockSize
+	blockSize := w.f.bucketInfo.Config.BlockSize
 	if w.curBlock != nil && len(w.curBlock.chunks) ==
-		int(blockSize/w.config.Object.ChunkSize) {
+		int(blockSize/w.f.config.Object.ChunkSize) {
 		w.commitCurBlock()
 	}
 	if w.curBlock == nil {
@@ -81,7 +83,7 @@ func (w *EcosWriter) getCurBlock() *Block {
 func (w *EcosWriter) getUploadStream(b *Block) (*UploadClient, error) {
 	nodes := w.pipes.GetBlockPGNodeID(b.PgId)
 	serverInfo, _ := b.infoAgent.Get(infos.InfoType_NODE_INFO, nodes[0])
-	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo(), w.config)
+	client, err := NewGaiaClient(serverInfo.BaseInfo().GetNodeInfo(), w.f.config)
 	if err != nil {
 		logger.Errorf("Unable to start Gaia Client: %v", err)
 		return nil, err
@@ -115,7 +117,7 @@ func (w *EcosWriter) commitCurBlock() {
 func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 	if w.curChunk == nil {
 		if len(w.reserveChunks) == 0 {
-			chunks, err := w.chunks.AcquireMultiple(int(w.bucketInfo.Config.BlockSize / w.config.Object.ChunkSize))
+			chunks, err := w.chunks.AcquireMultiple(int(w.f.bucketInfo.Config.BlockSize / w.f.config.Object.ChunkSize))
 			if err != nil {
 				return nil, err
 			}
@@ -143,7 +145,7 @@ func (w *EcosWriter) commitCurChunk() {
 	}
 	block := w.getCurBlock()
 	block.chunks = append(block.chunks, w.curChunk)
-	if len(block.chunks) == int(w.bucketInfo.Config.BlockSize/w.config.Object.ChunkSize) {
+	if len(block.chunks) == int(w.f.bucketInfo.Config.BlockSize/w.f.config.Object.ChunkSize) {
 		w.commitCurBlock()
 	}
 	w.curChunk = nil
@@ -168,7 +170,7 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 		if err != nil {
 			return offset, err
 		}
-		writeSize := copy(chunk.data[w.config.Object.ChunkSize-chunk.freeSize:], p[offset:])
+		writeSize := copy(chunk.data[w.f.config.Object.ChunkSize-chunk.freeSize:], p[offset:])
 		chunk.freeSize -= uint64(writeSize)
 		if chunk.freeSize == 0 {
 			w.commitCurChunk()
@@ -178,7 +180,7 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 	}
 	// Update ObjectMeta of EcosWriter.meta.ObjHash
 	w.writeSize += uint64(offset)
-	if w.bucketInfo.Config.ObjectHashType != infos.BucketConfig_OFF {
+	if w.f.bucketInfo.Config.ObjectHashType != infos.BucketConfig_OFF {
 		w.objHash.Write(p[:offset])
 	}
 	if offset != lenP {
@@ -188,9 +190,9 @@ func (w *EcosWriter) Write(p []byte) (int, error) {
 }
 
 func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
-	pgID := object.GenObjPgID(w.bucketInfo, objectKey, 10)
+	pgID := object.GenObjPgID(w.f.bucketInfo, objectKey, 10)
 	meta := &object.ObjectMeta{
-		ObjId:      object.GenObjectId(w.bucketInfo, objectKey),
+		ObjId:      object.GenObjectId(w.f.bucketInfo, objectKey),
 		ObjSize:    w.writeSize,
 		UpdateTime: timestamp.Now(),
 		PgId:       pgID,
@@ -198,7 +200,7 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 		Term:       w.clusterInfo.Term,
 		MetaData:   nil,
 	}
-	if w.bucketInfo.Config.ObjectHashType != infos.BucketConfig_OFF {
+	if w.f.bucketInfo.Config.ObjectHashType != infos.BucketConfig_OFF {
 		meta.ObjHash = hex.EncodeToString(w.objHash.Sum(nil))
 	} else {
 		meta.ObjHash = ""
@@ -267,8 +269,8 @@ func (w *EcosWriter) Abort() error {
 
 // Copy will create from src meta to dst
 func (w *EcosWriter) Copy(meta *object.ObjectMeta) (*string, error) {
-	pgID := object.GenObjPgID(w.bucketInfo, w.key, 10)
-	meta.ObjId = object.GenObjectId(w.bucketInfo, w.key)
+	pgID := object.GenObjPgID(w.f.bucketInfo, w.key, 10)
+	meta.ObjId = object.GenObjectId(w.f.bucketInfo, w.key)
 	meta.PgId = pgID
 	err := w.uploadMeta(meta)
 	if err != nil {
@@ -284,7 +286,7 @@ func (w *EcosWriter) Copy(meta *object.ObjectMeta) (*string, error) {
 // genPartialHash will generate partial hash from EcosWriter.blocks
 // Will be used in EcosWriter.genPartialMeta
 func (w *EcosWriter) genPartialHash() string {
-	if w.bucketInfo.Config.ObjectHashType == infos.BucketConfig_OFF {
+	if w.f.bucketInfo.Config.ObjectHashType == infos.BucketConfig_OFF {
 		return ""
 	}
 	w.objHash.Reset()
@@ -297,7 +299,7 @@ func (w *EcosWriter) genPartialHash() string {
 
 // genPartialMeta will generate partial ObjectMeta for partial upload.
 func (w *EcosWriter) genPartialMeta(objectKey string) *object.ObjectMeta {
-	pgID := object.GenObjPgID(w.bucketInfo, objectKey, 10)
+	pgID := object.GenObjPgID(w.f.bucketInfo, objectKey, 10)
 	var blocks []*object.BlockInfo
 	objSize := uint64(0)
 	for _, partID := range w.partIDs {
@@ -306,7 +308,7 @@ func (w *EcosWriter) genPartialMeta(objectKey string) *object.ObjectMeta {
 		objSize += block.BlockInfo.BlockSize
 	}
 	meta := &object.ObjectMeta{
-		ObjId:      object.GenObjectId(w.bucketInfo, w.key),
+		ObjId:      object.GenObjectId(w.f.bucketInfo, w.key),
 		ObjSize:    objSize,
 		UpdateTime: timestamp.Now(),
 		PgId:       pgID,
@@ -327,7 +329,7 @@ func (w *EcosWriter) CommitPartialMeta() error {
 	}
 	meta := w.genPartialMeta(w.key)
 	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	metaClient, err := NewMetaClient(metaServerNode, w.config)
+	metaClient, err := NewMetaClient(w.ctx, metaServerNode, w.f.config)
 	if err != nil {
 		logger.Errorf("Update Multipart Object Failed: %v", err)
 		return err
@@ -375,6 +377,18 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	if !noDuplicate {
 		victim := w.blocks[int(partID)]
 		logger.Tracef("Delete duplicate part %v", victim.PartId)
+		node, err := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(victim.PgId)[0])
+		if err != nil {
+			return "", err
+		}
+		client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.f.config)
+		if err != nil {
+			return "", err
+		}
+		err = victim.Abort(client)
+		if err != nil {
+			return "", err
+		}
 		go w.abortBlock(victim)
 		delete(w.blocks, int(partID))
 	}
@@ -387,7 +401,7 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	}
 	blockSize := uint64(0)
 	for {
-		var chunkData = make([]byte, w.config.Object.ChunkSize)
+		var chunkData = make([]byte, w.f.config.Object.ChunkSize)
 		readSize, err := reader.Read(chunkData)
 		blockSize += uint64(readSize)
 		chunk := &localChunk{
@@ -410,6 +424,7 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 		return "", err
 	}
 	go w.uploadBlock(int(partID), w.blocks[int(partID)])
+	metrics.GetOrRegisterTimer(watcher.MetricsClientPartPutTimer, nil).UpdateSince(w.startTime)
 	return w.blocks[int(partID)].BlockId, nil
 }
 
@@ -461,7 +476,6 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 		return "", err
 	}
 	w.Status = FINISHED
-	metrics.GetOrRegisterTimer(watcher.MetricsClientPartPutTimer, nil).UpdateSince(w.startTime)
 	return hex.EncodeToString(w.objHash.Sum(nil)), nil
 }
 
@@ -478,13 +492,13 @@ func (w *EcosWriter) AbortMultiPart() error {
 	errBlocks := make([]int32, 0, len(w.partIDs))
 	for _, partID := range w.partIDs {
 		block := w.blocks[int(partID)]
-		node, err1 := w.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
+		node, err1 := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
 		if err1 != nil {
 			err = err1
 			errBlocks = append(errBlocks, partID)
 			continue
 		}
-		client, err2 := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.config)
+		client, err2 := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.f.config)
 		if err2 != nil {
 			err = err2
 			errBlocks = append(errBlocks, partID)
@@ -529,7 +543,7 @@ func (w *EcosWriter) GetPartBlockInfo(partID int32) (*object.BlockInfo, error) {
 func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {
 	nodeId := w.pipes.GetMetaPGNodeID(pgID)[0]
 	logger.Infof("META PG: %v, NODE: %v", pgID, nodeId)
-	nodeInfo, _ := w.infoAgent.Get(infos.InfoType_NODE_INFO, nodeId)
+	nodeInfo, _ := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, nodeId)
 	return nodeInfo.BaseInfo().GetNodeInfo()
 }
 
@@ -540,7 +554,7 @@ func (w *EcosWriter) getNewBlock() *Block {
 		status:      READING,
 		chunks:      nil,
 		key:         w.key,
-		infoAgent:   w.infoAgent,
+		infoAgent:   w.f.infoAgent,
 		clusterInfo: w.clusterInfo,
 		blockCount:  w.blockCount,
 		pipes:       w.pipes,
@@ -548,7 +562,7 @@ func (w *EcosWriter) getNewBlock() *Block {
 		delFunc: func(self *Block) {
 			// Release Chunks
 			for _, chunk := range self.chunks {
-				chunk.freeSize = w.config.Object.ChunkSize
+				chunk.freeSize = w.f.config.Object.ChunkSize
 				w.chunks.Release(chunk)
 			}
 			self.chunks = nil
@@ -593,14 +607,24 @@ func (w *EcosWriter) uploadBlock(i int, block *Block) {
 
 // uploadMeta will upload meta info of an object.
 func (w *EcosWriter) uploadMeta(meta *object.ObjectMeta) error {
+retry:
 	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	metaClient, err := NewMetaClient(metaServerNode, w.config)
+	ctx, _ := alaya.SetTermToContext(w.ctx, w.f.infoAgent.GetCurClusterInfo().Term)
+	metaClient, err := NewMetaClient(ctx, metaServerNode, w.f.config)
 	if err != nil {
 		logger.Errorf("Upload Object Failed: %v", err)
 		return err
 	}
 	result, err := metaClient.SubmitMeta(meta)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
+			logger.Warningf("Term not match, retry")
+			err = w.f.infoAgent.UpdateCurClusterInfo()
+			if err != nil {
+				return err
+			}
+			goto retry
+		}
 		logger.Errorf("Upload Object Failed: %v with Error %v", result, err)
 		return err
 	}
@@ -609,11 +633,11 @@ func (w *EcosWriter) uploadMeta(meta *object.ObjectMeta) error {
 }
 
 func (w *EcosWriter) abortBlock(block *Block) {
-	node, err := w.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
+	node, err := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(block.PgId)[0])
 	if err != nil {
 		logger.Warningf("Abort Block: get node info failed: %v", err)
 	}
-	client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.config)
+	client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.f.config)
 	if err != nil {
 		logger.Warningf("Abort Block: get node info failed: %v", err)
 	}

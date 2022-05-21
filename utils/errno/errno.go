@@ -29,6 +29,7 @@ var (
 	PGNotExist          = newErr(CodePgNotExist, "place group not exist")
 	MetaNotExist        = newErr(CodeMetaNotExist, "meta data not exist")
 	MetaStorageNotExist = newErr(CodeMetaStorageNotExist, "meta data storage not exist")
+	TermNotExist        = newErr(CodeMetaNotExist, "term not exist")
 )
 
 /* MOON error */
@@ -67,6 +68,9 @@ const (
 
 	CodeJobNotExist
 
+	CodeConnectionIssue
+	CodeClusterInfo
+
 	CodeBlockOperationTimeout
 )
 
@@ -80,6 +84,9 @@ var (
 	InvalidArgument  = newErr(CodeInvalidArgument, "invalid argument")
 
 	JobNotExist = newErr(CodeJobNotExist, "job not exist")
+
+	ConnectionIssue = newErr(CodeConnectionIssue, "connect to edge node failed")
+	ClusterInfoErr  = newErr(CodeClusterInfo, "get cluster info failed")
 
 	BlockOperationTimeout = newErr(CodeBlockOperationTimeout, "block operation timeout")
 )

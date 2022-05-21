@@ -104,6 +104,7 @@ func testAlaya(t *testing.T, mock bool) {
 				pgID := object.GenSlotPgID(bucketInfo.GetID(), int32(i), watchers[0].GetCurrentClusterInfo().MetaPgNum)
 				nodeID := pipelines[pgID-1].RaftId[0]
 				alaya := alayas[nodeID-1]
+				ctx, _ = SetTermToIncomingContext(ctx, watchers[0].GetCurrentTerm())
 				ms, err := alaya.ListMeta(ctx, &ListMetaRequest{
 					Prefix: path.Join(bucketInfo.GetID(), strconv.Itoa(i)),
 				})
@@ -172,13 +173,12 @@ func testAlaya(t *testing.T, mock bool) {
 		pgID := object.GenObjPgID(bucketInfo, key, watchers[0].GetCurrentClusterInfo().MetaPgNum)
 		nodeIndex := pipelines[pgID-1].RaftId[0]
 		a := alayas[nodeIndex-1]
-
+		ctx, _ = SetTermToIncomingContext(ctx, watchers[0].GetCurrentTerm())
 		reply, err := a.GetObjectMeta(ctx, &MetaRequest{
 			ObjId: meta.ObjId,
 		})
 		assert.NoError(t, err, "meta need to delete should exist")
 		assert.Equal(t, meta.ObjId, reply.ObjId, "meta objID not equal")
-
 		_, err = a.DeleteMeta(ctx, &DeleteMetaRequest{
 			ObjId: meta.ObjId,
 		})
@@ -216,8 +216,9 @@ func genTestMetas(watchers []*watcher.Watcher,
 func updateMetas(t *testing.T, watchers []*watcher.Watcher,
 	alayas []Alayaer, metas []*object.ObjectMeta, bucketInfo *infos.BucketInfo) {
 	clusterInfo := watchers[0].GetCurrentClusterInfo()
-	clusterP, _ := pipeline.NewClusterPipelines(&clusterInfo)
+	clusterP, _ := pipeline.NewClusterPipelines(clusterInfo)
 	p := clusterP.MetaPipelines
+	ctx := context.Background()
 	for _, meta := range metas {
 		_, _, key, _, err := object.SplitID(meta.ObjId)
 		pgID := object.GenObjPgID(bucketInfo, key, watchers[0].GetCurrentClusterInfo().MetaPgNum)
@@ -226,7 +227,8 @@ func updateMetas(t *testing.T, watchers []*watcher.Watcher,
 		logger.Debugf("Obj: %v, pgID: %v, nodeID: %v", meta.ObjId, pgID, nodeIndex)
 
 		meta.PgId = pgID
-		_, err = a.RecordObjectMeta(context.TODO(), meta)
+		ctx, _ = SetTermToIncomingContext(ctx, meta.Term)
+		_, err = a.RecordObjectMeta(ctx, meta)
 		assert.NoError(t, err)
 	}
 }
