@@ -4,6 +4,7 @@ import (
 	"ecos/client/credentials"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
+	"ecos/utils/common"
 	"encoding/xml"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -154,7 +155,57 @@ func deleteBucket(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
-	return
+}
+
+type Bucket struct {
+	Name         *string `xml:"Name"`
+	CreationDate *string `xml:"CreationDate"`
+}
+
+type Owner struct {
+	ID          *string `xml:"ID"`
+	DisplayName *string `xml:"DisplayName"`
+}
+
+type ListAllMyBucketsResult struct {
+	Owner   *Owner `xml:"Owner"`
+	Buckets *struct {
+		Buckets []Bucket `xml:"Bucket"`
+	} `xml:"Buckets"`
+}
+
+// listBucket lists all buckets
+//
+// GET /
+func listBuckets(c *gin.Context) {
+	var credential credentials.Credential
+	bucketOps, err := Client.GetVolumeOperator().List("")
+	if err != nil {
+		c.XML(http.StatusInternalServerError, InternalError(err.Error(), "", c.Request.URL.Path, nil))
+		return
+	}
+	result := ListAllMyBucketsResult{
+		Owner: &Owner{
+			ID:          common.PtrString(credential.GetUserID()),
+			DisplayName: common.PtrString(credential.GetUserID()),
+		},
+		Buckets: &struct {
+			Buckets []Bucket `xml:"Bucket"`
+		}{},
+	}
+	for _, op := range bucketOps {
+		rawInfo, err := op.Info()
+		if err != nil {
+			continue
+		}
+		bucketInfo := rawInfo.(*infos.BucketInfo)
+		formattedTime := time.Now().Format(time.RFC3339)
+		result.Buckets.Buckets = append(result.Buckets.Buckets, Bucket{
+			Name:         &bucketInfo.BucketName,
+			CreationDate: &formattedTime,
+		})
+	}
+	c.XML(http.StatusOK, result)
 }
 
 // bucketLevelPostHandler handles bucket level POST requests

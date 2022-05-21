@@ -2,11 +2,12 @@ package router
 
 import (
 	"ecos/utils/logger"
-	"fmt"
+	"encoding/xml"
 	"github.com/gin-gonic/gin"
 	"github.com/rcrowley/go-metrics"
-	"net"
+	timeout "github.com/vearne/gin-timeout"
 	"net/http"
+	"time"
 )
 
 func NewRouter(cfg Config) *gin.Engine {
@@ -23,8 +24,20 @@ func NewRouter(cfg Config) *gin.Engine {
 	}
 	InitClient(clientConfig)
 	router := gin.Default()
-	router.GET("/", hello)
-	router.GET("/metrics", getMetrics)
+	timeoutMsg, _ := xml.Marshal(RequestTimeout(nil))
+	router.Use(timeout.Timeout(
+		timeout.WithTimeout(time.Minute),
+		timeout.WithErrorHttpCode(http.StatusRequestTimeout),
+		timeout.WithDefaultMsg(string(timeoutMsg)),
+		timeout.WithCallBack(func(r *http.Request) {
+			logger.Warningf("timeout happen, url: %s", r.URL.String())
+		})))
+	router.Use(func(c *gin.Context) {
+		c.Header("Server", "ECOS")
+		c.Header("Accept-Ranges", "bytes")
+	})
+	router.GET("/", listBuckets)
+	router.HEAD("/", getMetrics)
 	// Bucket Routes
 	bucketRouter := router.Group("/:bucketName")
 	{
@@ -42,29 +55,7 @@ func NewRouter(cfg Config) *gin.Engine {
 		bucketRouter.HEAD("/*key", objectLevelHeadHandler)
 		bucketRouter.POST("/*key", objectLevelPostHandler)
 	}
-	router.Use(func(c *gin.Context) {
-		c.Header("Server", "ECOS")
-		c.Header("Accept-Ranges", "bytes")
-	})
 	return router
-}
-
-func hello(c *gin.Context) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	selfIp := ""
-	for _, address := range addrs {
-		// 检查ip地址判断是否回环地址
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				selfIp = ipnet.IP.String()
-			}
-		}
-	}
-	c.String(http.StatusOK, "ECOS EdgeNode: %s", selfIp)
 }
 
 func getMetrics(c *gin.Context) {

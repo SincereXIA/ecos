@@ -114,7 +114,7 @@ func InvalidArgument(keyName, bucketName, resPath string, key *string) Error {
 func InvalidBucketName(bucketName *string) Error {
 	return Error{
 		Code:       common.PtrString("InvalidBucketName"),
-		Message:    common.PtrString(fmt.Sprintf("The specified bucket is not valid.")),
+		Message:    common.PtrString("The specified bucket is not valid."),
 		BucketName: bucketName,
 	}
 }
@@ -303,6 +303,15 @@ func RequestIsNotMultiPartContent(bucketName, resPath string) Error {
 		Message:    common.PtrString("The Bucket POST request is not multi-part content."),
 		BucketName: common.PtrString(bucketName),
 		Resource:   common.PtrString(resPath),
+	}
+}
+
+// RequestTimeout 408
+func RequestTimeout(resPath *string) Error {
+	return Error{
+		Code:     common.PtrString("RequestTimeout"),
+		Message:  common.PtrString("Your socket connection to the server was not read from or written to within the timeout period."),
+		Resource: resPath,
 	}
 }
 

@@ -199,6 +199,9 @@ type BucketOperator struct {
 	client     *Client
 }
 
+// List
+// Deprecated
+// Use Client.ListObjects instead
 func (b *BucketOperator) List(prefix string) ([]Operator, error) {
 	//TODO implement me
 	panic("implement me")
