@@ -265,7 +265,8 @@ retry:
 	if err != nil {
 		return nil, err
 	}
-	reply, err := alayaClient.GetObjectMeta(context.Background(), &alaya.MetaRequest{
+	ctx, _ := alaya.SetTermToContext(b.client.ctx, b.client.infoAgent.GetCurClusterInfo().Term)
+	reply, err := alayaClient.GetObjectMeta(ctx, &alaya.MetaRequest{
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
 	if err != nil {
