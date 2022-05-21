@@ -18,7 +18,7 @@ import (
 )
 
 type Commit struct {
-	Data       []string
+	Data       [][]byte
 	ApplyDoneC chan<- struct{}
 }
 
@@ -26,7 +26,7 @@ type RaftNode struct {
 	ctx    context.Context //context
 	cancel context.CancelFunc
 
-	ProposeC         chan string            // proposed messages (client)
+	ProposeC         chan []byte            // proposed messages (client)
 	ConfChangeC      chan raftpb.ConfChange // proposed cluster config changes
 	ApplyConfChangeC chan raftpb.ConfChange // notify upper layer when config change is applied
 	CommunicationC   chan []raftpb.Message  // notify upper-layer applications to send messages
@@ -67,7 +67,7 @@ func NewRaftNode(id int, ctx context.Context, peers []raft.Peer, basePath string
 		ctx:    ctx,
 		cancel: cancel,
 
-		ProposeC:         make(chan string),
+		ProposeC:         make(chan []byte),
 		ConfChangeC:      make(chan raftpb.ConfChange),
 		ApplyConfChangeC: make(chan raftpb.ConfChange, 10),
 		CommunicationC:   make(chan []raftpb.Message, 100),
@@ -133,7 +133,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) (<-chan struct{}, bool) 
 		return nil, true
 	}
 
-	data := make([]string, 0, len(ents))
+	data := make([][]byte, 0, len(ents))
 	for i := range ents {
 		switch ents[i].Type {
 		case raftpb.EntryNormal:
@@ -141,8 +141,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) (<-chan struct{}, bool) 
 				// ignore empty messages
 				break
 			}
-			s := string(ents[i].Data)
-			data = append(data, s)
+			data = append(data, ents[i].Data)
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			err := cc.Unmarshal(ents[i].Data)
@@ -382,7 +381,7 @@ func (rc *RaftNode) serveChannels() {
 					rc.ProposeC = nil
 				} else {
 					// blocks until accepted by raft state machine
-					err := rc.Node.Propose(rc.ctx, []byte(prop))
+					err := rc.Node.Propose(rc.ctx, prop)
 					if err != nil {
 						logger.Errorf("propose failed: %v", err)
 					}

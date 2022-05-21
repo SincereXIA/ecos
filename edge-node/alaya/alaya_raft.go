@@ -397,11 +397,12 @@ func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
 	bytes, _ := proto.Marshal(operate)
 	// 注册，等待 operate 被 apply
 	ch := r.w.Register(opID)
-	err := r.raft.Node.Propose(r.ctx, bytes)
-	if err != nil {
-		logger.Warningf("raft propose err: %v", err)
-		return err
-	}
+	//err := r.raft.Node.Propose(r.ctx, bytes)
+	//if err != nil {
+	//	logger.Warningf("raft propose err: %v", err)
+	//	return err
+	//}
+	r.raft.ProposeC <- bytes
 	// TODO (zhang): Time out
 	logger.Debugf("%v pg: %v raft propose object meta: %v, wait for it apply", r.raft.ID, r.pgID, operate.Meta.ObjId)
 	select {

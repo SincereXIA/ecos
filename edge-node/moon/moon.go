@@ -91,7 +91,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 
 	// 注册
 	ch := m.w.Register(opID)
-	m.raft.ProposeC <- string(data)
+	m.raft.ProposeC <- data
 
 	// wait propose apply
 	select {
