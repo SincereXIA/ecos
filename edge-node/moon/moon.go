@@ -9,14 +9,14 @@ import (
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"errors"
-	"github.com/google/go-cmp/cmp"
+	"go.etcd.io/etcd/pkg/v3/idutil"
+	"go.etcd.io/etcd/pkg/v3/wait"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"go.etcd.io/etcd/server/v3/etcdserver/api/snap"
-	"google.golang.org/protobuf/testing/protocmp"
-	"runtime"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type InfoController interface {
@@ -46,8 +46,10 @@ type Moon struct {
 	infoMap  map[uint64]*infos.NodeInfo
 	leaderID uint64 // 注册时的 leader 信息
 
-	infoStorageRegister  *infos.StorageRegister
-	appliedRequestChan   chan *ProposeInfoRequest
+	infoStorageRegister *infos.StorageRegister
+	//appliedRequestChan   chan *ProposeInfoRequest
+	w                    wait.Wait
+	reqIDGen             *idutil.Generator
 	appliedConfErrorChan chan error
 
 	snapshotter *snap.Snapshotter
@@ -79,25 +81,23 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 		return nil, errors.New("info key is empty")
 	}
 
+	opID := m.reqIDGen.Next()
+	request.OperateId = opID
 	data, err := request.Marshal()
 	if err != nil {
 		logger.Errorf("receive unmarshalled propose info request: %v", request.Id)
 		return nil, err
 	}
 
+	// 注册
+	ch := m.w.Register(opID)
 	m.raft.ProposeC <- string(data)
 
 	// wait propose apply
-	for {
-		applied := <-m.appliedRequestChan
-		if cmp.Equal(applied.BaseInfo, request.BaseInfo, protocmp.Transform()) {
-			break
-		} else {
-			m.appliedRequestChan <- applied
-			runtime.Gosched()
-		}
+	select {
+	case <-ch:
+		logger.Infof("propose info request: %v SUCCESS", request.Id)
 	}
-	logger.Infof("propose info request: %v SUCCESS", request.Id)
 
 	return &ProposeInfoReply{
 		Result: &common.Result{
@@ -157,7 +157,9 @@ func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 			if err != nil {
 				logger.Errorf("Moon process moon message err: %v", err.Error())
 			}
-			m.appliedRequestChan <- &msg
+			if m.w.IsRegistered(msg.OperateId) {
+				m.w.Trigger(msg.OperateId, struct{}{})
+			}
 		}
 		close(commit.ApplyDoneC)
 	}
@@ -272,7 +274,8 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 		config:               config,
 		status:               StatusInit,
 		infoStorageRegister:  register,
-		appliedRequestChan:   make(chan *ProposeInfoRequest, 10000),
+		w:                    wait.New(),
+		reqIDGen:             idutil.NewGenerator(0, time.Now()),
 		appliedConfErrorChan: make(chan error),
 	}
 	leaderInfo := config.ClusterInfo.LeaderInfo
@@ -429,9 +432,10 @@ func (m *Moon) reportSelfInfo() {
 			Timestamp: timestamp.Now(),
 			Term:      0,
 		},
-		Id:       strconv.FormatUint(m.SelfInfo.RaftId, 10),
-		Operate:  ProposeInfoRequest_UPDATE,
-		BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: m.SelfInfo}},
+		Id:        strconv.FormatUint(m.SelfInfo.RaftId, 10),
+		Operate:   ProposeInfoRequest_UPDATE,
+		OperateId: 0,
+		BaseInfo:  &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: m.SelfInfo}},
 	}
 	_, err := m.ProposeInfo(m.ctx, message)
 	if err != nil {
