@@ -26,8 +26,9 @@ message ProposeInfoRequest {
     DELETE = 2;
   }
   Operate operate = 2;
-  string id = 3;
-  BaseInfo base_info = 4;
+  uint64 operate_id = 3;
+  string id = 4;
+  BaseInfo base_info = 5;
 }
 
 message ProposeInfoReply {
