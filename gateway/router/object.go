@@ -10,13 +10,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/rcrowley/go-metrics"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // putObject creates a new object
@@ -470,10 +468,11 @@ func objectLevelPutHandler(c *gin.Context) {
 		createBucket(c)
 		return
 	}
-	timer := time.Now()
 	if _, ok := c.GetQuery("uploadId"); ok {
 		uploadPart(c)
-		defer metrics.GetOrRegisterTimer(watcher.MetricsGatewayPartPutTimer, nil).UpdateSince(timer)
+		defer func() {
+			metricsChan <- watcher.MetricsGatewayPartPutTimer
+		}()
 		return
 	}
 	if c.GetHeader("x-amz-copy-source") != "" {
@@ -481,7 +480,9 @@ func objectLevelPutHandler(c *gin.Context) {
 		return
 	}
 	putObject(c)
-	defer metrics.GetOrRegisterTimer(watcher.MetricsGatewayPutTimer, nil).UpdateSince(timer)
+	defer func() {
+		metricsChan <- watcher.MetricsGatewayPutTimer
+	}()
 }
 
 // objectLevelGetHandler handles object level GET requests
@@ -494,18 +495,21 @@ func objectLevelGetHandler(c *gin.Context) {
 		bucketLevelGetHandler(c)
 		return
 	}
-	timer := time.Now()
 	if _, ok := c.GetQuery("uploadId"); ok {
 		listParts(c)
 		return
 	}
 	if _, ok := c.GetQuery("partNumber"); ok {
 		getPart(c)
-		defer metrics.GetOrRegisterTimer(watcher.MetricsGatewayPartGetTimer, nil).UpdateSince(timer)
+		defer func() {
+			metricsChan <- watcher.MetricsGatewayPartGetTimer
+		}()
 		return
 	}
 	getObject(c)
-	defer metrics.GetOrRegisterTimer(watcher.MetricsGatewayGetTimer, nil).UpdateSince(timer)
+	defer func() {
+		metricsChan <- watcher.MetricsGatewayGetTimer
+	}()
 }
 
 // objectLevelDeleteHandler handles object level DELETE requests
