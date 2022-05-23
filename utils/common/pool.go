@@ -51,6 +51,9 @@ func (p *Pool) Acquire() (io.Closer, error) {
 func (p *Pool) AcquireMultiple(count int) ([]io.Closer, error) {
 	p.m.Lock()
 	defer p.m.Unlock()
+	if count == 0 {
+		return nil, errno.ZeroSize
+	}
 	ret := make([]io.Closer, 0, count)
 	for i := 0; i < count; i++ {
 		res, err := p.Acquire()
