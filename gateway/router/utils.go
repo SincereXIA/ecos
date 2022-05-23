@@ -29,5 +29,3 @@ func parseBucketKey(c *gin.Context) (bucketName, key string, err error) {
 	}
 	return
 }
-
-var metricsChan = make(chan string, 1)
