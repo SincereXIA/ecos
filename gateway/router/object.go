@@ -471,7 +471,9 @@ func objectLevelPutHandler(c *gin.Context) {
 	if _, ok := c.GetQuery("uploadId"); ok {
 		uploadPart(c)
 		defer func() {
-			metricsChan <- watcher.MetricsGatewayPartPutTimer
+			if metricChan, ok := c.Get("metric"); ok {
+				*metricChan.(*chan string) <- watcher.MetricsGatewayPartPutTimer
+			}
 		}()
 		return
 	}
@@ -481,7 +483,9 @@ func objectLevelPutHandler(c *gin.Context) {
 	}
 	putObject(c)
 	defer func() {
-		metricsChan <- watcher.MetricsGatewayPutTimer
+		if metricChan, ok := c.Get("metric"); ok {
+			*metricChan.(*chan string) <- watcher.MetricsGatewayPutTimer
+		}
 	}()
 }
 
@@ -502,13 +506,17 @@ func objectLevelGetHandler(c *gin.Context) {
 	if _, ok := c.GetQuery("partNumber"); ok {
 		getPart(c)
 		defer func() {
-			metricsChan <- watcher.MetricsGatewayPartGetTimer
+			if metricChan, ok := c.Get("metric"); ok {
+				*metricChan.(*chan string) <- watcher.MetricsGatewayPartGetTimer
+			}
 		}()
 		return
 	}
 	getObject(c)
 	defer func() {
-		metricsChan <- watcher.MetricsGatewayGetTimer
+		if metricChan, ok := c.Get("metric"); ok {
+			*metricChan.(*chan string) <- watcher.MetricsGatewayGetTimer
+		}
 	}()
 }
 
