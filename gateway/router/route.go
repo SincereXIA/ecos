@@ -24,6 +24,15 @@ func NewRouter(cfg Config) *gin.Engine {
 	}
 	InitClient(clientConfig)
 	router := gin.Default()
+	router.Use(func(c *gin.Context) { // Use chan to record gateway process time
+		startTime := time.Now()
+		c.Next()
+		select {
+		case metricsName := <-metricsChan:
+			metrics.GetOrRegisterTimer(metricsName, nil).UpdateSince(startTime)
+		default:
+		}
+	})
 	timeoutMsg, _ := xml.Marshal(RequestTimeout(nil))
 	router.Use(timeout.Timeout(
 		timeout.WithTimeout(time.Minute),
