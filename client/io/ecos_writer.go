@@ -119,6 +119,8 @@ func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 		if len(w.reserveChunks) == 0 {
 			chunks, err := w.chunks.AcquireMultiple(int(w.f.bucketInfo.Config.BlockSize / w.f.config.Object.ChunkSize))
 			if err != nil {
+				logger.Errorf("Unable to acquire chunks: %v", err)
+				logger.Infof("bucketInfo: %v, chunkSize: %v", w.f.bucketInfo, w.f.config.Object.ChunkSize)
 				return nil, err
 			}
 			for _, chunk := range chunks {
