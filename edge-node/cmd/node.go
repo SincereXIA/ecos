@@ -12,6 +12,7 @@ import (
 	"ecos/messenger"
 	configUtil "ecos/utils/config"
 	"ecos/utils/logger"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 	"net/http"
@@ -87,6 +88,7 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 		// Gen Gateway
 		logger.Infof("Start init Gateway ...")
 		g := gateway.NewRouter(conf.GatewayConfig)
+		pprof.Register(g)
 		_ = g.Run()
 	}()
 	logger.Infof("edge node init success")
