@@ -187,6 +187,9 @@ func (w *RemoteWriter) Write(chunk []byte) (n int, err error) {
 }
 
 func (w *RemoteWriter) Close() error {
+	if w.stream == nil {
+		return errno.RemoteGaiaFail
+	}
 	err := w.stream.Send(&UploadBlockRequest{
 		Payload: &UploadBlockRequest_Message{
 			Message: &ControlMessage{
