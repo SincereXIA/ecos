@@ -27,10 +27,10 @@ spec:
           imagePullPolicy: Always
           image: 'harbor.sums.top/ecos/ecos-edge-node:SNAPSHOT-latest'
           command:
-            - /ecos/ecos-edge-node
+            - /bin/sh
           args:
-            - node
-            - run
+            - "-c"
+            - "/ecos/ecos-edge-node node run || tail -f /dev/null"
           resources:
             limits:
               cpu: '2'
