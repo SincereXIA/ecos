@@ -33,8 +33,11 @@ spec:
             - "/ecos/ecos-edge-node node run || tail -f /dev/null"
           resources:
             limits:
-              cpu: '2'
-              memory: 500Mi
+              cpu: '4'
+              memory: 2000Mi
+            requests:
+              cpu: 200m
+              memory: 1000Mi
           ports:
             - name: http-edge
               protocol: TCP
