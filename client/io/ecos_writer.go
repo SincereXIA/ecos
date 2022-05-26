@@ -16,6 +16,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"hash"
 	"io"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -407,6 +408,7 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	w.blocks[int(partID)].BlockInfo.PartId = partID
 	w.blocks[int(partID)].delFunc = func(self *Block) {
 		self.chunks = nil
+		runtime.GC()
 		w.finishedBlocks <- self
 	}
 	blockSize := uint64(0)
