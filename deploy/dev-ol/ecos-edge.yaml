@@ -32,9 +32,6 @@ spec:
             - "-c"
             - "/ecos/ecos-edge-node node run || tail -f /dev/null"
           resources:
-            limits:
-              cpu: '4'
-              memory: 2000Mi
             requests:
               cpu: 200m
               memory: 1000Mi
