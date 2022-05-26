@@ -329,15 +329,25 @@ func (w *EcosWriter) CommitPartialMeta() error {
 	if !w.partObject {
 		return errno.MethodNotAllowed
 	}
+retry:
 	meta := w.genPartialMeta(w.key)
 	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	metaClient, err := NewMetaClient(w.ctx, metaServerNode, w.f.config)
+	ctx, _ := alaya.SetTermToContext(w.ctx, w.f.infoAgent.GetCurClusterInfo().Term)
+	metaClient, err := NewMetaClient(ctx, metaServerNode, w.f.config)
 	if err != nil {
 		logger.Errorf("Update Multipart Object Failed: %v", err)
 		return err
 	}
 	result, err := metaClient.SubmitMeta(meta)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
+			logger.Warningf("Term not match, retry")
+			err = w.f.infoAgent.UpdateCurClusterInfo()
+			if err != nil {
+				return err
+			}
+			goto retry
+		}
 		logger.Errorf("Update Multipart Object Failed: %v with Error %v", result, err)
 		return err
 	}
