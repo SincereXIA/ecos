@@ -25,6 +25,8 @@ const (
 	MetricsGatewayPartGetTimer = MetricsGateway + ".part.get.timer"
 	MetricsGatewayPutTimer     = MetricsGateway + ".put.timer"
 	MetricsGatewayPartPutTimer = MetricsGateway + ".part.put.timer"
+	MetricsGatewayStatTimer    = MetricsGateway + ".stat.timer"
+	MetricsGatewayDeleteTimer  = MetricsGateway + ".delete.timer"
 )
 
 const (
@@ -32,6 +34,8 @@ const (
 	MetricsClientGetTimer     = MetricsClient + ".get.timer"
 	MetricsClientPutTimer     = MetricsClient + ".put.timer"
 	MetricsClientPartPutTimer = MetricsClient + ".part.put.timer"
+	MetricsClientStatTimer    = MetricsClient + ".stat.timer"
+	MetricsClientDeleteTimer  = MetricsClient + ".delete.timer"
 )
 
 const (
