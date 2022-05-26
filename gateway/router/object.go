@@ -532,8 +532,14 @@ func objectLevelDeleteHandler(c *gin.Context) {
 	}
 	if _, ok := c.GetQuery("uploadId"); ok {
 		abortMultipartUpload(c)
+		return
 	}
 	deleteObject(c)
+	defer func() {
+		if metricChan, ok := c.Get("metric"); ok {
+			*metricChan.(*chan string) <- watcher.MetricsGatewayDeleteTimer
+		}
+	}()
 }
 
 // objectLevelHeadHandler handles object level HEAD requests
@@ -546,4 +552,9 @@ func objectLevelHeadHandler(c *gin.Context) {
 		return
 	}
 	headObject(c)
+	defer func() {
+		if metricChan, ok := c.Get("metric"); ok {
+			*metricChan.(*chan string) <- watcher.MetricsGatewayStatTimer
+		}
+	}()
 }
