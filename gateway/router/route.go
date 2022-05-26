@@ -2,12 +2,23 @@ package router
 
 import (
 	"ecos/utils/logger"
+	"github.com/gin-contrib/timeout"
 	"github.com/gin-gonic/gin"
 	"github.com/rcrowley/go-metrics"
-	timeout "github.com/vearne/gin-timeout"
 	"net/http"
 	"time"
 )
+
+const TIMEOUT = time.Minute
+
+func timeoutMiddleware() gin.HandlerFunc {
+	return timeout.New(
+		timeout.WithTimeout(TIMEOUT),
+		timeout.WithHandler(func(c *gin.Context) {
+			c.Next()
+		}),
+	)
+}
 
 func NewRouter(cfg Config) *gin.Engine {
 	if Client != nil {
@@ -37,12 +48,7 @@ func NewRouter(cfg Config) *gin.Engine {
 		}
 		close(metricChan)
 	})
-	router.Use(timeout.Timeout(
-		timeout.WithTimeout(time.Minute),
-		timeout.WithErrorHttpCode(http.StatusRequestTimeout),
-		timeout.WithCallBack(func(r *http.Request) {
-			logger.Warningf("==== \t !!!! TIMEOUT !!!! URL: %s", r.URL.String())
-		})))
+	router.Use(timeoutMiddleware())
 	router.Use(func(c *gin.Context) {
 		c.Header("Server", "ECOS")
 		c.Header("Accept-Ranges", "bytes")
