@@ -4,6 +4,7 @@ package messenger;
 import "common.proto";
 import "object.proto";
 import "pipeline.proto";
+import "timestamp.proto";
 option go_package = "ecos/edge-node/gaia";
 
 service Gaia {
@@ -52,4 +53,11 @@ message ControlMessage {
 message Chunk {
   bytes content = 1;
   uint64 read_bytes = 2;
+}
+
+message BlockStatic {
+  string block_id = 1;
+  string object_id = 2;
+  uint64 size = 3;
+  Timestamp lastVisit = 4;
 }
