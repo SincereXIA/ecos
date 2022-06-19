@@ -2,6 +2,7 @@ package router
 
 import (
 	"ecos/utils/logger"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-contrib/timeout"
 	"github.com/gin-gonic/gin"
 	"github.com/rcrowley/go-metrics"
@@ -72,6 +73,7 @@ func NewRouter(cfg Config) *gin.Engine {
 		bucketRouter.HEAD("/*key", objectLevelHeadHandler)
 		bucketRouter.POST("/*key", objectLevelPostHandler)
 	}
+	pprof.Register(router)
 	return router
 }
 

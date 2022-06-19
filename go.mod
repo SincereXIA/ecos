@@ -10,7 +10,7 @@ require (
 	github.com/deathowl/go-metrics-prometheus v0.0.0-20200518174047-74482eab5bfb
 	github.com/deckarep/golang-set v1.8.0
 	github.com/elliotchance/orderedmap v1.4.0
-	github.com/gin-contrib/pprof v1.3.0 // indirect
+	github.com/gin-contrib/pprof v1.3.0
 	github.com/gin-contrib/timeout v0.0.3
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-playground/validator/v10 v10.10.1 // indirect
@@ -35,6 +35,7 @@ require (
 	github.com/spf13/cobra v1.4.0
 	github.com/stretchr/testify v1.7.1
 	github.com/twmb/murmur3 v1.1.6
+	github.com/ugorji/go v1.2.7 // indirect
 	github.com/wxnacy/wgo v1.0.4
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2
 	go.etcd.io/etcd/pkg/v3 v3.5.2

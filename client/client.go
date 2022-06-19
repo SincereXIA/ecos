@@ -105,6 +105,8 @@ retry:
 				result = nil
 				goto retry
 			}
+			logger.Errorf("ListObjects Failed with Error %v", err)
+			return nil, err
 		}
 		result = append(result, reply.Metas...)
 	}

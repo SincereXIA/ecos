@@ -278,6 +278,7 @@ retry:
 			}
 			goto retry
 		}
+		logger.Errorf("Get ObjectMeta Failed: %v with Error %v", reply, err)
 		return nil, err
 	}
 	return &ObjectOperator{meta: reply}, nil

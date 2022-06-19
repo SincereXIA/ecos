@@ -18,6 +18,7 @@ import (
 	"io"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -58,6 +59,7 @@ type EcosWriter struct {
 	objHash   hash.Hash
 
 	// for multipart upload
+	mutex      sync.RWMutex
 	partObject bool
 	partIDs    []int32
 
@@ -386,6 +388,8 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	if partID < 1 || partID > 10000 {
 		return "", errno.InvalidArgument
 	}
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	noDuplicate := w.addPartID(partID)
 	if !noDuplicate {
 		victim := w.blocks[int(partID)]
@@ -462,6 +466,8 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 	if !w.partObject {
 		return "", errno.MethodNotAllowed
 	}
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.Status != READING {
 		return "", errno.RepeatedClose
 	}
@@ -498,6 +504,8 @@ func (w *EcosWriter) AbortMultiPart() error {
 	if !w.partObject {
 		return errno.MethodNotAllowed
 	}
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.Status != READING {
 		return errno.RepeatedClose
 	}
@@ -538,6 +546,8 @@ func (w *EcosWriter) GetPartBlockInfo(partID int32) (*object.BlockInfo, error) {
 	if !w.partObject {
 		return nil, errno.MethodNotAllowed
 	}
+	w.mutex.RLock()
+	defer w.mutex.RUnlock()
 	if w.Status != READING {
 		return nil, errno.MethodNotAllowed
 	}
