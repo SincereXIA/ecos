@@ -25,6 +25,7 @@ require (
 	github.com/minio/sha256-simd v1.0.0
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
+	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.12.1
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b
