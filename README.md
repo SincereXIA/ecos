@@ -1,6 +1,6 @@
 ECOS
 =========
-<img align="right" src="./docs/pics/logo-small.png">![Project status](https://img.shields.io/badge/version-0.1.0-green.svg)
+<img align="right" src="./docs/pics/logo-small.png">![Project status](https://img.shields.io/badge/version-1.0.1-green.svg)
 ![License](https://img.shields.io/badge/license-Apache-blue)
 
 An edge-cloud collaborative object storage
@@ -46,29 +46,29 @@ ECOS 具有以下特点：
 
 ### v0.2
 
-- [ ] 对象下载 rpc 定义
-- [ ] Object 元数据持久化
-- [ ] 完整的对象下载流程
+- [x] 对象下载 rpc 定义
+- [x] Object 元数据持久化
+- [x] 完整的对象下载流程
 
 ### v0.3
 
-- [ ] 多用户，多 bucket 支持
-- [ ] 节点临时掉线异常处理
-- [ ] 节点重启后重新加入集群
+- [x] 多用户，多 bucket 支持
+- [x] 节点临时掉线异常处理
+- [x] 节点重启后重新加入集群
 
 ### v0.4
 
-- [ ] 边缘节点扩缩容
+- [x] 边缘节点扩缩容
 
 ### v1.x
 
-- [ ] S3 网关适配
+- [x] S3 网关适配
 - [ ] 用户指定的云边协同
 
 ### v2.x
 
 - [ ] 自动的云边协同
-- [ ] Crush 算法优化
+- [x] Crush 算法优化
 
 ### v3.x
 
