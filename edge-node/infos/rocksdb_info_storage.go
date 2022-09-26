@@ -26,8 +26,8 @@ func (s *RocksDBInfoStorage) List(prefix string) ([]Information, error) {
 	result := make([]Information, 0)
 	it := s.db.NewIteratorCF(database.ReadOpts, s.myHandler)
 	defer it.Close()
-
-	for it.SeekToFirst(); it.Valid(); it.Next() {
+	it.Seek([]byte(prefix))
+	for ; it.Valid(); it.Next() {
 		key := string(it.Key().Data())
 		if strings.HasPrefix(key, prefix) {
 			metaData := it.Value()
@@ -39,6 +39,8 @@ func (s *RocksDBInfoStorage) List(prefix string) ([]Information, error) {
 			}
 			result = append(result, baseInfo)
 			metaData.Free()
+		} else {
+			break
 		}
 	}
 	return result, nil

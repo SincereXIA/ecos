@@ -7,15 +7,17 @@ import (
 	agent "ecos/client/info-agent"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
+	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
+	cmap "github.com/orcaman/concurrent-map"
 	"github.com/twmb/murmur3"
 	"hash"
 	"io"
-	"sync"
 	"time"
 )
 
@@ -28,8 +30,10 @@ type EcosIOFactory struct {
 	bucketInfo *infos.BucketInfo
 	chunkPool  *common.Pool
 
+	clusterInfo *infos.ClusterInfo
+
 	// for multipart upload
-	multipartJobs sync.Map
+	multipartJobs cmap.ConcurrentMap
 }
 
 // NewEcosIOFactory Constructor for EcosIOFactory
@@ -55,7 +59,25 @@ func NewEcosIOFactory(ctx context.Context, config *config.ClientConfig, volumeID
 		return nil, err
 	}
 	ret.bucketInfo = info.BaseInfo().GetBucketInfo()
+	ret.multipartJobs = cmap.New()
 	return ret, err
+}
+
+func (f *EcosIOFactory) GetLatestClusterInfo() error {
+	conn, err := messenger.GetRpcConn(f.config.NodeAddr, f.config.NodePort)
+	if err != nil {
+		return err
+	}
+	watcherClient := watcher.NewWatcherClient(conn)
+	reply, err := watcherClient.GetClusterInfo(context.Background(),
+		&watcher.GetClusterInfoRequest{Term: 0})
+	if err != nil {
+		logger.Errorf("get group info fail: %v", err)
+		return err
+	}
+	clusterInfo := reply.GetClusterInfo()
+	*(f.clusterInfo) = *clusterInfo
+	return nil
 }
 
 func (f *EcosIOFactory) IsConnected() bool {
@@ -106,13 +128,13 @@ func (f *EcosIOFactory) CreateMultipartUploadJob(key string) string {
 	ret := f.GetEcosWriter(key)
 	ret.partObject = true
 	uploadId := uuid.New().String()
-	f.multipartJobs.Store(uploadId, ret)
+	f.multipartJobs.Set(uploadId, ret)
 	return uploadId
 }
 
 // GetMultipartUploadWriter Get the writer for a multipart upload with a jobID
 func (f *EcosIOFactory) GetMultipartUploadWriter(jobID string) (*EcosWriter, error) {
-	ret, ok := f.multipartJobs.Load(jobID)
+	ret, ok := f.multipartJobs.Get(jobID)
 	if !ok {
 		return nil, errno.NoSuchUpload
 	}
@@ -129,7 +151,7 @@ func (f *EcosIOFactory) AbortMultipartUploadJob(jobID string) error {
 	if err != nil {
 		return err
 	}
-	f.multipartJobs.Delete(jobID)
+	f.multipartJobs.Remove(jobID)
 	return nil
 }
 
@@ -153,37 +175,33 @@ func (f *EcosIOFactory) CompleteMultipartUploadJob(jobID string, parts ...types.
 	if err != nil {
 		return "", err
 	}
-	f.multipartJobs.Delete(jobID)
+	f.multipartJobs.Remove(jobID)
 	return etag, nil
 }
 
 // AbortAllMultipartUploadJob Abort all multipart upload job
 func (f *EcosIOFactory) AbortAllMultipartUploadJob() error {
-	f.multipartJobs.Range(func(key, value interface{}) bool {
-		writer, err := f.GetMultipartUploadWriter(key.(string))
+	for job := range f.multipartJobs.IterBuffered() {
+		writer := job.Val.(*EcosWriter)
+		err := writer.Abort()
 		if err != nil {
-			return true
+			logger.Warningf("Abort mp-job %v fail: %v", job.Key, err)
 		}
-		err = writer.Abort()
-		if err != nil {
-			return true
-		}
-		f.multipartJobs.Delete(key.(string))
-		return true
-	})
+		f.multipartJobs.Remove(job.Key)
+	}
 	return nil
 }
 
 // ListMultipartUploadJob List all multipart upload job
 func (f *EcosIOFactory) ListMultipartUploadJob() ([]types.MultipartUpload, error) {
 	ret := make([]types.MultipartUpload, 0)
-	f.multipartJobs.Range(func(key, value interface{}) bool {
+	for job := range f.multipartJobs.IterBuffered() {
+		writer := job.Val.(*EcosWriter)
 		ret = append(ret, types.MultipartUpload{
-			Key:      &value.(*EcosWriter).key,
-			UploadId: common.PtrString(key.(string)),
+			Key:      &writer.key,
+			UploadId: common.PtrString(job.Key),
 		})
-		return true
-	})
+	}
 	return ret, nil
 }
 

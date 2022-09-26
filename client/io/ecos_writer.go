@@ -16,6 +16,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"hash"
 	"io"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -119,6 +120,8 @@ func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 		if len(w.reserveChunks) == 0 {
 			chunks, err := w.chunks.AcquireMultiple(int(w.f.bucketInfo.Config.BlockSize / w.f.config.Object.ChunkSize))
 			if err != nil {
+				logger.Errorf("Unable to acquire chunks: %v", err)
+				logger.Infof("bucketInfo: %v, chunkSize: %v", w.f.bucketInfo, w.f.config.Object.ChunkSize)
 				return nil, err
 			}
 			for _, chunk := range chunks {
@@ -327,15 +330,25 @@ func (w *EcosWriter) CommitPartialMeta() error {
 	if !w.partObject {
 		return errno.MethodNotAllowed
 	}
+retry:
 	meta := w.genPartialMeta(w.key)
 	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	metaClient, err := NewMetaClient(w.ctx, metaServerNode, w.f.config)
+	ctx, _ := alaya.SetTermToContext(w.ctx, w.f.infoAgent.GetCurClusterInfo().Term)
+	metaClient, err := NewMetaClient(ctx, metaServerNode, w.f.config)
 	if err != nil {
 		logger.Errorf("Update Multipart Object Failed: %v", err)
 		return err
 	}
 	result, err := metaClient.SubmitMeta(meta)
 	if err != nil {
+		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
+			logger.Warningf("Term not match, retry")
+			err = w.f.infoAgent.UpdateCurClusterInfo()
+			if err != nil {
+				return err
+			}
+			goto retry
+		}
 		logger.Errorf("Update Multipart Object Failed: %v with Error %v", result, err)
 		return err
 	}
@@ -397,6 +410,7 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	w.blocks[int(partID)].BlockInfo.PartId = partID
 	w.blocks[int(partID)].delFunc = func(self *Block) {
 		self.chunks = nil
+		runtime.GC()
 		w.finishedBlocks <- self
 	}
 	blockSize := uint64(0)

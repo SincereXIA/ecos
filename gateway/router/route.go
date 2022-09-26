@@ -2,13 +2,23 @@ package router
 
 import (
 	"ecos/utils/logger"
-	"encoding/xml"
+	"github.com/gin-contrib/timeout"
 	"github.com/gin-gonic/gin"
 	"github.com/rcrowley/go-metrics"
-	timeout "github.com/vearne/gin-timeout"
 	"net/http"
 	"time"
 )
+
+const TIMEOUT = time.Minute
+
+func timeoutMiddleware() gin.HandlerFunc {
+	return timeout.New(
+		timeout.WithTimeout(TIMEOUT),
+		timeout.WithHandler(func(c *gin.Context) {
+			c.Next()
+		}),
+	)
+}
 
 func NewRouter(cfg Config) *gin.Engine {
 	if Client != nil {
@@ -24,14 +34,21 @@ func NewRouter(cfg Config) *gin.Engine {
 	}
 	InitClient(clientConfig)
 	router := gin.Default()
-	timeoutMsg, _ := xml.Marshal(RequestTimeout(nil))
-	router.Use(timeout.Timeout(
-		timeout.WithTimeout(time.Minute),
-		timeout.WithErrorHttpCode(http.StatusRequestTimeout),
-		timeout.WithDefaultMsg(string(timeoutMsg)),
-		timeout.WithCallBack(func(r *http.Request) {
-			logger.Warningf("timeout happen, url: %s", r.URL.String())
-		})))
+	router.Use(func(c *gin.Context) { // Use chan to record gateway process time
+		startTime := time.Now()
+		metricChan := make(chan string, 1)
+		c.Set("metric", &metricChan)
+		c.Next()
+		select {
+		case metricsName := <-metricChan:
+			logger.Infof("Pushing to %s", metricsName)
+			metrics.GetOrRegisterTimer(metricsName, nil).UpdateSince(startTime)
+		default:
+			logger.Infof("No metrics to push")
+		}
+		close(metricChan)
+	})
+	router.Use(timeoutMiddleware())
 	router.Use(func(c *gin.Context) {
 		c.Header("Server", "ECOS")
 		c.Header("Accept-Ranges", "bytes")
