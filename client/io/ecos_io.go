@@ -7,6 +7,8 @@ import (
 	agent "ecos/client/info-agent"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
+	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
@@ -27,6 +29,8 @@ type EcosIOFactory struct {
 	config     *config.ClientConfig
 	bucketInfo *infos.BucketInfo
 	chunkPool  *common.Pool
+
+	clusterInfo *infos.ClusterInfo
 
 	// for multipart upload
 	multipartJobs sync.Map
