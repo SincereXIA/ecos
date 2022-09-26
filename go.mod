@@ -10,7 +10,6 @@ require (
 	github.com/deathowl/go-metrics-prometheus v0.0.0-20200518174047-74482eab5bfb
 	github.com/deckarep/golang-set v1.8.0
 	github.com/elliotchance/orderedmap v1.4.0
-	github.com/gin-contrib/pprof v1.3.0 // indirect
 	github.com/gin-contrib/timeout v0.0.3
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-playground/validator/v10 v10.10.1 // indirect
