@@ -342,6 +342,9 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 }
 
 func (m *Moon) IsLeader() bool {
+	if m.raft == nil || m.raft.Node == nil {
+		return false
+	}
 	return m.raft.Node.Status().Lead == m.id
 }
 

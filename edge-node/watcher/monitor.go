@@ -62,9 +62,10 @@ type NodeMonitor struct {
 	nodeStatusMap sync.Map
 	reportTimers  sync.Map
 
-	selfNodeStatus *NodeStatusReport
-	selfPipeline   map[uint64]*PipelineReport
-	watcher        *Watcher
+	selfNodeStatusMutex sync.Mutex
+	selfNodeStatus      *NodeStatusReport
+	selfPipeline        map[uint64]*PipelineReport
+	watcher             *Watcher
 
 	reportersMap sync.Map
 	eventChannel chan *Event
@@ -112,6 +113,78 @@ func (m *NodeMonitor) Register(name string, reporter Reporter) error {
 	}
 	m.reportersMap.Store(name, reporter)
 	return nil
+}
+
+//CollectNodes 收集 Cluster 中所有 Node 的节点信息
+func (m *NodeMonitor) collectNodes() {
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-m.timer.C:
+			// 检查自己是否为 leader
+			//logger.Debugf("Node: %v check if need collect nodes", m.watcher.GetSelfInfo().GetID())
+			if !m.watcher.moon.IsLeader() {
+				//logger.Debugf("Node: %v not leader", m.watcher.GetSelfInfo().GetID())
+				time.Sleep(time.Second * 3)
+				continue
+			}
+			logger.Debugf("Node: %v start collect node report", m.watcher.GetSelfInfo().GetID())
+
+			m.watcher.GetCurrentClusterInfo()
+			nodeInfoStorage := m.watcher.register.GetStorage(infos.InfoType_NODE_INFO)
+			nodeInfos, err := nodeInfoStorage.GetAll()
+			if err != nil {
+				logger.Errorf("get nodeInfo from nodeInfoStorage fail: %v", err)
+				//return
+			}
+			logger.Debugf("Node: %v start send collect request, node size: %v", m.watcher.GetSelfInfo().GetID(), len(nodeInfos))
+
+			// 拉取其他节点信息
+			for _, nodeInfo := range nodeInfos {
+				go func(inform infos.Information) {
+					nodeInfo := inform.BaseInfo().GetNodeInfo()
+					conn, _ := messenger.GetRpcConnByNodeInfo(nodeInfo)
+					client := NewMonitorClient(conn)
+					ctxWithTimeOut, cancel := context.WithTimeout(m.ctx, time.Second*10)
+					defer cancel()
+					report, err := client.Get(ctxWithTimeOut, &emptypb.Empty{})
+					if err != nil {
+						// 获取节点信息超时，汇报错误信息
+						logger.Warningf("get node status timeout, nodeId: %v, err: %v", nodeInfo.RaftId, err.Error())
+						v, ok := m.nodeStatusMap.Load(nodeInfo.RaftId)
+						if !ok {
+							return
+						}
+						r := v.(*NodeStatusReport)
+						if r.State == infos.NodeState_OFFLINE {
+							return
+						}
+						r.State = infos.NodeState_OFFLINE
+						m.nodeStatusMap.Store(nodeInfo.RaftId, r)
+						m.eventChannel <- &Event{
+							Report: r,
+						}
+						return
+					}
+
+					if _, ok := m.nodeStatusMap.Load(report.NodeId); !ok {
+						// first time online
+						m.eventChannel <- &Event{
+							Report: report,
+						}
+					}
+					m.nodeStatusMap.Store(report.NodeId, report)
+					for _, p := range report.Pipelines {
+						m.clusterPipeline.Store(p.PgId, p)
+					}
+
+					logger.Tracef("Node: %v get node report from: %v", m.watcher.GetSelfInfo().GetID(), nodeInfo.RaftId)
+				}(nodeInfo)
+			}
+
+		}
+	}
 }
 
 // Report is a rpc func to get the node status report.
@@ -211,6 +284,20 @@ func (m *NodeMonitor) GetClusterReport(context.Context, *emptypb.Empty) (*Cluste
 	}, nil
 }
 
+// Get return NodeStatusReport of node self
+// Get 返回自身的 Status 信息，用于拉取模型
+func (m *NodeMonitor) Get(context.Context, *emptypb.Empty) (*NodeStatusReport, error) {
+	m.selfNodeStatusMutex.Lock()
+	defer m.selfNodeStatusMutex.Unlock()
+	if m.selfNodeStatus == nil {
+		m.selfNodeStatusMutex.Unlock()
+		m.collectReports()
+		m.selfNodeStatusMutex.Lock()
+	}
+	return m.selfNodeStatus, nil
+}
+
+// collectReports 收集自身的 status 信息
 func (m *NodeMonitor) collectReports() {
 	m.reportersMap.Range(func(key, value interface{}) bool {
 		reporter := value.(Reporter)
@@ -218,6 +305,8 @@ func (m *NodeMonitor) collectReports() {
 			return true
 		}
 		reports := reporter.GetReports()
+
+		m.selfNodeStatusMutex.Lock()
 		for _, report := range reports {
 			if report.NodeReport != nil {
 				m.selfNodeStatus = report.NodeReport
@@ -230,6 +319,7 @@ func (m *NodeMonitor) collectReports() {
 				}
 			}
 		}
+		m.selfNodeStatusMutex.Unlock()
 		return true
 	})
 }
@@ -249,28 +339,32 @@ func (m *NodeMonitor) runReport() {
 			return
 		case <-m.timer.C:
 			m.collectReports()
+			m.selfNodeStatus.Pipelines = m.getAllPipelineReports()
 			leaderID := m.watcher.GetMoon().GetLeaderID()
 			if leaderID == 0 {
 				continue
 			}
-			leaderInfo, err := m.watcher.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO, strconv.FormatUint(leaderID, 10))
-			if err != nil || leaderInfo.BaseInfo().GetNodeInfo() == nil {
-				logger.Warningf("node: %v get leader info: %v failed: %v", m.watcher.GetSelfInfo().GetID(), leaderID, err)
-				continue
-			}
-			conn, _ := messenger.GetRpcConnByNodeInfo(leaderInfo.BaseInfo().GetNodeInfo())
-			client := NewMonitorClient(conn)
-			m.selfNodeStatus.Pipelines = m.getAllPipelineReports()
-			_, err = client.Report(m.ctx, m.selfNodeStatus)
-			if err != nil {
-				logger.Errorf("runReport node status failed: %v", err)
-			}
+			// 推送模型
+			/*
+				leaderInfo, err := m.watcher.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO, strconv.FormatUint(leaderID, 10))
+				if err != nil || leaderInfo.BaseInfo().GetNodeInfo() == nil {
+					logger.Warningf("node: %v get leader info: %v failed: %v", m.watcher.GetSelfInfo().GetID(), leaderID, err)
+					continue
+				}
+				conn, _ := messenger.GetRpcConnByNodeInfo(leaderInfo.BaseInfo().GetNodeInfo())
+				client := NewMonitorClient(conn)
+				_, err = client.Report(m.ctx, m.selfNodeStatus)
+				if err != nil {
+					logger.Errorf("runReport node status failed: %v", err)
+				}
+			*/
 		}
 	}
 }
 
 func (m *NodeMonitor) Run() {
 	m.timer = time.NewTicker(time.Second * 1)
+	go m.collectNodes()
 	go m.runReport()
 	go m.pushToPrometheus()
 }
@@ -287,7 +381,7 @@ func NewMonitor(ctx context.Context, w *Watcher, rpcServer *messenger.RpcServer)
 		cancel:        cancel,
 		nodeStatusMap: sync.Map{},
 		watcher:       w,
-		eventChannel:  make(chan *Event),
+		eventChannel:  make(chan *Event, 5),
 		selfPipeline:  make(map[uint64]*PipelineReport),
 	}
 	RegisterMonitorServer(rpcServer, monitor)

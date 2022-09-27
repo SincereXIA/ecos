@@ -65,6 +65,7 @@ func testMoon(t *testing.T, mock bool) {
 		}()
 		go moons[i].Run()
 	}
+	time.Sleep(time.Second) // 保证所有 moons 都执行了 run 方法
 
 	t.Cleanup(func() {
 		for i := 0; i < nodeNum; i++ {
