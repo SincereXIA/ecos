@@ -249,7 +249,6 @@ func (r *Raft) controlLoop() {
 			logger.Infof("Node: %v became leader for PG: %v, start control loop", r.raft.ID, r.pgID)
 		}
 		newP := r.getPipeline()
-		logger.Infof("Node: %v became leader for PG: %v, newP: %v, now: %v", r.raft.ID, r.pgID, newP, r.raft.ConfState.Voters)
 		firstTime = false
 		needAdd, needRemove := calDiff(newP.RaftId, r.raft.ConfState.Voters)
 		err := r.ProposeNewNodes(needAdd)

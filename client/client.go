@@ -7,6 +7,7 @@ import (
 	"ecos/client/io"
 	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
+	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
@@ -65,6 +66,22 @@ func New(config *config.ClientConfig) (*Client, error) {
 		infoAgent:   infoAgent,
 		factoryPool: lruPool,
 	}, nil
+}
+
+func (client *Client) GetMoon() (moon.MoonClient, uint64, error) {
+	for _, nodeInfo := range client.infoAgent.GetCurClusterInfo().NodesInfo {
+		if nodeInfo.State != infos.NodeState_ONLINE {
+			continue
+		}
+		conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+		if err != nil {
+			logger.Errorf("get rpc connection to node: %v fail: %v", nodeInfo.RaftId, err.Error())
+			continue
+		}
+		moonClient := moon.NewMoonClient(conn)
+		return moonClient, nodeInfo.RaftId, nil
+	}
+	return nil, 0, errno.ConnectionIssue
 }
 
 func (client *Client) ListObjects(_ context.Context, bucketName, prefix string) ([]*object.ObjectMeta, error) {
