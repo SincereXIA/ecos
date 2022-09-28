@@ -84,7 +84,7 @@ func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipe
 			})
 		}
 	}
-	logger.Infof("%v new raft node for pg %v, peers: %v, oldP: %v", raftID, r.pgID, peers, oldP)
+	logger.Infof("%v new raft node for PG: %v, peers: %v, oldP: %v", raftID, r.pgID, peers, oldP)
 
 	readyC := make(chan bool)
 	// TODO: init wal base path
@@ -106,6 +106,7 @@ func (r *Raft) cleanup() {
 func (r *Raft) Run() {
 	go r.RunAskForLeader()
 	go r.readCommit(r.raft.CommitC, r.raft.ErrorC)
+	go r.controlLoop()
 
 	for {
 		select {
@@ -219,20 +220,50 @@ func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 
 func (r *Raft) ProposeNewPipeline(newP *pipeline.Pipeline, oldP *pipeline.Pipeline) {
 	r.setPipeline(newP)
-	go func() {
-		needAdd, needRemove := calDiff(newP.RaftId, oldP.RaftId)
+	logger.Infof("set new pipeline: %v, %v", newP.PgId, newP.RaftId)
+	//go func() {
+	//	needAdd, needRemove := calDiff(newP.RaftId, oldP.RaftId)
+	//	err := r.ProposeNewNodes(needAdd)
+	//	if err != nil {
+	//		logger.Errorf("Alaya propose new nodes in PG: %v fail, err: %v", r.pgID, err)
+	//	}
+	//	if r.raft.Node.Status().ID != r.getPipeline().RaftId[0] {
+	//		return
+	//	}
+	//	err = r.ProposeRemoveNodes(needRemove)
+	//	if err != nil {
+	//		logger.Errorf("Alaya propose remove nodes in PG: %v fail, err: %v", r.pgID, err)
+	//	}
+	//}()
+}
+
+func (r *Raft) controlLoop() {
+	firstTime := true
+	for {
+		time.Sleep(time.Second)
+		if !r.isLeader() {
+			firstTime = true
+			continue
+		}
+		if firstTime {
+			logger.Infof("Node: %v became leader for PG: %v, start control loop", r.raft.ID, r.pgID)
+		}
+		newP := r.getPipeline()
+		logger.Infof("Node: %v became leader for PG: %v, newP: %v, now: %v", r.raft.ID, r.pgID, newP, r.raft.ConfState.Voters)
+		firstTime = false
+		needAdd, needRemove := calDiff(newP.RaftId, r.raft.ConfState.Voters)
 		err := r.ProposeNewNodes(needAdd)
 		if err != nil {
 			logger.Errorf("Alaya propose new nodes in PG: %v fail, err: %v", r.pgID, err)
 		}
-		if r.raft.Node.Status().ID != r.getPipeline().RaftId[0] {
-			return
-		}
+		//if r.raft.Node.Status().ID != r.getPipeline().RaftId[0] {
+		//	return
+		//}
 		err = r.ProposeRemoveNodes(needRemove)
 		if err != nil {
 			logger.Errorf("Alaya propose remove nodes in PG: %v fail, err: %v", r.pgID, err)
 		}
-	}()
+	}
 }
 
 func (r *Raft) findVoter(id uint64) bool {

@@ -129,6 +129,7 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 		InfoId:   infos.GenBucketID(v.volumeID, key),
 	})
 	if err != nil {
+		logger.Errorf("get info by moon: %v err: %v", nodeInfo.RaftId, err.Error())
 		return nil, err
 	}
 	return &BucketOperator{

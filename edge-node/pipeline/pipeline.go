@@ -68,6 +68,9 @@ func GenPipelines(clusterInfo infos.ClusterInfo, pgNum uint64, groupSize uint64)
 	rootNode := infos.NewRootNode()
 	rootNode.Root = rootNode
 	for _, info := range clusterInfo.NodesInfo {
+		if info.State == infos.NodeState_OFFLINE {
+			continue
+		}
 		rootNode.Children = append(rootNode.Children,
 			&infos.EcosNode{
 				NodeInfo: info,

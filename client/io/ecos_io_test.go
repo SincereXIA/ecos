@@ -64,7 +64,7 @@ func TestEcosWriterAndReader(t *testing.T) {
 		},
 	}
 	_ = common.InitAndClearPath(basePath)
-	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, false, basePath, 9)
+	watchers, _, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, false, basePath, 9)
 
 	// Add a test bucket first
 	bucketInfo := infos.GenBucketInfo("root", "default", "root")

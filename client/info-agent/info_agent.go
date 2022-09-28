@@ -47,26 +47,31 @@ func (agent *InfoAgent) Get(infoType infos.InfoType, id string) (infos.Informati
 		return info, err
 	}
 	// no cache, start request
-	nodeInfo := agent.currentClusterInfo.NodesInfo[0]
-	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
-	if err != nil {
-		return infos.InvalidInfo{}, err
+	for _, nodeInfo := range agent.currentClusterInfo.NodesInfo {
+		conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+		if err != nil {
+			logger.Warningf("create rpc connect to node: %v, err: %v", nodeInfo.RaftId, err.Error())
+			continue
+		}
+		m := moon.NewMoonClient(conn)
+		req := &moon.GetInfoRequest{
+			InfoId:   id,
+			InfoType: infoType,
+		}
+		result, err := m.GetInfo(agent.ctx, req)
+		if err != nil {
+			logger.Warningf("get info from node: %v, err: %v", nodeInfo.RaftId, err.Error())
+			continue
+		}
+		_ = agent.Update(result.GetBaseInfo())
+		return result.GetBaseInfo(), err
 	}
-	m := moon.NewMoonClient(conn)
-	req := &moon.GetInfoRequest{
-		InfoId:   id,
-		InfoType: infoType,
-	}
-	result, err := m.GetInfo(agent.ctx, req)
-	if err != nil {
-		return infos.InvalidInfo{}, err
-	}
-	_ = agent.Update(result.GetBaseInfo())
-	return result.GetBaseInfo(), err
+	return infos.InvalidInfo{}, errno.ConnectionIssue
 }
 
 // GetCurClusterInfo Returns current ClusterInfo
 func (agent *InfoAgent) GetCurClusterInfo() infos.ClusterInfo {
+	_ = agent.UpdateCurClusterInfo()
 	agent.mutex.RLock()
 	defer agent.mutex.RUnlock()
 	return *agent.currentClusterInfo

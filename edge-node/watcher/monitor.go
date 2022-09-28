@@ -299,6 +299,8 @@ func (m *NodeMonitor) Get(context.Context, *emptypb.Empty) (*NodeStatusReport, e
 
 // collectReports 收集自身的 status 信息
 func (m *NodeMonitor) collectReports() {
+	m.selfNodeStatusMutex.Lock()
+	defer m.selfNodeStatusMutex.Unlock()
 	m.reportersMap.Range(func(key, value interface{}) bool {
 		reporter := value.(Reporter)
 		if reporter.IsChanged() == false {
@@ -306,7 +308,6 @@ func (m *NodeMonitor) collectReports() {
 		}
 		reports := reporter.GetReports()
 
-		m.selfNodeStatusMutex.Lock()
 		for _, report := range reports {
 			if report.NodeReport != nil {
 				m.selfNodeStatus = report.NodeReport
@@ -319,9 +320,9 @@ func (m *NodeMonitor) collectReports() {
 				}
 			}
 		}
-		m.selfNodeStatusMutex.Unlock()
 		return true
 	})
+	m.selfNodeStatus.Pipelines = m.getAllPipelineReports()
 }
 
 func (m *NodeMonitor) getAllPipelineReports() []*PipelineReport {
@@ -339,7 +340,6 @@ func (m *NodeMonitor) runReport() {
 			return
 		case <-m.timer.C:
 			m.collectReports()
-			m.selfNodeStatus.Pipelines = m.getAllPipelineReports()
 			leaderID := m.watcher.GetMoon().GetLeaderID()
 			if leaderID == 0 {
 				continue

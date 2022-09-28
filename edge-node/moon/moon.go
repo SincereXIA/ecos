@@ -342,6 +342,8 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 }
 
 func (m *Moon) IsLeader() bool {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 	if m.raft == nil || m.raft.Node == nil {
 		return false
 	}

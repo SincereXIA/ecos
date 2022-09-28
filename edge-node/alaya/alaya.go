@@ -337,12 +337,14 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
 		raftNode := value.(*Raft)
 		pgID := key.(uint64)
-
-		if raftNode.raft.Node.Status().Lead != a.selfInfo.RaftId {
-			return true
-		}
-		// if this node is leader, add new pipelines node first
 		p := pipelines.MetaPipelines[pgID-1]
+
+		//if raftNode.raft.Node.Status().Lead != a.selfInfo.RaftId &&
+		//	-1 == arrays.Contains(p.RaftId, raftNode.raft.Node.Status().Lead) {
+		//	// 若当前节点不是 leader，并且原有 leader 仍然在新 pg 中，则当前 pg 可以跳过
+		//	return true
+		//}
+		// if this node is leader, add new pipelines node first
 		raftNode.ProposeNewPipeline(p, oldPipelines.MetaPipelines[pgID-1])
 		return true
 	})
@@ -365,7 +367,6 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 		}
 		if a.state == UPDATING {
 			go func(raft *Raft) {
-				//time.Sleep(time.Second * 2)
 				raft.Run()
 			}(raft)
 		}
@@ -441,6 +442,7 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 	length := 0
 	if len(a.clusterPipelines.MetaPipelines) == 0 || a.state != RUNNING ||
 		a.clusterPipelines.Term != a.watcher.GetCurrentTerm() {
+		logger.Infof("term not ok")
 		return false
 	}
 	a.PGRaftNode.Range(func(key, value interface{}) bool {
