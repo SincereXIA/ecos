@@ -14,7 +14,7 @@ import (
 )
 
 func RunTestEdgeNodeCluster(t gomock.TestReporter, ctx context.Context, mock bool,
-	basePath string, num int) ([]*watcher.Watcher, []*messenger.RpcServer) {
+	basePath string, num int) ([]*watcher.Watcher, []alaya.Alayaer, []*messenger.RpcServer) {
 	var watchers []*watcher.Watcher
 	var rpcServers []*messenger.RpcServer
 	var alayas []alaya.Alayaer
@@ -42,8 +42,8 @@ func RunTestEdgeNodeCluster(t gomock.TestReporter, ctx context.Context, mock boo
 		go a.Run()
 	}
 	watcher.WaitAllTestWatcherOK(watchers)
-	waiteAllAlayaOK(alayas)
-	return watchers, rpcServers
+	WaiteAllAlayaOK(alayas)
+	return watchers, alayas, rpcServers
 }
 
 func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []alaya.Alayaer {
@@ -85,7 +85,7 @@ func GenGaiaCluster(ctx context.Context, basePath string, watchers []*watcher.Wa
 	return gaias
 }
 
-func waiteAllAlayaOK(alayas []alaya.Alayaer) {
+func WaiteAllAlayaOK(alayas []alaya.Alayaer) {
 	timer := time.After(60 * time.Second)
 	for {
 		select {
@@ -101,14 +101,25 @@ func waiteAllAlayaOK(alayas []alaya.Alayaer) {
 		default:
 		}
 		ok := true
-		for _, a := range alayas {
+		for id, a := range alayas {
 			if !a.IsAllPipelinesOK() {
-				//logger.Warningf("Alaya %v not ok", id+1)
+				logger.Warningf("Alaya %v not ok", id+1)
+				switch x := a.(type) {
+				case *alaya.Alaya:
+					x.PrintPipelineInfo()
+				}
 				ok = false
 				break
 			}
 		}
 		if ok {
+			logger.Infof("=== All alaya ok ===")
+			for _, a := range alayas {
+				switch x := a.(type) {
+				case *alaya.Alaya:
+					x.PrintPipelineInfo()
+				}
+			}
 			return
 		}
 		time.Sleep(time.Millisecond * 200)

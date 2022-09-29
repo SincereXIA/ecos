@@ -130,11 +130,12 @@ func WaitAllTestWatcherOK(watchers []*Watcher) {
 					watchers[i].GetSelfInfo().RaftId, watchers[i].moon.GetLeaderID())
 				time.Sleep(time.Millisecond * 300)
 			} else {
+				logger.Debugf("WaitAllTestWatcherOK get leader, node: %v", watchers[i].GetSelfInfo().RaftId)
 				break
 			}
 		}
 	}
-
+	logger.Debugf("WaitAllTestWatcherOK get leader, start check health")
 	for {
 		ok := true
 		select {
@@ -155,6 +156,7 @@ func WaitAllTestWatcherOK(watchers []*Watcher) {
 				logger.Debugf("WaitAllTestWatcherOK wait health node, node: %v", w.GetSelfInfo().RaftId)
 				break
 			}
+			logger.Debugf("WaitAllTestWatcherOK wait health node ok, node: %v", w.GetSelfInfo().RaftId)
 		}
 		if ok {
 			return

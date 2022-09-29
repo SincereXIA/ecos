@@ -32,7 +32,7 @@ func TestGateway(t *testing.T) {
 			_ = os.RemoveAll(basePath)
 		})
 		_ = common.InitAndClearPath(basePath)
-		watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, true, basePath, 9)
+		watchers, _, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, true, basePath, 9)
 
 		// Add a test bucket first
 		bucketName := "default"

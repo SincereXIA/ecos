@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"ecos/edge-node/infos"
+	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"github.com/sincerexia/gocrush"
 	"strconv"
@@ -48,6 +49,9 @@ func (cp *ClusterPipelines) GetBlockPipeline(pgID uint64) *Pipeline {
 func NewClusterPipelines(info infos.ClusterInfo) (*ClusterPipelines, error) {
 	metaPipelines := GenMetaPipelines(info)
 	blockPipelines := GenBlockPipelines(info)
+	if len(metaPipelines) == 0 || len(blockPipelines) == 0 {
+		return nil, errno.ClusterNotOK
+	}
 	return &ClusterPipelines{
 		Term:           info.Term,
 		MetaPipelines:  metaPipelines,
@@ -67,7 +71,12 @@ func GenPipelines(clusterInfo infos.ClusterInfo, pgNum uint64, groupSize uint64)
 	var rs []*Pipeline
 	rootNode := infos.NewRootNode()
 	rootNode.Root = rootNode
+	healthNodeNum := 0
 	for _, info := range clusterInfo.NodesInfo {
+		if info.State == infos.NodeState_OFFLINE {
+			continue
+		}
+		healthNodeNum += 1
 		rootNode.Children = append(rootNode.Children,
 			&infos.EcosNode{
 				NodeInfo: info,
@@ -76,6 +85,9 @@ func GenPipelines(clusterInfo infos.ClusterInfo, pgNum uint64, groupSize uint64)
 				Root:     rootNode,
 			},
 		)
+	}
+	if uint64(healthNodeNum) < groupSize {
+		return nil
 	}
 	rootNode.Selector = gocrush.NewStrawSelector(rootNode)
 	for i := uint64(1); i <= pgNum; i++ {

@@ -30,7 +30,7 @@ func TestClient(t *testing.T) {
 		_ = os.RemoveAll(basePath)
 	})
 	_ = common.InitAndClearPath(basePath)
-	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, false, basePath, 9)
+	watchers, alayas, rpcServers := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, false, basePath, 9)
 
 	conf := config.DefaultConfig
 	conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
@@ -67,13 +67,18 @@ func TestClient(t *testing.T) {
 	t.Run("test term change", func(t *testing.T) {
 		oldTerm := watchers[0].GetCurrentTerm()
 		watchers[8].Monitor.Stop()
+		watchers[8].GetMoon().Stop()
+		alayas[8].Stop()
+		rpcServers[8].GracefulStop()
 		//watcher.WaitAllTestWatcherOK(watchers[0:8])
 		for oldTerm == watchers[0].GetCurrentTerm() {
 			time.Sleep(time.Second)
 		}
+		edgeNodeTest.WaiteAllAlayaOK(alayas[0:7])
 	})
 
 	t.Run("put object", func(t *testing.T) {
+		time.Sleep(time.Second * 10)
 		for i := 0; i < objectNum; i++ {
 			data := genTestData(objectSize)
 			writer := factory.GetEcosWriter("/test2" + strconv.Itoa(i) + "/ecos-test")
@@ -170,7 +175,7 @@ func BenchmarkClient(b *testing.B) {
 		_ = os.RemoveAll(basePath)
 	})
 	_ = common.InitAndClearPath(basePath)
-	watchers, _ := edgeNodeTest.RunTestEdgeNodeCluster(b, ctx, true, basePath, 9)
+	watchers, _, _ := edgeNodeTest.RunTestEdgeNodeCluster(b, ctx, true, basePath, 9)
 
 	conf := config.DefaultConfig
 	conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr

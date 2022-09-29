@@ -118,17 +118,17 @@ func (v *VolumeOperator) Info() (interface{}, error) {
 }
 
 func (v *VolumeOperator) Get(key string) (Operator, error) {
-	nodeInfo := v.client.infoAgent.GetCurClusterInfo().NodesInfo[0]
-	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+	moonClient, nodeId, err := v.client.GetMoon()
 	if err != nil {
+		logger.Errorf("get moon client err: %v", err.Error())
 		return nil, err
 	}
-	moonClient := moon.NewMoonClient(conn)
 	info, err := moonClient.GetInfo(context.Background(), &moon.GetInfoRequest{
 		InfoType: infos.InfoType_BUCKET_INFO,
 		InfoId:   infos.GenBucketID(v.volumeID, key),
 	})
 	if err != nil {
+		logger.Errorf("get info by moon: %v err: %v", nodeId, err.Error())
 		return nil, err
 	}
 	return &BucketOperator{
@@ -138,12 +138,11 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 }
 
 func (v *VolumeOperator) List(key string) ([]Operator, error) {
-	nodeInfo := v.client.infoAgent.GetCurClusterInfo().NodesInfo[0]
-	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+	moonClient, _, err := v.client.GetMoon()
 	if err != nil {
+		logger.Errorf("get moon client err: %v", err.Error())
 		return nil, err
 	}
-	moonClient := moon.NewMoonClient(conn)
 	reply, err := moonClient.ListInfo(context.Background(), &moon.ListInfoRequest{
 		InfoType: infos.InfoType_BUCKET_INFO,
 		Prefix:   infos.GenBucketID(v.volumeID, key),
@@ -162,12 +161,11 @@ func (v *VolumeOperator) List(key string) ([]Operator, error) {
 }
 
 func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
-	nodeInfo := v.client.infoAgent.GetCurClusterInfo().NodesInfo[0]
-	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+	moonClient, _, err := v.client.GetMoon()
 	if err != nil {
+		logger.Errorf("get moon client err: %v", err.Error())
 		return err
 	}
-	moonClient := moon.NewMoonClient(conn)
 	_, err = moonClient.ProposeInfo(context.Background(), &moon.ProposeInfoRequest{
 		Operate:  moon.ProposeInfoRequest_ADD,
 		Id:       bucketInfo.GetID(),
@@ -180,12 +178,11 @@ func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
 //
 // The Bucket must be empty.
 func (v *VolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
-	nodeInfo := v.client.infoAgent.GetCurClusterInfo().NodesInfo[0]
-	conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+	moonClient, _, err := v.client.GetMoon()
 	if err != nil {
+		logger.Errorf("get moon client err: %v", err.Error())
 		return err
 	}
-	moonClient := moon.NewMoonClient(conn)
 	_, err = moonClient.ProposeInfo(context.Background(), &moon.ProposeInfoRequest{
 		Operate:  moon.ProposeInfoRequest_DELETE,
 		Id:       bucketInfo.GetID(),

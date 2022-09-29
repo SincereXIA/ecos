@@ -144,11 +144,13 @@ const (
 
 	CodePoolClosed = CommonError + iota
 	CodeZeroSize
+	CodeClusterNotOK
 )
 
 var (
-	PoolClosed = newErr(CodePoolClosed, "pool has closed")
-	ZeroSize   = newErr(CodeZeroSize, "0 for uint size")
+	PoolClosed   = newErr(CodePoolClosed, "pool has closed")
+	ZeroSize     = newErr(CodeZeroSize, "0 for uint size")
+	ClusterNotOK = newErr(CodeClusterNotOK, "cluster not ok")
 )
 
 /* Gaia error */
