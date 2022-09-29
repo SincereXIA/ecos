@@ -57,7 +57,11 @@ func (register *StorageRegister) Register(infoType InfoType, storage Storage) {
 func (register *StorageRegister) GetStorage(infoType InfoType) Storage {
 	register.rwMutex.RLock()
 	defer register.rwMutex.RUnlock()
-	return register.storageMap[infoType]
+	storage, ok := register.storageMap[infoType]
+	if !ok {
+		logger.Fatalf("get storage of type: %v fail, storage not exist", infoType.String())
+	}
+	return storage
 }
 
 // Update will store the Information into corresponding Storage,

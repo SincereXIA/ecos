@@ -159,5 +159,6 @@ func Errorf(format string, args ...interface{}) {
 
 // Fatalf Print fatal error message then EXIT
 func Fatalf(format string, args ...interface{}) {
+	debug.PrintStack()
 	Logger.Fatalf(format, args...)
 }

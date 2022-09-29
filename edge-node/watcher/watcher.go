@@ -363,11 +363,16 @@ func (w *Watcher) nodeInfoChanged(_ infos.Information) {
 		return
 	}
 	w.timer = time.AfterFunc(w.config.NodeInfoCommitInterval, func() {
-		clusterInfo := w.genNewClusterInfo()
-		if clusterInfo == nil {
+		select {
+		case <-w.ctx.Done():
 			return
+		default:
+			clusterInfo := w.genNewClusterInfo()
+			if clusterInfo == nil {
+				return
+			}
+			w.proposeClusterInfo(clusterInfo)
 		}
-		w.proposeClusterInfo(clusterInfo)
 	})
 }
 
