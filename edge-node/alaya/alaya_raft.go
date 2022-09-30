@@ -197,16 +197,18 @@ func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 		if change.Type == raftpb.ConfChangeRemoveNode {
 			logger.Infof("raft: %v PG: %v remove node %v and raft apply", r.raft.ID, r.pgID, change.NodeID)
 		}
-		if r.w.IsRegistered(change.NodeID) {
-			r.w.Trigger(change.NodeID, struct{}{})
-		}
 		var p pipeline.Pipeline
 		err := p.Unmarshal(change.Context)
 		if err != nil {
 			logger.Errorf("get pipeline from conf change fail")
 		}
 		r.setPipeline(&p)
-
+		if p.ClusterTerm < r.pipeline.GetClusterTerm() {
+			return // 历史的集群变更提前结束，不再处理
+		}
+		if r.w.IsRegistered(change.NodeID) {
+			r.w.Trigger(change.NodeID, struct{}{})
+		}
 	}
 	if change.NodeID != uint64(r.raft.ID) {
 		return
@@ -456,14 +458,6 @@ func (r *Raft) RunAskForLeader() {
 			continue
 		} else {
 			r.askForLeader()
-			needRemove, _ := calDiff(r.GetVotersID(), r.getPipeline().RaftId)
-			if len(needRemove) > 0 {
-				logger.Infof("raft: %v, PG: %v Start remove nodes: %v", r.raft.ID, r.pgID, needRemove)
-				err := r.ProposeRemoveNodes(needRemove)
-				if err != nil {
-					logger.Errorf("Alaya propose remove nodes in PG: %v fail, err: %v", r.pgID, err)
-				}
-			}
 		}
 	}
 }
@@ -516,7 +510,9 @@ func (r *Raft) getPipeline() *pipeline.Pipeline {
 func (r *Raft) setPipeline(p *pipeline.Pipeline) {
 	r.rwMutex.Lock()
 	defer r.rwMutex.Unlock()
-	r.pipeline = p
+	if p.ClusterTerm > r.pipeline.ClusterTerm {
+		r.pipeline = p
+	}
 }
 
 func calDiff(a []uint64, b []uint64) (da []uint64, db []uint64) {
