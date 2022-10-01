@@ -97,7 +97,7 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	logger.Infof("edge node init success")
 
 	// 监听系统信号
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
 		for s := range c {
