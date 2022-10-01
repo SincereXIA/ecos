@@ -49,11 +49,11 @@ type Raft struct {
 	rwMutex sync.RWMutex
 }
 
-func NewAlayaRaft(raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline, config *Config,
+func NewAlayaRaft(ctx context.Context, raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline, config *Config,
 	watcher *watcher.Watcher, metaStorage MetaStorage,
 	raftAlayaChan chan raftpb.Message, stopChan chan uint64) *Raft {
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
 	r := &Raft{
 		pgID:          nowPipe.PgId,

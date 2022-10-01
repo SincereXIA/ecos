@@ -296,6 +296,7 @@ func (rc *RaftNode) cleanup() {
 	rc.wal.Close()
 	close(rc.CommitC)
 	close(rc.ErrorC)
+	logger.Infof("raft node: %v close wal and clean up done", rc.ID)
 }
 
 func (rc *RaftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {

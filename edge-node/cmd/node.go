@@ -49,6 +49,7 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 		logger.Errorf("init config fail: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Gen Rpc
 	rpc := messenger.NewRpcServer(conf.WatcherConfig.SelfNodeInfo.RpcPort)
@@ -95,8 +96,6 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	router := newRouter(w)
 	port := strconv.FormatUint(conf.HttpPort, 10)
 	_ = router.Run(":" + port)
-
-	cancel()
 }
 
 func newRouter(w *watcher.Watcher) *gin.Engine {

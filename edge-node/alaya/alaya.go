@@ -532,7 +532,7 @@ func (a *Alaya) makeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pip
 		logger.Fatalf("Alaya: %v, create meta storage for pg: %v err: %v", a.selfInfo.RaftId, pgID, err)
 	}
 	a.PGRaftNode.Store(pgID,
-		NewAlayaRaft(a.selfInfo.RaftId, p, oldP, a.config, a.watcher, storage,
+		NewAlayaRaft(a.ctx, a.selfInfo.RaftId, p, oldP, a.config, a.watcher, storage,
 			c.(chan raftpb.Message), a.raftNodeStopChan))
 	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.selfInfo.RaftId, pgID)
 	metrics.GetOrRegisterCounter(watcher.MetricsAlayaPipelineCount, nil).Inc(1)
