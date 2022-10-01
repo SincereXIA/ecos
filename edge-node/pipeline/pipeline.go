@@ -101,9 +101,10 @@ func GenPipelines(clusterInfo infos.ClusterInfo, pgNum uint64, groupSize uint64)
 			ids = append(ids, raftId)
 		}
 		pipeline := Pipeline{
-			PgId:     i,
-			RaftId:   ids,
-			SyncType: 0,
+			PgId:        i,
+			RaftId:      ids,
+			SyncType:    0,
+			ClusterTerm: clusterInfo.Term,
 		}
 		rs = append(rs, &pipeline)
 	}

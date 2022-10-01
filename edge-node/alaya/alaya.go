@@ -266,6 +266,12 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	default:
 	}
 	pgID := pgMessage.PgId
+
+	if _, ok := a.PGRaftNode.Load(pgID); !ok {
+		logger.Warningf("%v receive raft message from: %v, but pg: %v not exist", a.selfInfo.RaftId, pgMessage.Message.From, pgID)
+		return nil, errno.PGNotExist
+	}
+
 	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
 		msgChan.(chan raftpb.Message) <- *pgMessage.Message
 		return &PGRaftMessage{
@@ -273,7 +279,7 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 			Message: &raftpb.Message{},
 		}, nil
 	}
-	logger.Warningf("%v receive raft message from: %v, but pg: %v not exist", a.selfInfo.RaftId, pgMessage.Message.From, pgID)
+	logger.Errorf("%v receive raft message from: %v, but pg: %v channel not exist", a.selfInfo.RaftId, pgMessage.Message.From, pgID)
 	return nil, errno.PGNotExist
 }
 
@@ -487,9 +493,10 @@ func (a *Alaya) getPipelineReport(pgID uint64) watcher.Report {
 			state = watcher.PipelineReport_OK
 		}
 		report := &watcher.PipelineReport{
-			PgId:    pgID,
-			NodeIds: node.GetVotersID(),
-			State:   state,
+			PgId:     pgID,
+			NodeIds:  node.GetVotersID(),
+			LeaderId: node.raft.Node.Status().Lead,
+			State:    state,
 		}
 		return watcher.Report{
 			ReportType:     watcher.ReportTypeADD,
@@ -525,7 +532,7 @@ func (a *Alaya) makeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pip
 		logger.Fatalf("Alaya: %v, create meta storage for pg: %v err: %v", a.selfInfo.RaftId, pgID, err)
 	}
 	a.PGRaftNode.Store(pgID,
-		NewAlayaRaft(a.selfInfo.RaftId, p, oldP, a.config, a.watcher, storage,
+		NewAlayaRaft(a.ctx, a.selfInfo.RaftId, p, oldP, a.config, a.watcher, storage,
 			c.(chan raftpb.Message), a.raftNodeStopChan))
 	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.selfInfo.RaftId, pgID)
 	metrics.GetOrRegisterCounter(watcher.MetricsAlayaPipelineCount, nil).Inc(1)

@@ -12,4 +12,5 @@ message Pipeline {
     STREAM = 1;
   }
   SyncType sync_type = 3;
+  uint64 cluster_term = 4;
 }

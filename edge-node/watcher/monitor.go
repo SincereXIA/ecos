@@ -307,17 +307,14 @@ func (m *NodeMonitor) collectReports() {
 			return true
 		}
 		reports := reporter.GetReports()
+		m.selfPipeline = make(map[uint64]*PipelineReport)
 
 		for _, report := range reports {
 			if report.NodeReport != nil {
 				m.selfNodeStatus = report.NodeReport
 			}
 			if report.PipelineReport != nil {
-				if report.ReportType == ReportTypeDELETE {
-					delete(m.selfPipeline, report.PipelineReport.PgId)
-				} else {
-					m.selfPipeline[report.PipelineReport.PgId] = report.PipelineReport
-				}
+				m.selfPipeline[report.PipelineReport.PgId] = report.PipelineReport
 			}
 		}
 		return true

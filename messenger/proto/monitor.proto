@@ -49,6 +49,7 @@ message NodeStatus {
 message PipelineReport {
   uint64 pg_id = 1;
   repeated uint64 node_ids = 2;
+  uint64 leader_id = 3;
   enum State {
     UNKNOWN = 0;
     OK = 1;
@@ -56,7 +57,7 @@ message PipelineReport {
     CHANGING = 3;
     ERROR = 4;
   }
-  State state = 3;
+  State state = 4;
 }
 
 message ClusterReport {

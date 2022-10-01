@@ -15,7 +15,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 )
 
 var nodeCmd = &cobra.Command{
@@ -49,6 +53,7 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 		logger.Errorf("init config fail: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Gen Rpc
 	rpc := messenger.NewRpcServer(conf.WatcherConfig.SelfNodeInfo.RpcPort)
@@ -91,12 +96,22 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	}()
 	logger.Infof("edge node init success")
 
+	// 监听系统信号
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		for s := range c {
+			logger.Infof("receive signal from os: %v, ECOS node start stop", s)
+			cancel()
+			time.Sleep(time.Second)
+			os.Exit(0)
+		}
+	}()
+
 	// init Gin
 	router := newRouter(w)
 	port := strconv.FormatUint(conf.HttpPort, 10)
 	_ = router.Run(":" + port)
-
-	cancel()
 }
 
 func newRouter(w *watcher.Watcher) *gin.Engine {
