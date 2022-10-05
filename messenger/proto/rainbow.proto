@@ -1,0 +1,54 @@
+syntax = "proto3";
+package messenger;
+
+import "infos.proto";
+import "common.proto";
+import "object.proto";
+
+option go_package = "ecos/cloud/rainbow";
+
+service Rainbow {
+  rpc getStream(stream Content) returns (stream Content) {}
+}
+
+message Content {
+  oneof payload {
+    Request request = 1;
+    Response response = 2;
+  }
+}
+
+message Request {
+  enum Method {
+    UNKNOWN_Method = 0;
+    GET = 1;
+    PUT = 2;
+    DELETE = 3;
+    LIST = 4;
+  }
+
+  enum Resource {
+    UNKNOWN_Resource = 0;
+    INFO = 1;
+    META = 2;
+    OBJECT = 3;
+  }
+
+  uint64 request_seq = 1;
+  Method method = 2;
+  string request_id = 3;
+  BaseInfo info = 4;
+  ObjectMeta meta = 5;
+}
+
+message Response {
+  uint64 response_to = 1;
+  Result result = 2;
+
+  bytes chunk = 3;
+  repeated ObjectMeta metas = 4;
+  repeated BaseInfo infos = 5;
+}
+
+
+
