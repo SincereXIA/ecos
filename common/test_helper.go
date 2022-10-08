@@ -1,9 +1,10 @@
-package edgeNodeTest
+package common
 
 import (
 	"context"
 	"ecos/edge-node/alaya"
 	"ecos/edge-node/gaia"
+	"ecos/edge-node/outpost"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/utils/logger"
@@ -18,14 +19,16 @@ func RunTestEdgeNodeCluster(t gomock.TestReporter, ctx context.Context, mock boo
 	var watchers []*watcher.Watcher
 	var rpcServers []*messenger.RpcServer
 	var alayas []alaya.Alayaer
+	var cloudAddr string
 	if mock {
 		watchers, rpcServers, _, _ = watcher.GenMockWatcherCluster(t, ctx, basePath, num)
 		alayas = GenMockAlayaCluster(t, ctx, basePath, watchers, rpcServers)
 	} else {
-		watchers, rpcServers, _ = watcher.GenTestWatcherCluster(ctx, basePath, num)
+		watchers, rpcServers, cloudAddr = watcher.GenTestWatcherCluster(ctx, basePath, num)
 		alayas = GenAlayaCluster(ctx, basePath, watchers, rpcServers)
 	}
 	_ = GenGaiaCluster(ctx, basePath, watchers, rpcServers)
+	outposts := GenOutpostCluster(ctx, cloudAddr, watchers)
 
 	for i := 0; i < num; i++ {
 		go func(server *messenger.RpcServer) {
@@ -41,6 +44,10 @@ func RunTestEdgeNodeCluster(t gomock.TestReporter, ctx context.Context, mock boo
 	for _, a := range alayas {
 		go a.Run()
 	}
+	for _, o := range outposts {
+		go o.Run()
+	}
+
 	watcher.WaitAllTestWatcherOK(watchers)
 	WaiteAllAlayaOK(alayas)
 	return watchers, alayas, rpcServers
@@ -58,6 +65,19 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 		alayas = append(alayas, a)
 	}
 	return alayas
+}
+
+func GenOutpostCluster(ctx context.Context, cloudAddr string, watchers []*watcher.Watcher) []*outpost.Outpost {
+	nodeNum := len(watchers)
+	var outposts []*outpost.Outpost
+	for i := 0; i < nodeNum; i++ {
+		o, err := outpost.NewOutpost(ctx, cloudAddr, watchers[i])
+		if err != nil {
+			logger.Errorf("Create outpost fail: %v", err)
+		}
+		outposts = append(outposts, o)
+	}
+	return outposts
 }
 
 func GenMockAlayaCluster(t gomock.TestReporter, _ context.Context, basePath string,

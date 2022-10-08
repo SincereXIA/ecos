@@ -9,6 +9,8 @@ option go_package = "ecos/cloud/rainbow";
 
 service Rainbow {
   rpc getStream(stream Content) returns (stream Content) {}
+
+  rpc SendRequest(Request) returns (stream Response) {}
 }
 
 message Content {
@@ -36,9 +38,10 @@ message Request {
 
   uint64 request_seq = 1;
   Method method = 2;
-  string request_id = 3;
-  BaseInfo info = 4;
-  ObjectMeta meta = 5;
+  Resource resource = 3;
+  string request_id = 4;
+  BaseInfo info = 5;
+  ObjectMeta meta = 6;
 }
 
 message Response {
@@ -48,6 +51,8 @@ message Response {
   bytes chunk = 3;
   repeated ObjectMeta metas = 4;
   repeated BaseInfo infos = 5;
+
+  bool is_last = 6;
 }
 
 

@@ -87,7 +87,7 @@ func (m *NodeMonitor) pushToPrometheus() {
 
 	register := prometheus.NewRegistry()
 	prometheusClient := prometheusmetrics.NewPrometheusProvider(
-		metrics.DefaultRegistry, m.watcher.config.ClusterName,
+		metrics.DefaultRegistry, m.watcher.Config.ClusterName,
 		"edge-node",
 		register, 1*time.Second)
 	go prometheusClient.UpdatePrometheusMetrics()

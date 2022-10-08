@@ -40,7 +40,7 @@ type Watcher struct {
 	register     *infos.StorageRegister
 	timer        *time.Timer
 	timerMutex   sync.Mutex
-	config       *Config
+	Config       *Config
 
 	addNodeMutex sync.Mutex
 
@@ -249,10 +249,10 @@ func (w *Watcher) GetMoon() moon.InfoController {
 }
 
 func (w *Watcher) AskSky() (leaderInfo *infos.NodeInfo, err error) {
-	if w.config.SunAddr == "" {
+	if w.Config.SunAddr == "" {
 		return nil, errno.ConnectSunFail
 	}
-	conn, err := grpc.Dial(w.config.SunAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(w.Config.SunAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
@@ -359,10 +359,10 @@ func (w *Watcher) nodeInfoChanged(_ infos.Information) {
 		return
 	}
 	if w.timer != nil && w.timer.Stop() {
-		w.timer.Reset(w.config.NodeInfoCommitInterval)
+		w.timer.Reset(w.Config.NodeInfoCommitInterval)
 		return
 	}
-	w.timer = time.AfterFunc(w.config.NodeInfoCommitInterval, func() {
+	w.timer = time.AfterFunc(w.Config.NodeInfoCommitInterval, func() {
 		select {
 		case <-w.ctx.Done():
 			return
@@ -388,6 +388,20 @@ func (w *Watcher) clusterInfoChanged(info infos.Information) {
 	w.currentClusterInfo = *info.BaseInfo().GetClusterInfo()
 }
 
+func (w *Watcher) WaitClusterOK() (ok bool) {
+	for {
+		select {
+		case <-w.ctx.Done():
+			return false
+		default:
+			if w.GetCurrentClusterInfo().Term != uint64(0) && w.selfNodeInfo.RaftId != 0 {
+				return true
+			}
+			time.Sleep(time.Second)
+		}
+	}
+}
+
 func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer,
 	m moon.InfoController, register *infos.StorageRegister) *Watcher {
 	watcherCtx, cancelFunc := context.WithCancel(ctx)
@@ -395,7 +409,7 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 	watcher := &Watcher{
 		moon:         m,
 		register:     register,
-		config:       config,
+		Config:       config,
 		selfNodeInfo: &config.SelfNodeInfo,
 		ctx:          watcherCtx,
 		cancelFunc:   cancelFunc,

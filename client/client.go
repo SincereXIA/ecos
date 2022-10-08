@@ -5,6 +5,7 @@ import (
 	"ecos/client/config"
 	agent "ecos/client/info-agent"
 	"ecos/client/io"
+	"ecos/cloud/rainbow"
 	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
@@ -84,6 +85,14 @@ func (client *Client) GetMoon() (moon.MoonClient, uint64, error) {
 	return nil, 0, errno.ConnectionIssue
 }
 
+func (client *Client) GetRainbow() (rainbow.RainbowClient, error) {
+	conn, err := messenger.GetRpcConn(client.config.CloudAddr, client.config.CloudPort)
+	if err != nil {
+		return nil, err
+	}
+	return rainbow.NewRainbowClient(conn), nil
+}
+
 func (client *Client) ListObjects(_ context.Context, bucketName, prefix string) ([]*object.ObjectMeta, error) {
 	userID := client.config.Credential.GetUserID()
 	bucketID := infos.GenBucketID(userID, bucketName)
@@ -153,4 +162,11 @@ func (client *Client) GetVolumeOperator() *VolumeOperator {
 
 func (client *Client) GetClusterOperator() Operator {
 	return &ClusterOperator{client: client}
+}
+
+func (client *Client) GetCloudVolumeOperator() *CloudVolumeOperator {
+	return &CloudVolumeOperator{
+		client: client,
+		ctx:    client.ctx,
+	}
 }

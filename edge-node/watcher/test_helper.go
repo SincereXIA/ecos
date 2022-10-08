@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"ecos/cloud/rainbow"
 	"ecos/cloud/sun"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
@@ -91,6 +92,11 @@ func GenTestWatcherCluster(ctx context.Context, basePath string, num int) ([]*Wa
 		}
 	}()
 	sunAddr := "127.0.0.1:" + strconv.FormatUint(sunPort, 10)
+
+	// init rainbow
+	logger.Infof("Start init rainbow ...")
+	_ = rainbow.NewRainbow(sunRpc)
+
 	time.Sleep(1 * time.Second)
 
 	var watchers []*Watcher

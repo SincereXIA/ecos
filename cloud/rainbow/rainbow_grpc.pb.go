@@ -19,6 +19,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RainbowClient interface {
 	GetStream(ctx context.Context, opts ...grpc.CallOption) (Rainbow_GetStreamClient, error)
+	SendRequest(ctx context.Context, in *Request, opts ...grpc.CallOption) (Rainbow_SendRequestClient, error)
 }
 
 type rainbowClient struct {
@@ -60,11 +61,44 @@ func (x *rainbowGetStreamClient) Recv() (*Content, error) {
 	return m, nil
 }
 
+func (c *rainbowClient) SendRequest(ctx context.Context, in *Request, opts ...grpc.CallOption) (Rainbow_SendRequestClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Rainbow_ServiceDesc.Streams[1], "/messenger.Rainbow/SendRequest", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &rainbowSendRequestClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Rainbow_SendRequestClient interface {
+	Recv() (*Response, error)
+	grpc.ClientStream
+}
+
+type rainbowSendRequestClient struct {
+	grpc.ClientStream
+}
+
+func (x *rainbowSendRequestClient) Recv() (*Response, error) {
+	m := new(Response)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // RainbowServer is the server API for Rainbow service.
 // All implementations must embed UnimplementedRainbowServer
 // for forward compatibility
 type RainbowServer interface {
 	GetStream(Rainbow_GetStreamServer) error
+	SendRequest(*Request, Rainbow_SendRequestServer) error
 	mustEmbedUnimplementedRainbowServer()
 }
 
@@ -74,6 +108,9 @@ type UnimplementedRainbowServer struct {
 
 func (UnimplementedRainbowServer) GetStream(Rainbow_GetStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetStream not implemented")
+}
+func (UnimplementedRainbowServer) SendRequest(*Request, Rainbow_SendRequestServer) error {
+	return status.Errorf(codes.Unimplemented, "method SendRequest not implemented")
 }
 func (UnimplementedRainbowServer) mustEmbedUnimplementedRainbowServer() {}
 
@@ -114,6 +151,27 @@ func (x *rainbowGetStreamServer) Recv() (*Content, error) {
 	return m, nil
 }
 
+func _Rainbow_SendRequest_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Request)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(RainbowServer).SendRequest(m, &rainbowSendRequestServer{stream})
+}
+
+type Rainbow_SendRequestServer interface {
+	Send(*Response) error
+	grpc.ServerStream
+}
+
+type rainbowSendRequestServer struct {
+	grpc.ServerStream
+}
+
+func (x *rainbowSendRequestServer) Send(m *Response) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Rainbow_ServiceDesc is the grpc.ServiceDesc for Rainbow service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -127,6 +185,11 @@ var Rainbow_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _Rainbow_GetStream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "SendRequest",
+			Handler:       _Rainbow_SendRequest_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "rainbow.proto",

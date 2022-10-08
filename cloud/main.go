@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ecos/cloud/rainbow"
 	"ecos/cloud/sun"
 	"ecos/messenger"
 	"ecos/utils/logger"
@@ -34,6 +35,10 @@ func main() {
 
 	Sun = s
 	logger.Infof("Sun init success")
+
+	// init rainbow
+	logger.Infof("Start init rainbow ...")
+	_ = rainbow.NewRainbow(rpcServer)
 
 	// init Gin
 	router := NewRouter()

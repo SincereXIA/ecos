@@ -22,6 +22,9 @@ type ClientConfig struct {
 	UploadBuffer  uint64
 	NodeAddr      string
 	NodePort      uint64
+
+	CloudAddr string
+	CloudPort uint64
 }
 
 var DefaultConfig ClientConfig
