@@ -237,10 +237,10 @@ func TestGateway(t *testing.T) {
 		fullContent = append(fullContent, lastContent...)
 		result := bytes.Compare(fullContent, content)
 		assert.Zero(t, result)
-		//if result != 0 {
-		//	t.Log("Expected: \n", string(fullContent))
-		//	t.Log("Actual: \n", string(content))
-		//}
+		if result != 0 {
+			t.Errorf("GetObject: content is not equal")
+			t.Logf("expected size: %d, actual size: %d", len(fullContent), len(content))
+		}
 
 		uploadId = testCreateMultipartUpload(t, client, bucketName, "testMultipartUpload2.obj", false)
 		_, _ = reader.Seek(0, io.SeekStart)

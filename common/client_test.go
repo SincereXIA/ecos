@@ -65,6 +65,7 @@ func TestClient(t *testing.T) {
 	}
 
 	t.Run("test term change", func(t *testing.T) {
+		t.Logf("test term change")
 		oldTerm := watchers[0].GetCurrentTerm()
 		watchers[8].Monitor.Stop()
 		watchers[8].GetMoon().Stop()

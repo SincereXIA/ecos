@@ -107,10 +107,11 @@ func GenGaiaCluster(ctx context.Context, basePath string, watchers []*watcher.Wa
 
 func WaiteAllAlayaOK(alayas []alaya.Alayaer) {
 	timer := time.After(60 * time.Second)
+	logger.Infof("start wait all alaya ok, num: %v", len(alayas))
 	for {
 		select {
 		case <-timer:
-			logger.Warningf("Alayas not OK after time out")
+			logger.Fatalf("Alayas not OK after time out")
 			for _, a := range alayas {
 				switch x := a.(type) {
 				case *alaya.Alaya:
