@@ -22,6 +22,7 @@ type Rainbow struct {
 	rwMutex sync.RWMutex // protect clusterInfo & requestSeq
 }
 
+// eventLoop 处理 stream 中收到的 content
 func (r *Rainbow) eventLoop(stream Rainbow_GetStreamServer, nodeInfo *infos.NodeInfo) error {
 	for {
 		content, err := stream.Recv()
@@ -58,10 +59,9 @@ func (r *Rainbow) GetStream(stream Rainbow_GetStreamServer) error {
 		}
 		switch payload := content.Payload.(type) {
 		case *Content_Request:
-			logger.Infof("get request_seq: %v", payload.Request.RequestSeq)
-
 			payloadInfo := payload.Request.Info
 			nodeInfo := payloadInfo.GetNodeInfo()
+			logger.Infof("get stream connect, node: %v", nodeInfo.RaftId)
 
 			err := stream.Send(&Content{
 				Payload: &Content_Response{
@@ -124,6 +124,7 @@ func (r *Rainbow) SendRequestToNode(nodeId uint64, request *Request) (<-chan *Re
 
 	respChan := r.router.Register(request.RequestSeq)
 
+	// 此处的操作需要同步
 	return respChan, stream.(Rainbow_GetStreamServer).Send(&Content{
 		Payload: &Content_Request{
 			Request: request,

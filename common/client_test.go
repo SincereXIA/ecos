@@ -72,6 +72,7 @@ func TestClient(t *testing.T) {
 		rpcServers[8].GracefulStop()
 		//watcher.WaitAllTestWatcherOK(watchers[0:8])
 		for oldTerm == watchers[0].GetCurrentTerm() {
+			logger.Infof("Waiting for term change, now term is %d, oldTerm: %v", watchers[0].GetCurrentTerm(), oldTerm)
 			time.Sleep(time.Second)
 		}
 		WaiteAllAlayaOK(alayas[0:7])

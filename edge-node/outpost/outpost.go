@@ -14,6 +14,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Outpost struct {
@@ -27,6 +28,8 @@ type Outpost struct {
 
 	sendChan chan *rainbow.Content
 	stream   rainbow.Rainbow_GetStreamClient
+
+	mu sync.Mutex // protect requestSeq
 
 	clusterInfoChanged chan struct{}
 }
@@ -73,8 +76,11 @@ func (o *Outpost) SendChanListenLoop() {
 }
 
 func (o *Outpost) Send(request *rainbow.Request) <-chan *rainbow.Response {
+	o.mu.Lock()
 	request.RequestSeq = o.requestSeq
 	o.requestSeq += 1
+	o.mu.Unlock()
+
 	respChan := o.r.Register(request.RequestSeq)
 	o.sendChan <- &rainbow.Content{
 		Payload: &rainbow.Content_Request{
