@@ -140,6 +140,11 @@ func (o *Outpost) Run() error {
 	}
 
 	// 与云端建立连接
+	if o.cloudAddr == "" {
+		logger.Warningf("cloudAddr is empty, outpost exit")
+		return errors.New("cloud address is empty")
+	}
+
 	port, _ := strconv.Atoi(strings.Split(o.cloudAddr, ":")[1])
 	addr := strings.Split(o.cloudAddr, ":")[0]
 	conn, err := messenger.GetRpcConn(addr, uint64(port))

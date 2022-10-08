@@ -18,6 +18,8 @@ type Rainbow struct {
 	router *Router
 
 	requestSeq uint64
+
+	rwMutex sync.RWMutex // protect clusterInfo & requestSeq
 }
 
 func (r *Rainbow) eventLoop(stream Rainbow_GetStreamServer, nodeInfo *infos.NodeInfo) error {
@@ -37,7 +39,9 @@ func (r *Rainbow) eventLoop(stream Rainbow_GetStreamServer, nodeInfo *infos.Node
 				if payload.Request.Info.GetInfoType() == infos.InfoType_CLUSTER_INFO {
 					logger.Infof("get cluster info, term: %v", payload.Request.Info.GetClusterInfo().Term)
 					if r.clusterInfo == nil || r.clusterInfo.Term <= payload.Request.Info.GetClusterInfo().Term {
+						r.rwMutex.Lock()
 						r.clusterInfo = payload.Request.Info.GetClusterInfo()
+						r.rwMutex.Unlock()
 					}
 				}
 			}
@@ -81,6 +85,7 @@ func (r *Rainbow) GetStream(stream Rainbow_GetStreamServer) error {
 	}
 }
 
+// SendRequest 向边缘集群 leader 发送 request 请求
 func (r *Rainbow) SendRequest(request *Request, stream Rainbow_SendRequestServer) error {
 	respChan, err := r.SendRequestToEdgeLeader(request)
 	if err != nil {
@@ -99,17 +104,24 @@ func (r *Rainbow) SendRequest(request *Request, stream Rainbow_SendRequestServer
 }
 
 func (r *Rainbow) GetClusterInfo() *infos.ClusterInfo {
+	r.rwMutex.RLock()
+	defer r.rwMutex.RUnlock()
 	return r.clusterInfo
 }
 
+// SendRequestToNode 向指定节点发送请求
+// 返回响应 channel
 func (r *Rainbow) SendRequestToNode(nodeId uint64, request *Request) (<-chan *Response, error) {
 	stream, ok := r.streams.Load(nodeId)
 	if !ok {
 		return nil, errors.New("stream not found")
 	}
 
+	r.rwMutex.Lock()
 	request.RequestSeq = r.requestSeq
 	r.requestSeq += 1
+	r.rwMutex.Unlock()
+
 	respChan := r.router.Register(request.RequestSeq)
 
 	return respChan, stream.(Rainbow_GetStreamServer).Send(&Content{
