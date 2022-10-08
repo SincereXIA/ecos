@@ -8,8 +8,10 @@ import "object.proto";
 option go_package = "ecos/cloud/rainbow";
 
 service Rainbow {
-  rpc getStream(stream Content) returns (stream Content) {}
-
+  // GetStream used by edge-node registers a new stream to the cloud server.
+  rpc GetStream(stream Content) returns (stream Content) {}
+  // SendRequest used by client, send a request to the cloud server.
+  // And the cloud server will forward the request to the edge-node.
   rpc SendRequest(Request) returns (stream Response) {}
 }
 

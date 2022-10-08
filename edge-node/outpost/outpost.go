@@ -104,6 +104,7 @@ func (o *Outpost) reportLoop() {
 	}
 }
 
+// streamLoop 接受云端发送的结果和请求
 func (o *Outpost) streamLoop() (err error) {
 	for {
 		select {
@@ -116,6 +117,7 @@ func (o *Outpost) streamLoop() (err error) {
 			return err
 		}
 		switch content.GetPayload().(type) {
+		// 处理请求
 		case *rainbow.Content_Request:
 			request := content.GetRequest()
 			switch request.GetResource() {
@@ -124,9 +126,13 @@ func (o *Outpost) streamLoop() (err error) {
 			default:
 				logger.Errorf("unknown request resource: %v", request.GetResource())
 			}
+		// 处理响应
 		case *rainbow.Content_Response:
 			response := content.GetResponse()
 			o.r.Send(response.ResponseTo, response)
+			if response.IsLast {
+				o.r.Unregister(response.ResponseTo)
+			}
 		}
 	}
 }
@@ -160,20 +166,15 @@ func (o *Outpost) Run() error {
 	o.stream = stream
 
 	// 初始化发送自身信息
-	err = stream.Send(&rainbow.Content{
-		Payload: &rainbow.Content_Request{
-			Request: &rainbow.Request{
-				RequestSeq: o.requestSeq,
-				Method:     rainbow.Request_PUT,
-				Resource:   rainbow.Request_INFO,
-				Info:       o.w.GetSelfInfo().BaseInfo(),
-			},
-		},
-	})
-	o.requestSeq += 1
-	if err != nil {
-		return err
-	}
+	go func() {
+		respChan := o.Send(&rainbow.Request{
+			RequestSeq: o.requestSeq,
+			Method:     rainbow.Request_PUT,
+			Resource:   rainbow.Request_INFO,
+			Info:       o.w.GetSelfInfo().BaseInfo(),
+		})
+		<-respChan
+	}()
 
 	go o.SendChanListenLoop()
 	go o.reportLoop()
