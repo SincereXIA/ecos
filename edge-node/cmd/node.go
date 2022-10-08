@@ -7,6 +7,7 @@ import (
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
+	"ecos/edge-node/outpost"
 	"ecos/edge-node/watcher"
 	gateway "ecos/gateway/router"
 	"ecos/messenger"
@@ -78,6 +79,13 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	// Gen Gaia
 	logger.Infof("Start init Gaia ...")
 	_ = gaia.NewGaia(ctx, rpc, w, &conf.GaiaConfig)
+
+	// Gen Outpost
+	logger.Infof("Start init Outpost ...")
+	_, err = outpost.NewOutpost(ctx, conf.WatcherConfig.SunAddr, w)
+	if err != nil {
+		logger.Errorf("init outpost fail: %v", err)
+	}
 
 	// Run
 	go func() {
