@@ -18,7 +18,10 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RainbowClient interface {
+	// GetStream used by edge-node registers a new stream to the cloud server.
 	GetStream(ctx context.Context, opts ...grpc.CallOption) (Rainbow_GetStreamClient, error)
+	// SendRequest used by client, send a request to the cloud server.
+	// And the cloud server will forward the request to the edge-node.
 	SendRequest(ctx context.Context, in *Request, opts ...grpc.CallOption) (Rainbow_SendRequestClient, error)
 }
 
@@ -31,7 +34,7 @@ func NewRainbowClient(cc grpc.ClientConnInterface) RainbowClient {
 }
 
 func (c *rainbowClient) GetStream(ctx context.Context, opts ...grpc.CallOption) (Rainbow_GetStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Rainbow_ServiceDesc.Streams[0], "/messenger.Rainbow/getStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &Rainbow_ServiceDesc.Streams[0], "/messenger.Rainbow/GetStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +100,10 @@ func (x *rainbowSendRequestClient) Recv() (*Response, error) {
 // All implementations must embed UnimplementedRainbowServer
 // for forward compatibility
 type RainbowServer interface {
+	// GetStream used by edge-node registers a new stream to the cloud server.
 	GetStream(Rainbow_GetStreamServer) error
+	// SendRequest used by client, send a request to the cloud server.
+	// And the cloud server will forward the request to the edge-node.
 	SendRequest(*Request, Rainbow_SendRequestServer) error
 	mustEmbedUnimplementedRainbowServer()
 }
@@ -181,7 +187,7 @@ var Rainbow_ServiceDesc = grpc.ServiceDesc{
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "getStream",
+			StreamName:    "GetStream",
 			Handler:       _Rainbow_GetStream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,

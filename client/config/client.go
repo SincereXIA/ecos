@@ -10,6 +10,11 @@ const chunkSize = 1 << 20
 const uploadTimeout = 0
 const uploadBuffer = 1 << 25
 
+const (
+	ConnectEdge = iota
+	ConnectCloud
+)
+
 type ObjectConfig struct {
 	ChunkSize uint64
 }
@@ -25,6 +30,8 @@ type ClientConfig struct {
 
 	CloudAddr string
 	CloudPort uint64
+
+	ConnectType int
 }
 
 var DefaultConfig ClientConfig
@@ -40,5 +47,6 @@ func init() {
 		UploadBuffer:  uploadBuffer,
 		NodeAddr:      "ecos-edge-dev.ecos.svc.cluster.local",
 		NodePort:      3267,
+		ConnectType:   ConnectEdge,
 	}
 }

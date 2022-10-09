@@ -2,7 +2,7 @@ package io
 
 import (
 	"context"
-	"ecos/edge-node/alaya"
+	"ecos/client/config"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
@@ -52,6 +52,20 @@ func (r *EcosReader) genPipelines() error {
 }
 
 func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
+	switch r.f.config.ConnectType {
+	case config.ConnectCloud:
+		return r.GetBlockByCloud(blockInfo)
+	default:
+		return r.GetBlockByEdge(blockInfo)
+	}
+}
+
+func (r *EcosReader) GetBlockByCloud(blockInfo *object.BlockInfo) ([]byte, error) {
+	// TODO
+	panic("")
+}
+
+func (r *EcosReader) GetBlockByEdge(blockInfo *object.BlockInfo) ([]byte, error) {
 	blockID := blockInfo.BlockId
 	if block, ok := r.cachedBlocks.Load(blockID); ok {
 		return block.([]byte), nil
@@ -140,20 +154,12 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 
 func (r *EcosReader) getObjMeta() error {
 retry:
-	// use key to get pdId
-	pgId := object.GenObjPgID(r.f.bucketInfo, r.key, 10)
-	// Use Latest ClusterInfo and Pipeline
-	pipes, _ := pipeline.NewClusterPipelines(r.f.infoAgent.GetCurClusterInfo())
-	metaServerIdString := pipes.GetBlockPGNodeID(pgId)[0]
-	metaServerInfo, _ := r.f.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
-	ctx, _ := alaya.SetTermToContext(r.ctx, r.f.infoAgent.GetCurClusterInfo().Term)
-	metaClient, err := NewMetaClient(ctx, metaServerInfo.BaseInfo().GetNodeInfo(), r.f.config)
+	metaClient, err := NewMetaAgent(r.ctx, r.f.config, r.f.infoAgent, r.f.bucketInfo)
 	if err != nil {
 		logger.Errorf("New meta client failed, err: %v", err)
 		return err
 	}
-	objID := object.GenObjectId(r.f.bucketInfo, r.key)
-	r.meta, err = metaClient.GetObjMeta(objID)
+	r.meta, err = metaClient.GetObjMeta(r.key)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
 			err = r.f.infoAgent.UpdateCurClusterInfo()
@@ -165,7 +171,7 @@ retry:
 		logger.Errorf("get objMeta failed, err: %v", err)
 		return err
 	}
-	logger.Infof("get objMeta from raft [%v], success, meta: %v", metaServerIdString, r.meta)
+	logger.Infof("get objMeta success, meta: %v", r.meta)
 	return nil
 }
 

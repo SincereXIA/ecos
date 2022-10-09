@@ -2,7 +2,6 @@ package io
 
 import (
 	"context"
-	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -332,9 +331,7 @@ func (w *EcosWriter) CommitPartialMeta() error {
 	}
 retry:
 	meta := w.genPartialMeta(w.key)
-	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	ctx, _ := alaya.SetTermToContext(w.ctx, w.f.infoAgent.GetCurClusterInfo().Term)
-	metaClient, err := NewMetaClient(ctx, metaServerNode, w.f.config)
+	metaClient, err := NewMetaAgent(w.ctx, w.f.config, w.f.infoAgent, w.f.bucketInfo)
 	if err != nil {
 		logger.Errorf("Update Multipart Object Failed: %v", err)
 		return err
@@ -622,9 +619,7 @@ func (w *EcosWriter) uploadBlock(i int, block *Block) {
 // uploadMeta will upload meta info of an object.
 func (w *EcosWriter) uploadMeta(meta *object.ObjectMeta) error {
 retry:
-	metaServerNode := w.getObjNodeByPg(meta.PgId)
-	ctx, _ := alaya.SetTermToContext(w.ctx, w.f.infoAgent.GetCurClusterInfo().Term)
-	metaClient, err := NewMetaClient(ctx, metaServerNode, w.f.config)
+	metaClient, err := NewMetaAgent(w.ctx, w.f.config, w.f.infoAgent, w.f.bucketInfo)
 	if err != nil {
 		logger.Errorf("Upload Object Failed: %v", err)
 		return err

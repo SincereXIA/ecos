@@ -2,6 +2,8 @@ package info_agent
 
 import (
 	"context"
+	"ecos/client/config"
+	"ecos/cloud/rainbow"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
 	"ecos/edge-node/watcher"
@@ -17,6 +19,11 @@ type InfoAgent struct {
 
 	nodeAddr string
 	nodePort uint64
+
+	cloudAddr string
+	cloudPort uint64
+
+	connectType int
 
 	mutex              sync.RWMutex
 	currentClusterInfo *infos.ClusterInfo
@@ -46,7 +53,16 @@ func (agent *InfoAgent) Get(infoType infos.InfoType, id string) (infos.Informati
 	if err == nil {
 		return info, err
 	}
-	// no cache, start request
+	switch agent.connectType {
+	case config.ConnectEdge:
+		return agent.GetInfoByEdge(infoType, id)
+	case config.ConnectCloud:
+		return agent.GetInfoByCloud(infoType, id)
+	}
+	return infos.InvalidInfo{}, errno.ConnectionIssue
+}
+
+func (agent *InfoAgent) GetInfoByEdge(infoType infos.InfoType, id string) (infos.Information, error) {
 	for _, nodeInfo := range agent.currentClusterInfo.NodesInfo {
 		conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 		if err != nil {
@@ -67,6 +83,33 @@ func (agent *InfoAgent) Get(infoType infos.InfoType, id string) (infos.Informati
 		return result.GetBaseInfo(), err
 	}
 	return infos.InvalidInfo{}, errno.ConnectionIssue
+}
+
+func (agent *InfoAgent) GetInfoByCloud(infoType infos.InfoType, id string) (infos.Information, error) {
+	conn, err := messenger.GetRpcConn(agent.cloudAddr, agent.cloudPort)
+	if err != nil {
+		logger.Errorf("connect to cloud failed: %s", err.Error())
+		return infos.InvalidInfo{}, errno.ConnectionIssue
+	}
+
+	r := rainbow.NewRainbowClient(conn)
+	stream, err := r.SendRequest(agent.ctx, &rainbow.Request{
+		Method:    rainbow.Request_GET,
+		Resource:  rainbow.Request_INFO,
+		RequestId: id,
+		InfoType:  infoType,
+	})
+	if err != nil {
+		logger.Errorf("send request to cloud failed: %s", err.Error())
+		return infos.InvalidInfo{}, err
+	}
+	result, err := stream.Recv()
+	if err != nil || result.Infos == nil || len(result.Infos) == 0 {
+		logger.Errorf("recv response from cloud failed: %s", err.Error())
+		return infos.InvalidInfo{}, err
+	}
+	info := result.Infos[0]
+	return info.BaseInfo(), nil
 }
 
 // GetCurClusterInfo Returns current ClusterInfo

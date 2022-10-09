@@ -34,6 +34,12 @@ type ClusterOperator struct {
 	client *Client
 }
 
+func NewClusterOperator(ctx context.Context, client *Client) *ClusterOperator {
+	return &ClusterOperator{
+		client: client,
+	}
+}
+
 func (c *ClusterOperator) List(prefix string) ([]Operator, error) {
 	panic("implement me")
 }
@@ -47,7 +53,7 @@ func (c *ClusterOperator) Remove(key string) error {
 }
 
 func (c *ClusterOperator) Info() (interface{}, error) {
-	leaderInfo := c.client.infoAgent.GetCurClusterInfo().LeaderInfo
+	leaderInfo := c.client.InfoAgent.GetCurClusterInfo().LeaderInfo
 	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
 	if err != nil {
 		return "", err
@@ -58,7 +64,7 @@ func (c *ClusterOperator) Info() (interface{}, error) {
 }
 
 func (c *ClusterOperator) State() (string, error) {
-	clusterInfo := c.client.infoAgent.GetCurClusterInfo()
+	clusterInfo := c.client.InfoAgent.GetCurClusterInfo()
 	leaderInfo := clusterInfo.LeaderInfo
 	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
 	if err != nil {
@@ -102,6 +108,15 @@ func (c *ClusterOperator) State() (string, error) {
 type VolumeOperator struct {
 	volumeID string
 	client   *Client
+	ctx      context.Context
+}
+
+func NewVolumeOperator(ctx context.Context, volumeID string, client *Client) *VolumeOperator {
+	return &VolumeOperator{
+		volumeID: volumeID,
+		client:   client,
+		ctx:      ctx,
+	}
 }
 
 // Remove Deprecated
@@ -123,7 +138,7 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 		logger.Errorf("get moon client err: %v", err.Error())
 		return nil, err
 	}
-	info, err := moonClient.GetInfo(context.Background(), &moon.GetInfoRequest{
+	info, err := moonClient.GetInfo(v.ctx, &moon.GetInfoRequest{
 		InfoType: infos.InfoType_BUCKET_INFO,
 		InfoId:   infos.GenBucketID(v.volumeID, key),
 	})
@@ -131,10 +146,7 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 		logger.Errorf("get info by moon: %v err: %v", nodeId, err.Error())
 		return nil, err
 	}
-	return &BucketOperator{
-		bucketInfo: info.BaseInfo.GetBucketInfo(),
-		client:     v.client,
-	}, err
+	return NewBucketOperator(v.ctx, info.BaseInfo.GetBucketInfo(), v.client), nil
 }
 
 func (v *VolumeOperator) List(key string) ([]Operator, error) {
@@ -143,7 +155,7 @@ func (v *VolumeOperator) List(key string) ([]Operator, error) {
 		logger.Errorf("get moon client err: %v", err.Error())
 		return nil, err
 	}
-	reply, err := moonClient.ListInfo(context.Background(), &moon.ListInfoRequest{
+	reply, err := moonClient.ListInfo(v.ctx, &moon.ListInfoRequest{
 		InfoType: infos.InfoType_BUCKET_INFO,
 		Prefix:   infos.GenBucketID(v.volumeID, key),
 	})
@@ -166,7 +178,7 @@ func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
 		logger.Errorf("get moon client err: %v", err.Error())
 		return err
 	}
-	_, err = moonClient.ProposeInfo(context.Background(), &moon.ProposeInfoRequest{
+	_, err = moonClient.ProposeInfo(v.ctx, &moon.ProposeInfoRequest{
 		Operate:  moon.ProposeInfoRequest_ADD,
 		Id:       bucketInfo.GetID(),
 		BaseInfo: bucketInfo.BaseInfo(),
@@ -194,6 +206,15 @@ func (v *VolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
 type BucketOperator struct {
 	bucketInfo *infos.BucketInfo
 	client     *Client
+	ctx        context.Context
+}
+
+func NewBucketOperator(ctx context.Context, bucketInfo *infos.BucketInfo, client *Client) *BucketOperator {
+	return &BucketOperator{
+		bucketInfo: bucketInfo,
+		client:     client,
+		ctx:        ctx,
+	}
 }
 
 // List
@@ -205,14 +226,14 @@ func (b *BucketOperator) List(prefix string) ([]Operator, error) {
 }
 
 func (b *BucketOperator) getAlayaClient(key string) (alaya.AlayaClient, error) {
-	pgID := object.GenObjPgID(b.bucketInfo, key, b.client.infoAgent.GetCurClusterInfo().MetaPgNum)
-	cp, err := pipeline.NewClusterPipelines(b.client.infoAgent.GetCurClusterInfo())
+	pgID := object.GenObjPgID(b.bucketInfo, key, b.client.InfoAgent.GetCurClusterInfo().MetaPgNum)
+	cp, err := pipeline.NewClusterPipelines(b.client.InfoAgent.GetCurClusterInfo())
 	if err != nil {
 		return nil, err
 	}
 
 	nodeID := cp.GetMetaPG(pgID)[0]
-	info, err := b.client.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
+	info, err := b.client.InfoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
 	if err != nil {
 		return nil, err
 	}
@@ -230,14 +251,14 @@ retry:
 	if err != nil {
 		return err
 	}
-	ctx, _ := alaya.SetTermToContext(context.Background(), b.client.infoAgent.GetCurClusterInfo().Term)
+	ctx, _ := alaya.SetTermToContext(context.Background(), b.client.InfoAgent.GetCurClusterInfo().Term)
 	_, err = alayaClient.DeleteMeta(ctx, &alaya.DeleteMetaRequest{
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
 			logger.Warningf("term not match, retry")
-			err = b.client.infoAgent.UpdateCurClusterInfo()
+			err = b.client.InfoAgent.UpdateCurClusterInfo()
 			if err != nil {
 				return err
 			}
@@ -262,14 +283,14 @@ retry:
 	if err != nil {
 		return nil, err
 	}
-	ctx, _ := alaya.SetTermToContext(b.client.ctx, b.client.infoAgent.GetCurClusterInfo().Term)
+	ctx, _ := alaya.SetTermToContext(b.ctx, b.client.InfoAgent.GetCurClusterInfo().Term)
 	reply, err := alayaClient.GetObjectMeta(ctx, &alaya.MetaRequest{
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
 			logger.Warningf("term not match, retry")
-			err = b.client.infoAgent.UpdateCurClusterInfo()
+			err = b.client.InfoAgent.UpdateCurClusterInfo()
 			if err != nil {
 				return nil, err
 			}

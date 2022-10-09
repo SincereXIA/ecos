@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"ecos/cloud/rainbow"
+	"ecos/edge-node/object"
 	"ecos/messenger/common"
 	"errors"
 	"io"
@@ -84,7 +85,7 @@ func (cbo *CloudBucketOperator) List(prefix string) ([]Operator, error) {
 		}
 
 		for _, meta := range resp.Metas {
-			operators = append(operators, &ObjectOperator{meta: meta})
+			operators = append(operators, &CloudObjectOperator{meta: meta})
 		}
 
 		if resp.IsLast {
@@ -93,4 +94,38 @@ func (cbo *CloudBucketOperator) List(prefix string) ([]Operator, error) {
 	}
 
 	return operators, nil
+}
+
+type CloudObjectOperator struct {
+	meta *object.ObjectMeta
+}
+
+func (c CloudObjectOperator) Get(key string) (Operator, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c CloudObjectOperator) List(prefix string) ([]Operator, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c CloudObjectOperator) Remove(key string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c CloudObjectOperator) State() (string, error) {
+	//TODO implement me
+	return protoToJson(c.meta)
+}
+
+func (c CloudObjectOperator) Info() (interface{}, error) {
+	//TODO implement me
+	return protoToJson(c.meta)
+}
+
+func (coo *CloudObjectOperator) Read(p []byte) (n int, err error) {
+	//TODO implement me
+	panic("implement me")
 }

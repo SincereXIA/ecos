@@ -42,8 +42,9 @@ message Request {
   Method method = 2;
   Resource resource = 3;
   string request_id = 4;
-  BaseInfo info = 5;
-  ObjectMeta meta = 6;
+  InfoType info_type = 5;
+  BaseInfo info = 6;
+  ObjectMeta meta = 7;
 }
 
 message Response {

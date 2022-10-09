@@ -27,7 +27,7 @@ type Client struct {
 	cancel context.CancelFunc
 
 	config    *config.ClientConfig
-	infoAgent *agent.InfoAgent
+	InfoAgent *agent.InfoAgent
 
 	factoryPool *lru.Cache
 
@@ -64,13 +64,13 @@ func New(config *config.ClientConfig) (*Client, error) {
 		ctx:         ctx,
 		config:      config,
 		cancel:      cancel,
-		infoAgent:   infoAgent,
+		InfoAgent:   infoAgent,
 		factoryPool: lruPool,
 	}, nil
 }
 
 func (client *Client) GetMoon() (moon.MoonClient, uint64, error) {
-	for _, nodeInfo := range client.infoAgent.GetCurClusterInfo().NodesInfo {
+	for _, nodeInfo := range client.InfoAgent.GetCurClusterInfo().NodesInfo {
 		if nodeInfo.State != infos.NodeState_ONLINE {
 			continue
 		}
@@ -96,19 +96,19 @@ func (client *Client) GetRainbow() (rainbow.RainbowClient, error) {
 func (client *Client) ListObjects(_ context.Context, bucketName, prefix string) ([]*object.ObjectMeta, error) {
 	userID := client.config.Credential.GetUserID()
 	bucketID := infos.GenBucketID(userID, bucketName)
-	info, err := client.infoAgent.Get(infos.InfoType_BUCKET_INFO, bucketID)
+	info, err := client.InfoAgent.Get(infos.InfoType_BUCKET_INFO, bucketID)
 	if err != nil {
 		return nil, err
 	}
 	bucketInfo := info.BaseInfo().GetBucketInfo()
 retry:
-	clusterInfo := client.infoAgent.GetCurClusterInfo()
+	clusterInfo := client.InfoAgent.GetCurClusterInfo()
 	p := pipeline.GenMetaPipelines(clusterInfo)
 	var result []*object.ObjectMeta
 	for i := 1; int32(i) <= bucketInfo.Config.KeySlotNum; i++ {
 		pgID := object.GenSlotPgID(bucketInfo.GetID(), int32(i), clusterInfo.MetaPgNum)
 		nodeID := p[pgID-1].RaftId[0]
-		info, err := client.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
+		info, err := client.InfoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +124,7 @@ retry:
 		if err != nil {
 			if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
 				logger.Warningf("term not match, retry")
-				err = client.infoAgent.UpdateCurClusterInfo()
+				err = client.InfoAgent.UpdateCurClusterInfo()
 				if err != nil {
 					return nil, err
 				}
@@ -154,14 +154,11 @@ func (client *Client) GetIOFactory(bucketName string) (*io.EcosIOFactory, error)
 }
 
 func (client *Client) GetVolumeOperator() *VolumeOperator {
-	return &VolumeOperator{
-		volumeID: client.config.Credential.GetUserID(),
-		client:   client,
-	}
+	return NewVolumeOperator(client.ctx, client.config.Credential.GetUserID(), client)
 }
 
 func (client *Client) GetClusterOperator() Operator {
-	return &ClusterOperator{client: client}
+	return NewClusterOperator(client.ctx, client)
 }
 
 func (client *Client) GetCloudVolumeOperator() *CloudVolumeOperator {
