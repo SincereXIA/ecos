@@ -5,12 +5,16 @@ import (
 	"ecos/client"
 	"ecos/client/config"
 	"ecos/cloud/rainbow"
+	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
+	"ecos/edge-node/object"
+	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/utils/logger"
 	"errors"
+	"io"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -129,6 +133,8 @@ func (o *Outpost) streamLoop() (err error) {
 			switch request.GetResource() {
 			case rainbow.Request_META:
 				go o.doMetaRequest(request)
+			case rainbow.Request_BLOCK:
+				go o.doBlockRequest(request)
 			default:
 				logger.Errorf("unknown request resource: %v", request.GetResource())
 			}
@@ -188,13 +194,31 @@ func (o *Outpost) Run() error {
 	return o.streamLoop()
 }
 
+func (o *Outpost) getClient() (*client.Client, error) {
+	clientConfig := config.DefaultConfig // TODO 个性化配置
+	clientConfig.NodeAddr = "127.0.0.1"
+	clientConfig.NodePort = o.w.GetSelfInfo().RpcPort
+	return client.New(&clientConfig)
+}
+
+func (o *Outpost) returnFail(request *rainbow.Request, err error) {
+	o.sendChan <- &rainbow.Content{
+		Payload: &rainbow.Content_Response{
+			Response: &rainbow.Response{
+				ResponseTo: request.RequestSeq,
+				Result: &common.Result{
+					Status:  common.Result_FAIL,
+					Message: err.Error(),
+				},
+			},
+		},
+	}
+}
+
 func (o *Outpost) doMetaRequest(request *rainbow.Request) {
 	switch request.GetMethod() {
 	case rainbow.Request_LIST:
-		clientConfig := config.DefaultConfig // TODO 个性化配置
-		clientConfig.NodeAddr = "127.0.0.1"
-		clientConfig.NodePort = o.w.GetSelfInfo().RpcPort
-		c, err := client.New(&clientConfig)
+		c, _ := o.getClient()
 		metas, err := c.ListObjects(o.ctx, "default", request.RequestId)
 
 		if err != nil {
@@ -225,6 +249,30 @@ func (o *Outpost) doMetaRequest(request *rainbow.Request) {
 			},
 		}
 		return
+	case rainbow.Request_GET:
+		c, _ := o.getClient()
+		objID := request.RequestId
+		_, bucketID, key, _, _ := object.SplitID(objID)
+		split := strings.Split(bucketID, "/")
+		bucketName := split[len(split)-1]
+		bucket, _ := c.GetVolumeOperator().Get(bucketName)
+		obj, err := bucket.Get(key)
+		meta := obj.(*client.ObjectOperator).Meta
+		if err != nil {
+			o.returnFail(request, err)
+			break
+		}
+		o.sendChan <- &rainbow.Content{
+			Payload: &rainbow.Content_Response{
+				Response: &rainbow.Response{
+					ResponseTo: request.RequestSeq,
+					Result: &common.Result{
+						Status: common.Result_OK,
+					},
+					Metas: []*object.ObjectMeta{meta},
+				},
+			},
+		}
 	default:
 		o.sendChan <- &rainbow.Content{
 			Payload: &rainbow.Content_Response{
@@ -237,6 +285,103 @@ func (o *Outpost) doMetaRequest(request *rainbow.Request) {
 				},
 			},
 		}
+		logger.Errorf("request method not support: %v", request.GetMethod())
+	}
+}
+
+func (o *Outpost) doBlockRequest(request *rainbow.Request) {
+	switch request.GetMethod() {
+	case rainbow.Request_GET:
+		blockID := request.RequestId
+		clusterInfo, err := o.w.GetClusterInfoByTerm(request.Term)
+		if err != nil {
+			o.returnFail(request, err)
+			return
+		}
+
+		pgID := object.GenBlockPgID(blockID, clusterInfo.BlockPgNum)
+		pipelines, err := pipeline.NewClusterPipelines(clusterInfo)
+		if err != nil {
+			o.returnFail(request, err)
+			return
+		}
+		nodeIds := pipelines.GetBlockPG(pgID)
+
+		// 连接所有可用节点
+		for _, nodeID := range nodeIds {
+			info, err := o.w.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
+			if err != nil {
+				continue
+			}
+			nodeInfo := info.BaseInfo().GetNodeInfo()
+			conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
+			if err != nil {
+				continue
+			}
+
+			c := gaia.NewGaiaClient(conn)
+			req := &gaia.GetBlockRequest{
+				BlockId:  blockID,
+				CurChunk: 0,
+				Term:     request.Term,
+			}
+
+			res, err := c.GetBlockData(o.ctx, req)
+			if err != nil {
+				logger.Warningf("blockClient responds err: %v", err)
+				continue
+			}
+			startSend := false
+			ok := true
+			for {
+				var rs *gaia.GetBlockResult
+				rs, err = res.Recv() // 从流中接收数据
+				if err != nil {
+					if err == io.EOF {
+						o.sendChan <- &rainbow.Content{
+							Payload: &rainbow.Content_Response{
+								Response: &rainbow.Response{
+									ResponseTo: request.RequestSeq,
+									Result: &common.Result{
+										Status: common.Result_OK,
+									},
+									IsLast: true,
+								},
+							},
+						}
+						break
+					}
+					ok = false
+					terr := res.CloseSend()
+					if terr != nil {
+						logger.Infof("close gaia server failed, err: %v", terr)
+					}
+					logger.Warningf("res.Recv err: %v", err)
+					break
+				}
+				startSend = true // 有数据返回，开始发送
+				o.sendChan <- &rainbow.Content{
+					Payload: &rainbow.Content_Response{
+						Response: &rainbow.Response{
+							ResponseTo: request.RequestSeq,
+							Result: &common.Result{
+								Status: common.Result_OK,
+							},
+							Chunk: rs.GetChunk().Content,
+						},
+					},
+				}
+			}
+			if ok {
+				return
+			}
+			if startSend {
+				o.returnFail(request, err)
+			}
+		}
+
+		o.returnFail(request, errors.New("no available node"))
+	default:
 		logger.Errorf("request method not support: %v", request.GetMethod())
 	}
 }

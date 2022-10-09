@@ -85,7 +85,7 @@ func (client *Client) GetMoon() (moon.MoonClient, uint64, error) {
 	return nil, 0, errno.ConnectionIssue
 }
 
-func (client *Client) GetRainbow() (rainbow.RainbowClient, error) {
+func (client *Client) getRainbow() (rainbow.RainbowClient, error) {
 	conn, err := messenger.GetRpcConn(client.config.CloudAddr, client.config.CloudPort)
 	if err != nil {
 		return nil, err

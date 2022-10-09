@@ -220,23 +220,9 @@ func (r *Raft) CheckConfChange(change *raftpb.ConfChange) {
 	}
 }
 
-func (r *Raft) ProposeNewPipeline(newP *pipeline.Pipeline, oldP *pipeline.Pipeline) {
+func (r *Raft) ProposeNewPipeline(newP *pipeline.Pipeline) {
 	r.setPipeline(newP)
 	logger.Infof("set new pipeline: %v, %v", newP.PgId, newP.RaftId)
-	//go func() {
-	//	needAdd, needRemove := calDiff(newP.RaftId, oldP.RaftId)
-	//	err := r.ProposeNewNodes(needAdd)
-	//	if err != nil {
-	//		logger.Errorf("Alaya propose new nodes in PG: %v fail, err: %v", r.pgID, err)
-	//	}
-	//	if r.raft.Node.Status().ID != r.getPipeline().RaftId[0] {
-	//		return
-	//	}
-	//	err = r.ProposeRemoveNodes(needRemove)
-	//	if err != nil {
-	//		logger.Errorf("Alaya propose remove nodes in PG: %v fail, err: %v", r.pgID, err)
-	//	}
-	//}()
 }
 
 func (r *Raft) controlLoop() {

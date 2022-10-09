@@ -15,9 +15,9 @@ type Rainbow struct {
 	clusterInfo *infos.ClusterInfo
 
 	w      wait.Wait
-	router *Router
+	router *Router // router 注册从本地发出的响应
 
-	requestSeq uint64
+	requestSeq uint64 // 主动从 cloud 发起的 request 序列号
 
 	rwMutex sync.RWMutex // protect clusterInfo & requestSeq
 }

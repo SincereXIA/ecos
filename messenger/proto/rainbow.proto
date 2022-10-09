@@ -36,15 +36,18 @@ message Request {
     INFO = 1;
     META = 2;
     OBJECT = 3;
+    BLOCK = 4;
   }
 
   uint64 request_seq = 1;
   Method method = 2;
   Resource resource = 3;
-  string request_id = 4;
-  InfoType info_type = 5;
-  BaseInfo info = 6;
-  ObjectMeta meta = 7;
+  uint64 term = 4;
+
+  string request_id = 5;
+  InfoType info_type = 6;
+  BaseInfo info = 7;
+  ObjectMeta meta = 8;
 }
 
 message Response {

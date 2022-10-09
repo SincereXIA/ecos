@@ -4,6 +4,7 @@ import (
 	client2 "ecos/client"
 	"ecos/client/config"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ func TestNewCloudBucketOperator(t *testing.T) {
 	cloudPort, _ := strconv.Atoi(strings.Split(watchers[0].Config.SunAddr, ":")[1])
 	conf.CloudAddr = cloudAddr
 	conf.CloudPort = uint64(cloudPort)
+	conf.ConnectType = config.ConnectCloud
 
 	client, err := client2.New(&conf)
 	if err != nil {
@@ -62,6 +64,16 @@ func TestNewCloudBucketOperator(t *testing.T) {
 		}
 		assert.NoError(t, err, "Failed to list objects")
 		assert.Equal(t, objectNum, len(objects), "object num not match")
+	})
+
+	t.Run("get object by cloud", func(t *testing.T) {
+		reader := factory.GetEcosReader("/test_0/ecos-test")
+		data := make([]byte, objectSize)
+		size, err := reader.Read(data)
+		if err != nil && err != io.EOF {
+			t.Errorf("Failed to read data: %v", err)
+		}
+		assert.Equal(t, objectSize, size, "data size not match")
 	})
 
 }

@@ -56,7 +56,7 @@ func NewCloudBucketOperator(ctx context.Context, client *Client, bucketName stri
 }
 
 func (cbo *CloudBucketOperator) List(prefix string) ([]Operator, error) {
-	rainbowClient, err := cbo.client.GetRainbow()
+	rainbowClient, err := cbo.client.getRainbow()
 	if err != nil {
 		return nil, err
 	}

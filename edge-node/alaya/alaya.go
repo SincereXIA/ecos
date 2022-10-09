@@ -350,8 +350,8 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 		//	// 若当前节点不是 leader，并且原有 leader 仍然在新 pg 中，则当前 pg 可以跳过
 		//	return true
 		//}
-		// if this node is leader, add new pipelines node first
-		raftNode.ProposeNewPipeline(p, oldPipelines.MetaPipelines[pgID-1])
+
+		raftNode.ProposeNewPipeline(p)
 		return true
 	})
 

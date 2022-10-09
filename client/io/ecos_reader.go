@@ -3,11 +3,14 @@ package io
 import (
 	"context"
 	"ecos/client/config"
+	"ecos/cloud/rainbow"
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
+	"ecos/messenger"
+	"ecos/messenger/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"fmt"
@@ -52,24 +55,61 @@ func (r *EcosReader) genPipelines() error {
 }
 
 func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
-	switch r.f.config.ConnectType {
-	case config.ConnectCloud:
-		return r.GetBlockByCloud(blockInfo)
-	default:
-		return r.GetBlockByEdge(blockInfo)
-	}
-}
-
-func (r *EcosReader) GetBlockByCloud(blockInfo *object.BlockInfo) ([]byte, error) {
-	// TODO
-	panic("")
-}
-
-func (r *EcosReader) GetBlockByEdge(blockInfo *object.BlockInfo) ([]byte, error) {
 	blockID := blockInfo.BlockId
 	if block, ok := r.cachedBlocks.Load(blockID); ok {
 		return block.([]byte), nil
 	}
+	var block []byte
+	var err error
+	switch r.f.config.ConnectType {
+	case config.ConnectCloud:
+		block, err = r.GetBlockByCloud(blockInfo)
+	default:
+		block, err = r.GetBlockByEdge(blockInfo)
+	}
+	if err != nil {
+		return nil, err
+	}
+	r.cachedBlocks.Store(blockID, block)
+	return block, nil
+}
+
+func (r *EcosReader) GetBlockByCloud(blockInfo *object.BlockInfo) ([]byte, error) {
+	conn, err := messenger.GetRpcConn(r.f.config.CloudAddr, r.f.config.CloudPort)
+	if err != nil {
+		return nil, err
+	}
+	client := rainbow.NewRainbowClient(conn)
+
+	stream, err := client.SendRequest(r.ctx, &rainbow.Request{
+		Method:    rainbow.Request_GET,
+		Resource:  rainbow.Request_BLOCK,
+		RequestId: blockInfo.BlockId,
+		InfoType:  0,
+		Info:      nil,
+		Meta:      nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	block := make([]byte, 0, blockInfo.BlockSize)
+	for {
+		res, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		if res.Result.Status != common.Result_OK {
+			return nil, fmt.Errorf("get block %s failed, err: %s", blockInfo.BlockId, res.Result.Message)
+		}
+		block = append(block, res.Chunk...)
+	}
+	return block, nil
+}
+
+func (r *EcosReader) GetBlockByEdge(blockInfo *object.BlockInfo) ([]byte, error) {
 	pgID := object.GenBlockPgID(blockInfo.BlockId, r.clusterInfo.BlockPgNum)
 	gaiaServerId := r.pipes.GetBlockPG(pgID)
 	info, err := r.f.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId[0], 10))
@@ -77,7 +117,7 @@ func (r *EcosReader) GetBlockByEdge(blockInfo *object.BlockInfo) ([]byte, error)
 	if err != nil {
 		logger.Errorf("get gaia server info failed, err: %v", err)
 	}
-	logger.Debugf("get block %10.10s from %v", blockID, gaiaServerInfo.RaftId)
+	logger.Debugf("get block %10.10s from %v", blockInfo.BlockId, gaiaServerInfo.RaftId)
 	client, err := NewGaiaClient(gaiaServerInfo, r.f.config)
 	if err != nil {
 		return nil, err
@@ -87,7 +127,7 @@ func (r *EcosReader) GetBlockByEdge(blockInfo *object.BlockInfo) ([]byte, error)
 		CurChunk: 0,
 		Term:     r.meta.Term,
 	}
-	res, err := client.client.GetBlockData(context.Background(), req)
+	res, err := client.client.GetBlockData(r.ctx, req)
 	if err != nil {
 		logger.Warningf("blockClient responds err: %v", err)
 		return nil, err
@@ -108,7 +148,6 @@ func (r *EcosReader) GetBlockByEdge(blockInfo *object.BlockInfo) ([]byte, error)
 		}
 		block = append(block, rs.GetChunk().Content...)
 	}
-	r.cachedBlocks.Store(blockID, block)
 	return block, nil
 }
 

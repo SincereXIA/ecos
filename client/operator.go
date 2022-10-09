@@ -264,7 +264,7 @@ retry:
 			}
 			goto retry
 		}
-		logger.Warningf("delete meta: %v failed, err: %v", object.GenObjectId(b.bucketInfo, key), err)
+		logger.Warningf("delete Meta: %v failed, err: %v", object.GenObjectId(b.bucketInfo, key), err)
 	}
 	return err
 }
@@ -298,11 +298,11 @@ retry:
 		}
 		return nil, err
 	}
-	return &ObjectOperator{meta: reply}, nil
+	return &ObjectOperator{Meta: reply}, nil
 }
 
 type ObjectOperator struct {
-	meta *object.ObjectMeta
+	Meta *object.ObjectMeta
 }
 
 func (o *ObjectOperator) List(prefix string) ([]Operator, error) {
@@ -318,7 +318,7 @@ func (o *ObjectOperator) Remove(key string) error {
 }
 
 func (o *ObjectOperator) State() (string, error) {
-	return protoToJson(o.meta)
+	return protoToJson(o.Meta)
 }
 
 func protoToJson(pb proto.Message) (string, error) {
@@ -351,5 +351,5 @@ func interfaceToJson(data interface{}) (string, error) {
 }
 
 func (o *ObjectOperator) Info() (interface{}, error) {
-	return o.meta, nil
+	return o.Meta, nil
 }
