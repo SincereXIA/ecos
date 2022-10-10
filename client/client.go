@@ -153,17 +153,14 @@ func (client *Client) GetIOFactory(bucketName string) (*io.EcosIOFactory, error)
 	return ret, err
 }
 
-func (client *Client) GetVolumeOperator() *VolumeOperator {
-	return NewVolumeOperator(client.ctx, client.config.Credential.GetUserID(), client)
+func (client *Client) GetVolumeOperator() VolumeOperator {
+	switch client.config.ConnectType {
+	case config.ConnectCloud:
+		return NewCloudVolumeOperator(client.ctx, client, client.config.Credential.GetUserID())
+	}
+	return NewEdgeVolumeOperator(client.ctx, client.config.Credential.GetUserID(), client)
 }
 
 func (client *Client) GetClusterOperator() Operator {
 	return NewClusterOperator(client.ctx, client)
-}
-
-func (client *Client) GetCloudVolumeOperator() *CloudVolumeOperator {
-	return &CloudVolumeOperator{
-		client: client,
-		ctx:    client.ctx,
-	}
 }

@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"ecos/cloud/rainbow"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/messenger/common"
 	"errors"
@@ -14,6 +15,44 @@ type CloudVolumeOperator struct {
 	client   *Client
 
 	ctx context.Context
+}
+
+func (cvo *CloudVolumeOperator) List(prefix string) ([]Operator, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cvo *CloudVolumeOperator) Remove(key string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cvo *CloudVolumeOperator) State() (string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cvo *CloudVolumeOperator) Info() (interface{}, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cvo *CloudVolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cvo *CloudVolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func NewCloudVolumeOperator(ctx context.Context, client *Client, volumeID string) *CloudVolumeOperator {
+	return &CloudVolumeOperator{
+		volumeID: volumeID,
+		client:   client,
+		ctx:      ctx,
+	}
 }
 
 func (cvo *CloudVolumeOperator) Get(key string) (Operator, error) {

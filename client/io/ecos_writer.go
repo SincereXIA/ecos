@@ -561,6 +561,8 @@ func (w *EcosWriter) getObjNodeByPg(pgID uint64) *infos.NodeInfo {
 // getNewBlock will get a new Block with blank BlockInfo.
 func (w *EcosWriter) getNewBlock() *Block {
 	return &Block{
+		ctx:         w.ctx,
+		conf:        w.f.config,
 		BlockInfo:   object.BlockInfo{},
 		status:      READING,
 		chunks:      nil,
@@ -589,26 +591,13 @@ func (w *EcosWriter) uploadBlock(i int, block *Block) {
 		logger.Warningf("block close error: %v", err)
 		return
 	}
-	client, err := w.getUploadStream(block)
-	if err != nil {
-		logger.Warningf("Failed to get upload stream: %v", err)
-		return
-	}
 	// TODO (xiong): if upload is failed, now writer never can be close or writer won't know, we should fix it.
 	defer block.delFunc(block)
-	if client.cancel != nil {
-		defer client.cancel()
-	}
-	err = block.Upload(client.stream)
+	err = block.Upload()
 	if err != nil {
 		block.status = FAILED
 		return
 	} else {
-		_, err = client.GetUploadResult()
-		if err != nil {
-			block.status = FAILED
-			return
-		}
 		block.status = FINISHED
 	}
 	if err != nil {

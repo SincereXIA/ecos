@@ -13,7 +13,6 @@ import (
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/json"
-	"errors"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -28,6 +27,12 @@ type Operator interface {
 	Remove(key string) error
 	State() (string, error)
 	Info() (interface{}, error)
+}
+
+type VolumeOperator interface {
+	Operator
+	CreateBucket(bucketInfo *infos.BucketInfo) error
+	DeleteBucket(bucketInfo *infos.BucketInfo) error
 }
 
 type ClusterOperator struct {
@@ -105,34 +110,37 @@ func (c *ClusterOperator) State() (string, error) {
 	return base + "\n" + pipelines + "\n" + state, nil
 }
 
-type VolumeOperator struct {
+type EdgeVolumeOperator struct {
 	volumeID string
 	client   *Client
 	ctx      context.Context
 }
 
-func NewVolumeOperator(ctx context.Context, volumeID string, client *Client) *VolumeOperator {
-	return &VolumeOperator{
+func NewEdgeVolumeOperator(ctx context.Context, volumeID string, client *Client) *EdgeVolumeOperator {
+	return &EdgeVolumeOperator{
 		volumeID: volumeID,
 		client:   client,
 		ctx:      ctx,
 	}
 }
 
-// Remove Deprecated
-func (v *VolumeOperator) Remove(_ string) error {
-	return errors.New("remove is deprecated, use DeleteBucket instead")
+func (v *EdgeVolumeOperator) Remove(bucketName string) error {
+	bucketInfo := &infos.BucketInfo{
+		VolumeId:   v.volumeID,
+		BucketName: bucketName,
+	}
+	return v.DeleteBucket(bucketInfo)
 }
 
-func (v *VolumeOperator) State() (string, error) {
+func (v *EdgeVolumeOperator) State() (string, error) {
 	panic("volume operator does not support state")
 }
 
-func (v *VolumeOperator) Info() (interface{}, error) {
+func (v *EdgeVolumeOperator) Info() (interface{}, error) {
 	panic("volume operator does not support info")
 }
 
-func (v *VolumeOperator) Get(key string) (Operator, error) {
+func (v *EdgeVolumeOperator) Get(key string) (Operator, error) {
 	moonClient, nodeId, err := v.client.GetMoon()
 	if err != nil {
 		logger.Errorf("get moon client err: %v", err.Error())
@@ -149,7 +157,7 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 	return NewBucketOperator(v.ctx, info.BaseInfo.GetBucketInfo(), v.client), nil
 }
 
-func (v *VolumeOperator) List(key string) ([]Operator, error) {
+func (v *EdgeVolumeOperator) List(key string) ([]Operator, error) {
 	moonClient, _, err := v.client.GetMoon()
 	if err != nil {
 		logger.Errorf("get moon client err: %v", err.Error())
@@ -172,7 +180,7 @@ func (v *VolumeOperator) List(key string) ([]Operator, error) {
 	return buckets, nil
 }
 
-func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
+func (v *EdgeVolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
 	moonClient, _, err := v.client.GetMoon()
 	if err != nil {
 		logger.Errorf("get moon client err: %v", err.Error())
@@ -189,7 +197,7 @@ func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
 // DeleteBucket deletes a bucket by bucketInfo from its volume.
 //
 // The Bucket must be empty.
-func (v *VolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
+func (v *EdgeVolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
 	moonClient, _, err := v.client.GetMoon()
 	if err != nil {
 		logger.Errorf("get moon client err: %v", err.Error())

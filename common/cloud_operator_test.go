@@ -55,7 +55,7 @@ func TestNewCloudBucketOperator(t *testing.T) {
 	})
 
 	t.Run("test list object by cloud", func(t *testing.T) {
-		cloudVolumeOperator := client.GetCloudVolumeOperator()
+		cloudVolumeOperator := client.GetVolumeOperator()
 		bucket, err := cloudVolumeOperator.Get("default")
 		objects, err := bucket.List("/")
 		for _, object := range objects {
