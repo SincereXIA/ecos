@@ -1,6 +1,8 @@
 package rainbow
 
 import (
+	"context"
+	"ecos/cloud/config"
 	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"ecos/utils/logger"
@@ -20,6 +22,8 @@ type Rainbow struct {
 	requestSeq uint64 // 主动从 cloud 发起的 request 序列号
 
 	rwMutex sync.RWMutex // protect clusterInfo & requestSeq
+
+	gaia *CloudGaia
 }
 
 // eventLoop 处理 stream 中收到的 content
@@ -142,11 +146,12 @@ func (r *Rainbow) SendRequestToEdgeLeader(request *Request) (<-chan *Response, e
 	return r.SendRequestToNode(leader, request)
 }
 
-func NewRainbow(rpcServer *messenger.RpcServer) *Rainbow {
+func NewRainbow(ctx context.Context, rpcServer *messenger.RpcServer, conf *config.CloudConfig) *Rainbow {
 	rainbow := &Rainbow{
 		router:     NewRouter(),
 		requestSeq: 10000,
 	}
+	rainbow.gaia = NewCloudGaia(ctx, rpcServer, conf)
 	RegisterRainbowServer(rpcServer, rainbow)
 	return rainbow
 }

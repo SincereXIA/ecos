@@ -5,7 +5,7 @@ import (
 	"ecos/client"
 	"ecos/client/config"
 	"ecos/cloud/rainbow"
-	"ecos/edge-node/gaia"
+	"ecos/common/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -135,6 +135,8 @@ func (o *Outpost) streamLoop() (err error) {
 				go o.doMetaRequest(request)
 			case rainbow.Request_BLOCK:
 				go o.doBlockRequest(request)
+			case rainbow.Request_INFO:
+				go o.doInfoRequest(request)
 			default:
 				logger.Errorf("unknown request resource: %v", request.GetResource())
 			}
@@ -178,15 +180,12 @@ func (o *Outpost) Run() error {
 	o.stream = stream
 
 	// 初始化发送自身信息
-	go func() {
-		respChan := o.Send(&rainbow.Request{
-			RequestSeq: o.requestSeq,
-			Method:     rainbow.Request_PUT,
-			Resource:   rainbow.Request_INFO,
-			Info:       o.w.GetSelfInfo().BaseInfo(),
-		})
-		<-respChan
-	}()
+	_ = o.Send(&rainbow.Request{
+		RequestSeq: o.requestSeq,
+		Method:     rainbow.Request_PUT,
+		Resource:   rainbow.Request_INFO,
+		Info:       o.w.GetSelfInfo().BaseInfo(),
+	})
 
 	go o.SendChanListenLoop()
 	go o.reportLoop()
@@ -381,6 +380,40 @@ func (o *Outpost) doBlockRequest(request *rainbow.Request) {
 		}
 
 		o.returnFail(request, errors.New("no available node"))
+	default:
+		logger.Errorf("request method not support: %v", request.GetMethod())
+	}
+}
+
+func (o *Outpost) doInfoRequest(request *rainbow.Request) {
+	switch request.GetMethod() {
+	case rainbow.Request_GET:
+		infoType := request.GetInfoType()
+		infoID := request.RequestId
+		var info infos.Information
+		var err error
+		if infoType == infos.InfoType_CLUSTER_INFO && infoID == "0" {
+			clusterInfo := o.w.GetCurrentClusterInfo()
+			info = clusterInfo.BaseInfo()
+		} else {
+			info, err = o.w.GetMoon().GetInfoDirect(infoType, infoID)
+		}
+
+		if err != nil {
+			o.returnFail(request, err)
+			return
+		}
+		o.sendChan <- &rainbow.Content{
+			Payload: &rainbow.Content_Response{
+				Response: &rainbow.Response{
+					ResponseTo: request.RequestSeq,
+					Result: &common.Result{
+						Status: common.Result_OK,
+					},
+					Infos: []*infos.BaseInfo{info.BaseInfo()},
+				},
+			},
+		}
 	default:
 		logger.Errorf("request method not support: %v", request.GetMethod())
 	}

@@ -2,7 +2,7 @@ package cleaner
 
 import (
 	"context"
-	"ecos/edge-node/gaia"
+	"ecos/common/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"

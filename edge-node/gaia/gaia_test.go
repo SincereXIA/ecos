@@ -2,6 +2,7 @@ package gaia
 
 import (
 	"context"
+	"ecos/common/gaia"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
@@ -104,7 +105,7 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, pgID uint64,
 	term := watchers[id-1].GetCurrentClusterInfo().Term
 	conn, _ := messenger.GetRpcConnByNodeInfo(info)
 
-	client := NewGaiaClient(conn)
+	client := gaia.NewGaiaClient(conn)
 	stream, err := client.UploadBlockData(context.TODO())
 	if err != nil {
 		t.Errorf("Get Upload stream err: %v", err)
@@ -123,8 +124,8 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, pgID uint64,
 		PgId:      pgID,
 	}
 
-	err = stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Message{Message: &ControlMessage{
-		Code:     ControlMessage_BEGIN,
+	err = stream.Send(&gaia.UploadBlockRequest{Payload: &gaia.UploadBlockRequest_Message{Message: &gaia.ControlMessage{
+		Code:     gaia.ControlMessage_BEGIN,
 		Block:    blockInfo,
 		Pipeline: p,
 		Term:     term,
@@ -134,7 +135,7 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, pgID uint64,
 	}
 
 	for i := 0; i < testBlockSize/testTrunkSize; i++ {
-		err = stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Chunk{Chunk: &Chunk{
+		err = stream.Send(&gaia.UploadBlockRequest{Payload: &gaia.UploadBlockRequest_Chunk{Chunk: &gaia.Chunk{
 			Content: data[:],
 		}}})
 		if err != nil {
@@ -142,8 +143,8 @@ func uploadBlockTest(t *testing.T, p *pipeline.Pipeline, pgID uint64,
 		}
 	}
 
-	err = stream.Send(&UploadBlockRequest{Payload: &UploadBlockRequest_Message{Message: &ControlMessage{
-		Code:     ControlMessage_EOF,
+	err = stream.Send(&gaia.UploadBlockRequest{Payload: &gaia.UploadBlockRequest_Message{Message: &gaia.ControlMessage{
+		Code:     gaia.ControlMessage_EOF,
 		Block:    blockInfo,
 		Pipeline: p,
 		Term:     term,
@@ -165,9 +166,9 @@ func deleteBlock(p *pipeline.Pipeline, watchers []*watcher.Watcher, blockInfo *o
 	term := watchers[id-1].GetCurrentClusterInfo().Term
 	conn, _ := messenger.GetRpcConnByNodeInfo(info)
 
-	client := NewGaiaClient(conn)
+	client := gaia.NewGaiaClient(conn)
 
-	_, err := client.DeleteBlock(context.TODO(), &DeleteBlockRequest{
+	_, err := client.DeleteBlock(context.TODO(), &gaia.DeleteBlockRequest{
 		BlockId:  blockInfo.BlockId,
 		Term:     term,
 		Pipeline: p,

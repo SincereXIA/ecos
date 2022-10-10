@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"ecos/cloud/config"
 	"ecos/cloud/rainbow"
 	"ecos/cloud/sun"
 	"ecos/messenger"
@@ -22,6 +24,9 @@ func hello(c *gin.Context) {
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// init Sun
 	logger.Infof("Start init Sun ...")
 	rpcServer := messenger.NewRpcServer(3267)
@@ -38,7 +43,7 @@ func main() {
 
 	// init rainbow
 	logger.Infof("Start init rainbow ...")
-	_ = rainbow.NewRainbow(rpcServer)
+	_ = rainbow.NewRainbow(ctx, rpcServer, &config.DefaultCloudConfig)
 
 	// init Gin
 	router := NewRouter()

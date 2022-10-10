@@ -4,7 +4,7 @@ import (
 	"context"
 	"ecos/client/config"
 	agent "ecos/client/info-agent"
-	"ecos/edge-node/gaia"
+	"ecos/common/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -58,7 +58,7 @@ type Block struct {
 func (b *Block) Upload() error {
 	switch b.conf.ConnectType {
 	case config.ConnectCloud:
-		//return b.uploadByCloud()
+		return b.uploadByCloud()
 	}
 	return b.uploadByEdge()
 }

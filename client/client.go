@@ -41,7 +41,19 @@ const (
 
 func New(config *config.ClientConfig) (*Client, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	infoAgent, err := agent.NewInfoAgent(ctx, config.NodeAddr, config.NodePort)
+
+	clusterInfo := &infos.ClusterInfo{
+		NodesInfo: []*infos.NodeInfo{
+			{
+				RaftId:  0,
+				IpAddr:  config.NodeAddr,
+				RpcPort: config.NodePort,
+				State:   infos.NodeState_ONLINE,
+			},
+		},
+	}
+	infoAgent, err := agent.NewInfoAgent(ctx, clusterInfo, config.CloudAddr, config.CloudPort, config.ConnectType)
+
 	if err != nil {
 		cancel()
 		return nil, err

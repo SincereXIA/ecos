@@ -4,7 +4,7 @@ import (
 	"context"
 	"ecos/client/config"
 	"ecos/cloud/rainbow"
-	"ecos/edge-node/gaia"
+	"ecos/common/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
@@ -75,6 +75,46 @@ func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 }
 
 func (r *EcosReader) GetBlockByCloud(blockInfo *object.BlockInfo) ([]byte, error) {
+	conn, err := messenger.GetRpcConn(r.f.config.CloudAddr, r.f.config.CloudPort)
+	if err != nil {
+		return nil, err
+	}
+	client := gaia.NewGaiaClient(conn)
+	if err != nil {
+		return nil, err
+	}
+	req := &gaia.GetBlockRequest{
+		BlockId:  blockInfo.BlockId,
+		CurChunk: 0,
+		Term:     r.meta.Term,
+	}
+	res, err := client.GetBlockData(r.ctx, req)
+	defer func(res gaia.Gaia_GetBlockDataClient) {
+		err := res.CloseSend()
+		if err != nil {
+			logger.Errorf("close stream failed, err: %v", err)
+		}
+	}(res)
+	if err != nil {
+		logger.Warningf("blockClient responds err: %v", err)
+		return nil, err
+	}
+	block := make([]byte, 0, r.f.bucketInfo.Config.BlockSize)
+	for {
+		rs, err := res.Recv()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			logger.Warningf("res.Recv err: %v", err)
+			return nil, err
+		}
+		block = append(block, rs.GetChunk().Content...)
+	}
+	return block, nil
+}
+
+func (r *EcosReader) GetBlockInEdgeByCloud(blockInfo *object.BlockInfo) ([]byte, error) {
 	conn, err := messenger.GetRpcConn(r.f.config.CloudAddr, r.f.config.CloudPort)
 	if err != nil {
 		return nil, err
