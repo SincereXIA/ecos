@@ -11,7 +11,7 @@ import (
 )
 
 type MockState struct {
-	storage MetaStorage
+	storage alaya.MetaStorage
 	alaya.UnimplementedAlayaServer
 }
 
@@ -67,7 +67,7 @@ func (state *MockState) GetReports() []watcher.Report {
 }
 
 func InitMock(alayaer *MockAlayaer, rpcServer *messenger.RpcServer,
-	storage MetaStorage) {
+	storage alaya.MetaStorage) {
 	state := &MockState{storage: storage}
 	alayaer.EXPECT().Run().Times(1)
 	alayaer.EXPECT().GetObjectMeta(gomock.Any(), gomock.Not(nil)).DoAndReturn(state.GetObjectMeta).AnyTimes()

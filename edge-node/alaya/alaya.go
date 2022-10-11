@@ -48,7 +48,7 @@ type Alaya struct {
 	mutex            sync.Mutex
 	raftNodeStopChan chan uint64 // 内部 raft node 主动退出时，使用该 chan 通知 alaya
 
-	MetaStorageRegister MetaStorageRegister
+	MetaStorageRegister alaya.MetaStorageRegister
 	cleaner             *cleaner.Cleaner
 
 	state State
@@ -381,7 +381,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 }
 
 func NewAlaya(ctx context.Context, watcher *watcher.Watcher, config *Config,
-	metaStorageRegister MetaStorageRegister, rpcServer *messenger.RpcServer) Alayaer {
+	metaStorageRegister alaya.MetaStorageRegister, rpcServer *messenger.RpcServer) Alayaer {
 	ctx, cancel := context.WithCancel(ctx)
 	c := cleaner.NewCleaner(ctx, watcher)
 	a := Alaya{

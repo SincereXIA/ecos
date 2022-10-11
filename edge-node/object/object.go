@@ -48,6 +48,24 @@ func SplitID(objectID string) (volumeID, bucketID, key string, slotID int32, err
 	return
 }
 
+func SplitPrefixWithoutSlotID(prefix string) (volumeID, bucketID, key string, err error) {
+	prefix = CleanObjectKey(prefix)
+	split := strings.SplitN(prefix, "/", 3)
+	if len(split) < 2 {
+		return "", "", "", errors.New("split prefix error")
+	}
+	var bucketName string
+	volumeID, bucketName = split[0], split[1]
+	if len(split) == 3 {
+		key = split[2]
+	} else {
+		key = "/"
+	}
+	bucketID = infos.GenBucketID(volumeID, bucketName)
+	key = strings.TrimPrefix(key, "/")
+	return
+}
+
 func GenObjPgID(bucketInfo *infos.BucketInfo, objectKey string, pgNum int32) (pgID uint64) {
 	objectKey = CleanObjectKey(objectKey)
 	bucketID := bucketInfo.GetID()

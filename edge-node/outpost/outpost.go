@@ -218,7 +218,9 @@ func (o *Outpost) doMetaRequest(request *rainbow.Request) {
 	switch request.GetMethod() {
 	case rainbow.Request_LIST:
 		c, _ := o.getClient()
-		metas, err := c.ListObjects(o.ctx, "default", request.RequestId)
+		_, bucketID, key, err := object.SplitPrefixWithoutSlotID(request.RequestId)
+		bucketName := strings.Split(bucketID, "/")[2]
+		metas, err := c.ListObjects(o.ctx, bucketName, key)
 
 		if err != nil {
 			o.sendChan <- &rainbow.Content{
@@ -390,6 +392,7 @@ func (o *Outpost) doInfoRequest(request *rainbow.Request) {
 	case rainbow.Request_GET:
 		infoType := request.GetInfoType()
 		infoID := request.RequestId
+		logger.Debugf("outpost get info, type: %v, id: %v", infoType, infoID)
 		var info infos.Information
 		var err error
 		if infoType == infos.InfoType_CLUSTER_INFO && infoID == "0" {

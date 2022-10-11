@@ -3,12 +3,12 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
 	"ecos/edge-node/pipeline"
 	eraft "ecos/edge-node/raft-node"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/shared/alaya"
+	"ecos/shared/moon"
 	"ecos/utils/logger"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/gogo/protobuf/proto"
@@ -40,7 +40,7 @@ type Raft struct {
 	raftAlayaChan chan raftpb.Message
 	stopChan      chan uint64
 
-	metaStorage MetaStorage
+	metaStorage alaya.MetaStorage
 	//metaApplyChan chan *MetaOperate
 	w        wait.Wait
 	reqIDGen *idutil.Generator
@@ -51,7 +51,7 @@ type Raft struct {
 }
 
 func NewAlayaRaft(ctx context.Context, raftID uint64, nowPipe *pipeline.Pipeline, oldP *pipeline.Pipeline, config *Config,
-	watcher *watcher.Watcher, metaStorage MetaStorage,
+	watcher *watcher.Watcher, metaStorage alaya.MetaStorage,
 	raftAlayaChan chan raftpb.Message, stopChan chan uint64) *Raft {
 
 	ctx, cancel := context.WithCancel(ctx)

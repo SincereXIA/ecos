@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/shared/alaya"
+	"ecos/shared/moon"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/json"
@@ -229,8 +229,17 @@ func NewBucketOperator(ctx context.Context, bucketInfo *infos.BucketInfo, client
 // Deprecated
 // Use Client.ListObjects instead
 func (b *BucketOperator) List(prefix string) ([]Operator, error) {
-	//TODO implement me
-	panic("implement me")
+	metas, err := b.client.ListObjects(b.ctx, b.bucketInfo.BucketName, prefix)
+	if err != nil {
+		return nil, err
+	}
+	ops := make([]Operator, 0, len(metas))
+	for _, meta := range metas {
+		ops = append(ops, &CloudObjectOperator{
+			meta: meta,
+		})
+	}
+	return ops, nil
 }
 
 func (b *BucketOperator) getAlayaClient(key string) (alaya.AlayaClient, error) {

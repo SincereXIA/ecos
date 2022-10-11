@@ -25,13 +25,21 @@ message ObjectMeta {
   }
   Status status = 2;
 
-  uint64  obj_size = 3;
-  Timestamp update_time = 4;
-  string obj_hash = 5;
-  uint64 pg_id = 6;
-  repeated BlockInfo blocks = 7;
-  uint64 term = 8;
-  MetaData meta_data = 9;
+  enum Position {
+    POSITION_UNKNOWN = 0;
+    POSITION_EDGE = 1;
+    POSITION_CLOUD = 2;
+    POSITION_EDGE_CLOUD = 3;
+  }
+  Position position = 3;
+
+  uint64  obj_size = 4;
+  Timestamp update_time = 5;
+  string obj_hash = 6;
+  uint64 pg_id = 7;
+  repeated BlockInfo blocks = 8;
+  uint64 term = 9;
+  MetaData meta_data = 10;
 }
 
 message BlockInfo {

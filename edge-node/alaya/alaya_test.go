@@ -3,12 +3,12 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/shared/alaya"
+	"ecos/shared/moon"
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
@@ -38,7 +38,7 @@ func testAlaya(t *testing.T, mock bool) {
 	nodeNum := 9
 	var alayas []Alayaer
 	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
-	mockMetaStorage := NewMemoryMetaStorage()
+	mockMetaStorage := alaya.NewMemoryMetaStorage()
 	if mock {
 		alayas = GenMockAlayaCluster(t, ctx, basePath, mockMetaStorage, watchers, rpcServers)
 	} else {
@@ -251,7 +251,7 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	return alayas
 }
 
-func GenMockAlayaCluster(t *testing.T, ctx context.Context, basePath string, storage MetaStorage,
+func GenMockAlayaCluster(t *testing.T, ctx context.Context, basePath string, storage alaya.MetaStorage,
 	watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []Alayaer {
 	var alayas []Alayaer
 	nodeNum := len(watchers)

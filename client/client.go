@@ -7,11 +7,11 @@ import (
 	"ecos/client/io"
 	"ecos/cloud/rainbow"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	alaya "ecos/shared/alaya"
+	"ecos/shared/moon"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"errors"
@@ -105,14 +105,49 @@ func (client *Client) getRainbow() (rainbow.RainbowClient, error) {
 	return rainbow.NewRainbowClient(conn), nil
 }
 
-func (client *Client) ListObjects(_ context.Context, bucketName, prefix string) ([]*object.ObjectMeta, error) {
+func (client *Client) ListObjects(ctx context.Context, bucketName, prefix string) ([]*object.ObjectMeta, error) {
+	switch client.config.ConnectType {
+	case config.ConnectCloud:
+		return client.listObjectsByCloud(ctx, bucketName, prefix)
+	}
+	return client.listObjectsByEdge(ctx, bucketName, prefix)
+}
+
+func (client *Client) getBucketInfo(bucketName string) (*infos.BucketInfo, error) {
 	userID := client.config.Credential.GetUserID()
 	bucketID := infos.GenBucketID(userID, bucketName)
 	info, err := client.InfoAgent.Get(infos.InfoType_BUCKET_INFO, bucketID)
 	if err != nil {
 		return nil, err
 	}
-	bucketInfo := info.BaseInfo().GetBucketInfo()
+	return info.BaseInfo().GetBucketInfo(), nil
+}
+
+func (client *Client) listObjectsByCloud(ctx context.Context, bucketName, prefix string) ([]*object.ObjectMeta, error) {
+	bucketInfo, err := client.getBucketInfo(bucketName)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := messenger.GetRpcConn(client.config.CloudAddr, client.config.CloudPort)
+	if err != nil {
+		return nil, err
+	}
+	alayaClient := alaya.NewAlayaClient(conn)
+	reply, err := alayaClient.ListMeta(ctx, &alaya.ListMetaRequest{
+		Prefix: path.Join(bucketInfo.GetID(), prefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return reply.Metas, nil
+}
+
+func (client *Client) listObjectsByEdge(_ context.Context, bucketName, prefix string) ([]*object.ObjectMeta, error) {
+	bucketInfo, err := client.getBucketInfo(bucketName)
+	if err != nil {
+		return nil, err
+	}
+
 retry:
 	clusterInfo := client.InfoAgent.GetCurClusterInfo()
 	p := pipeline.GenMetaPipelines(clusterInfo)

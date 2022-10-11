@@ -5,6 +5,7 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/messenger"
 	common2 "ecos/messenger/common"
+	moon2 "ecos/shared/moon"
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
@@ -84,12 +85,12 @@ func testMoon(t *testing.T, mock bool) {
 	// 发送一个待同步的 info
 	t.Run("propose info", func(t *testing.T) {
 		moon := moons[leader-1]
-		request := &ProposeInfoRequest{
+		request := &moon2.ProposeInfoRequest{
 			Head: &common2.Head{
 				Timestamp: timestamp.Now(),
 				Term:      0,
 			},
-			Operate: ProposeInfoRequest_ADD,
+			Operate: moon2.ProposeInfoRequest_ADD,
 			Id:      "666",
 			BaseInfo: &infos.BaseInfo{
 				Info: &infos.BaseInfo_ClusterInfo{ClusterInfo: &infos.ClusterInfo{
@@ -113,8 +114,8 @@ func testMoon(t *testing.T, mock bool) {
 	t.Run("propose bucket info", func(t *testing.T) {
 		for i := 0; i < 200; i++ {
 			moon := moons[leader-1]
-			request := &ProposeInfoRequest{
-				Operate: ProposeInfoRequest_ADD,
+			request := &moon2.ProposeInfoRequest{
+				Operate: moon2.ProposeInfoRequest_ADD,
 				Id:      "/root/bucket" + strconv.Itoa(i),
 				BaseInfo: &infos.BaseInfo{
 					Info: &infos.BaseInfo_BucketInfo{
@@ -136,7 +137,7 @@ func testMoon(t *testing.T, mock bool) {
 
 	t.Run("get info", func(t *testing.T) {
 		moon := moons[leader-1]
-		request := &GetInfoRequest{
+		request := &moon2.GetInfoRequest{
 			Head: &common2.Head{
 				Timestamp: timestamp.Now(),
 				Term:      0,

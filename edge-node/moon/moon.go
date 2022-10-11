@@ -6,6 +6,7 @@ import (
 	eraft "ecos/edge-node/raft-node"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/shared/moon"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"errors"
@@ -20,7 +21,7 @@ import (
 )
 
 type InfoController interface {
-	MoonServer
+	moon.MoonServer
 
 	GetInfoDirect(infoType infos.InfoType, id string) (infos.Information, error)
 	ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error
@@ -34,7 +35,7 @@ type InfoController interface {
 
 type Moon struct {
 	// Moon Rpc
-	UnimplementedMoonServer
+	moon.UnimplementedMoonServer
 
 	id        uint64 //raft节点的id
 	raft      *eraft.RaftNode
@@ -76,7 +77,7 @@ const (
 	StatusOK
 )
 
-func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*ProposeInfoReply, error) {
+func (m *Moon) ProposeInfo(ctx context.Context, request *moon.ProposeInfoRequest) (*moon.ProposeInfoReply, error) {
 	if request.Id == "" {
 		return nil, errors.New("info key is empty")
 	}
@@ -99,7 +100,7 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *ProposeInfoRequest) (*P
 		logger.Infof("propose info request: %v SUCCESS", request.Id)
 	}
 
-	return &ProposeInfoReply{
+	return &moon.ProposeInfoReply{
 		Result: &common.Result{
 			Status: 0,
 		},
@@ -137,7 +138,7 @@ func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 		}
 
 		for _, rawData := range commit.Data {
-			var msg ProposeInfoRequest
+			var msg moon.ProposeInfoRequest
 			data := []byte(rawData)
 			err := msg.Unmarshal(data)
 			if err != nil {
@@ -145,13 +146,13 @@ func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 			}
 			info := msg.BaseInfo
 			switch msg.Operate {
-			case ProposeInfoRequest_ADD:
+			case moon.ProposeInfoRequest_ADD:
 				logger.Tracef("%d add info %v", m.id, info.GetID())
 				err = m.infoStorageRegister.Update(info)
 
-			case ProposeInfoRequest_UPDATE:
+			case moon.ProposeInfoRequest_UPDATE:
 				err = m.infoStorageRegister.Update(info)
-			case ProposeInfoRequest_DELETE:
+			case moon.ProposeInfoRequest_DELETE:
 				err = m.infoStorageRegister.Delete(info.GetInfoType(), msg.Id)
 			}
 			if err != nil {
@@ -168,11 +169,11 @@ func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 	}
 }
 
-func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoReply, error) {
+func (m *Moon) GetInfo(_ context.Context, request *moon.GetInfoRequest) (*moon.GetInfoReply, error) {
 	info, err := m.GetInfoDirect(request.InfoType, request.InfoId)
 	if err != nil {
 		logger.Warningf("get info from storage register fail: %v", err)
-		return &GetInfoReply{
+		return &moon.GetInfoReply{
 			Result: &common.Result{
 				Status:  common.Result_FAIL,
 				Message: err.Error(),
@@ -180,7 +181,7 @@ func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoRepl
 			BaseInfo: nil,
 		}, err
 	}
-	return &GetInfoReply{
+	return &moon.GetInfoReply{
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
@@ -188,7 +189,7 @@ func (m *Moon) GetInfo(_ context.Context, request *GetInfoRequest) (*GetInfoRepl
 	}, nil
 }
 
-func (m *Moon) ListInfo(ctx context.Context, request *ListInfoRequest) (*ListInfoReply, error) {
+func (m *Moon) ListInfo(ctx context.Context, request *moon.ListInfoRequest) (*moon.ListInfoReply, error) {
 	if m.isStopped() {
 		return nil, errors.New("moon is stopped")
 	}
@@ -201,7 +202,7 @@ func (m *Moon) ListInfo(ctx context.Context, request *ListInfoRequest) (*ListInf
 	for _, info := range result {
 		baseInfos = append(baseInfos, info.BaseInfo())
 	}
-	return &ListInfoReply{
+	return &moon.ListInfoReply{
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
@@ -283,7 +284,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 		m.leaderID = leaderInfo.RaftId
 	}
 
-	RegisterMoonServer(rpcServer, m)
+	moon.RegisterMoonServer(rpcServer, m)
 
 	if leaderInfo != nil {
 		m.infoMap[leaderInfo.RaftId] = leaderInfo
@@ -332,7 +333,7 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 			logger.Errorf("failed to connect: %v", err)
 			return
 		}
-		c := NewMoonClient(conn)
+		c := moon.NewMoonClient(conn)
 		_, err = c.SendRaftMessage(m.ctx, &message)
 		if err != nil {
 			m.appliedConfErrorChan <- err
@@ -432,13 +433,13 @@ func (m *Moon) isStopped() bool {
 
 func (m *Moon) reportSelfInfo() {
 	logger.Infof("%v join group success, start report self info", m.id)
-	message := &ProposeInfoRequest{
+	message := &moon.ProposeInfoRequest{
 		Head: &common.Head{
 			Timestamp: timestamp.Now(),
 			Term:      0,
 		},
 		Id:        strconv.FormatUint(m.SelfInfo.RaftId, 10),
-		Operate:   ProposeInfoRequest_UPDATE,
+		Operate:   moon.ProposeInfoRequest_UPDATE,
 		OperateId: 0,
 		BaseInfo:  &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: m.SelfInfo}},
 	}

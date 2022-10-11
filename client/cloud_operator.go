@@ -2,12 +2,8 @@ package client
 
 import (
 	"context"
-	"ecos/cloud/rainbow"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
-	"ecos/messenger/common"
-	"errors"
-	"io"
 )
 
 type CloudVolumeOperator struct {
@@ -95,44 +91,17 @@ func NewCloudBucketOperator(ctx context.Context, client *Client, bucketName stri
 }
 
 func (cbo *CloudBucketOperator) List(prefix string) ([]Operator, error) {
-	rainbowClient, err := cbo.client.getRainbow()
+	metas, err := cbo.client.ListObjects(cbo.ctx, cbo.bucketName, prefix)
 	if err != nil {
 		return nil, err
 	}
-
-	stream, err := rainbowClient.SendRequest(cbo.ctx, &rainbow.Request{
-		Method:    rainbow.Request_LIST,
-		Resource:  rainbow.Request_META,
-		RequestId: prefix,
-	})
-	if err != nil {
-		return nil, err
+	ops := make([]Operator, 0, len(metas))
+	for _, meta := range metas {
+		ops = append(ops, &CloudObjectOperator{
+			meta: meta,
+		})
 	}
-
-	var operators []Operator
-	for {
-		resp, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-
-		if resp.Result.Status != common.Result_OK {
-			return nil, errors.New(resp.Result.Message)
-		}
-
-		for _, meta := range resp.Metas {
-			operators = append(operators, &CloudObjectOperator{meta: meta})
-		}
-
-		if resp.IsLast {
-			break
-		}
-	}
-
-	return operators, nil
+	return ops, nil
 }
 
 type CloudObjectOperator struct {

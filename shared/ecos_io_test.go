@@ -6,7 +6,7 @@ import (
 	"ecos/client/config"
 	ecosIO "ecos/client/io"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
+	"ecos/shared/moon"
 	"ecos/utils/common"
 	"github.com/stretchr/testify/assert"
 	"io"

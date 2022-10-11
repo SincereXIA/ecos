@@ -7,6 +7,7 @@ import (
 	"ecos/edge-node/outpost"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	alaya2 "ecos/shared/alaya"
 	"ecos/utils/logger"
 	"github.com/golang/mock/gomock"
 	"path"
@@ -59,7 +60,7 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	for i := 0; i < nodeNum; i++ {
 		// TODO (qiutb): implement rocksdb MetaStorage
 		//metaStorage := alaya.NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
-		metaStorageRegister := alaya.NewMemoryMetaStorageRegister()
+		metaStorageRegister := alaya2.NewMemoryMetaStorageRegister()
 		alayaConfig := alaya.DefaultConfig
 		a := alaya.NewAlaya(ctx, watchers[i], &alayaConfig, metaStorageRegister, rpcServers[i])
 		alayas = append(alayas, a)
@@ -84,7 +85,7 @@ func GenMockAlayaCluster(t gomock.TestReporter, _ context.Context, basePath stri
 	watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []alaya.Alayaer {
 	var alayas []alaya.Alayaer
 	nodeNum := len(watchers)
-	metaStorage := alaya.NewMemoryMetaStorage()
+	metaStorage := alaya2.NewMemoryMetaStorage()
 	for i := 0; i < nodeNum; i++ {
 		ctrl := gomock.NewController(t)
 		a := alaya.NewMockAlayaer(ctrl)

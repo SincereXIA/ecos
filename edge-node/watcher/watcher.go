@@ -7,6 +7,7 @@ import (
 	"ecos/edge-node/moon"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	moon2 "ecos/shared/moon"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
@@ -70,12 +71,12 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	}
 
 	if flag {
-		request := &moon.ProposeInfoRequest{
+		request := &moon2.ProposeInfoRequest{
 			Head: &common.Head{
 				Timestamp: timestamp.Now(),
 				Term:      w.GetCurrentTerm(),
 			},
-			Operate:  moon.ProposeInfoRequest_ADD,
+			Operate:  moon2.ProposeInfoRequest_ADD,
 			Id:       strconv.FormatUint(info.RaftId, 10),
 			BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: info}},
 		}
@@ -316,8 +317,8 @@ func (w *Watcher) initCluster() {
 		return
 	}
 	logger.Infof("init root default bucket")
-	_, err = w.moon.ProposeInfo(w.ctx, &moon.ProposeInfoRequest{
-		Operate:  moon.ProposeInfoRequest_ADD,
+	_, err = w.moon.ProposeInfo(w.ctx, &moon2.ProposeInfoRequest{
+		Operate:  moon2.ProposeInfoRequest_ADD,
 		Id:       rootDefaultBucket.GetID(),
 		BaseInfo: rootDefaultBucket.BaseInfo(),
 	})
@@ -330,12 +331,12 @@ func (w *Watcher) proposeClusterInfo(clusterInfo *infos.ClusterInfo) {
 	if !w.moon.IsLeader() {
 		return
 	}
-	request := &moon.ProposeInfoRequest{
+	request := &moon2.ProposeInfoRequest{
 		Head: &common.Head{
 			Timestamp: timestamp.Now(),
 			Term:      w.GetCurrentTerm(),
 		},
-		Operate: moon.ProposeInfoRequest_ADD,
+		Operate: moon2.ProposeInfoRequest_ADD,
 		Id:      strconv.FormatUint(clusterInfo.Term, 10),
 		BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_ClusterInfo{
 			ClusterInfo: clusterInfo,

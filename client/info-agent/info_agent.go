@@ -3,11 +3,10 @@ package info_agent
 import (
 	"context"
 	"ecos/client/config"
-	"ecos/cloud/rainbow"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	moon2 "ecos/shared/moon"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"strconv"
@@ -67,8 +66,8 @@ func (agent *InfoAgent) GetInfoByEdge(infoType infos.InfoType, id string) (infos
 			logger.Warningf("create rpc connect to node: %v, err: %v", nodeInfo.RaftId, err.Error())
 			continue
 		}
-		m := moon.NewMoonClient(conn)
-		req := &moon.GetInfoRequest{
+		m := moon2.NewMoonClient(conn)
+		req := &moon2.GetInfoRequest{
 			InfoId:   id,
 			InfoType: infoType,
 		}
@@ -90,24 +89,18 @@ func (agent *InfoAgent) GetInfoByCloud(infoType infos.InfoType, id string) (info
 		return infos.InvalidInfo{}, errno.ConnectionIssue
 	}
 
-	r := rainbow.NewRainbowClient(conn)
-	stream, err := r.SendRequest(agent.ctx, &rainbow.Request{
-		Method:    rainbow.Request_GET,
-		Resource:  rainbow.Request_INFO,
-		RequestId: id,
-		InfoType:  infoType,
-	})
+	m := moon2.NewMoonClient(conn)
+	req := &moon2.GetInfoRequest{
+		InfoId:   id,
+		InfoType: infoType,
+	}
+	result, err := m.GetInfo(agent.ctx, req)
 	if err != nil {
-		logger.Errorf("send request to cloud failed: %s", err.Error())
-		return infos.InvalidInfo{}, err
+		logger.Warningf("get info from cloud err: %v", err.Error())
+		return infos.InvalidInfo{}, errno.ConnectionIssue
 	}
-	result, err := stream.Recv()
-	if err != nil || result.Infos == nil || len(result.Infos) == 0 {
-		logger.Errorf("recv response from cloud failed: %s", err.Error())
-		return infos.InvalidInfo{}, err
-	}
-	info := result.Infos[0]
-	return info.BaseInfo(), nil
+	_ = agent.Update(result.GetBaseInfo())
+	return result.GetBaseInfo(), err
 }
 
 // GetCurClusterInfo Returns current ClusterInfo

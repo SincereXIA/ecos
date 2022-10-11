@@ -11,6 +11,7 @@ import (
 	"ecos/edge-node/watcher"
 	gateway "ecos/gateway/router"
 	"ecos/messenger"
+	alaya2 "ecos/shared/alaya"
 	configUtil "ecos/utils/config"
 	"ecos/utils/logger"
 	"github.com/gin-gonic/gin"
@@ -73,7 +74,7 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	//dbBasePath := path.Join(conf.StoragePath, "/db")
 	//metaDBPath := path.Join(dbBasePath, "/meta")
 	//metaStorage := alaya.NewStableMetaStorage(metaDBPath)
-	metaStorageRegister := alaya.NewMemoryMetaStorageRegister()
+	metaStorageRegister := alaya2.NewMemoryMetaStorageRegister()
 	a := alaya.NewAlaya(ctx, w, &conf.AlayaConfig, metaStorageRegister, rpc)
 
 	// Gen Gaia

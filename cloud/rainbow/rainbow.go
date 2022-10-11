@@ -23,7 +23,9 @@ type Rainbow struct {
 
 	rwMutex sync.RWMutex // protect clusterInfo & requestSeq
 
-	gaia *CloudGaia
+	gaia  *CloudGaia
+	alaya *CloudAlaya
+	moon  *CloudMoon
 }
 
 // eventLoop 处理 stream 中收到的 content
@@ -37,6 +39,9 @@ func (r *Rainbow) eventLoop(stream Rainbow_GetStreamServer, nodeInfo *infos.Node
 		switch payload := content.Payload.(type) {
 		case *Content_Response:
 			r.router.Send(payload.Response.ResponseTo, payload.Response)
+			if payload.Response.IsLast {
+				r.router.Unregister(payload.Response.ResponseTo)
+			}
 		case *Content_Request:
 			// TODO: rainbow 收到边缘节点请求，进行处理
 			logger.Infof("get request_seq: %v", payload.Request.RequestSeq)
@@ -99,10 +104,6 @@ func (r *Rainbow) SendRequest(request *Request, stream Rainbow_SendRequestServer
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
-		if resp.IsLast { // 最后一个响应，删除注册
-			r.router.Unregister(resp.ResponseTo)
-			break
-		}
 	}
 	return nil
 }
@@ -161,6 +162,8 @@ func NewRainbow(ctx context.Context, rpcServer *messenger.RpcServer, conf *confi
 		requestSeq: 10000,
 	}
 	rainbow.gaia = NewCloudGaia(ctx, rpcServer, conf)
+	rainbow.alaya = NewCloudAlaya(ctx, rpcServer, conf, rainbow)
+	rainbow.moon = NewCloudMoon(ctx, rpcServer, rainbow)
 	RegisterRainbowServer(rpcServer, rainbow)
 	return rainbow
 }
