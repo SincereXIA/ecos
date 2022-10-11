@@ -3,11 +3,11 @@ package gaia
 import (
 	"bufio"
 	"context"
-	"ecos/common/gaia"
 	"ecos/edge-node/object"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/shared/gaia"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"github.com/rcrowley/go-metrics"

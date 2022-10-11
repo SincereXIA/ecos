@@ -5,12 +5,12 @@ import (
 	"ecos/client/config"
 	info_agent "ecos/client/info-agent"
 	"ecos/cloud/rainbow"
-	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/shared/alaya"
 	"errors"
 )
 

@@ -1,4 +1,4 @@
-package common
+package shared
 
 type Operator interface {
 	Get(key string) (Operator, error)

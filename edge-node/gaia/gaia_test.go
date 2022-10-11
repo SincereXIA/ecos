@@ -2,12 +2,12 @@ package gaia
 
 import (
 	"context"
-	"ecos/common/gaia"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/shared/gaia"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"math/rand"

@@ -8,6 +8,7 @@ import (
 	eraft "ecos/edge-node/raft-node"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	"ecos/shared/alaya"
 	"ecos/utils/logger"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/gogo/protobuf/proto"
@@ -156,14 +157,14 @@ func (r *Raft) readCommit(commitC <-chan *eraft.Commit, errorC <-chan error) {
 		}
 
 		for _, rawData := range commit.Data {
-			var metaOperate MetaOperate
+			var metaOperate alaya.MetaOperate
 			data := []byte(rawData)
 			err := metaOperate.Unmarshal(data)
 			if err != nil {
 				logger.Warningf("alaya raft process object meta in entry err: %v", err)
 			}
 			switch metaOperate.Operate {
-			case MetaOperate_PUT:
+			case alaya.MetaOperate_PUT:
 				meta := metaOperate.Meta
 				logger.Infof("node %v, PG: %v, New object meta: %v", r.raft.ID, r.pgID, meta.ObjId)
 				err = r.metaStorage.RecordMeta(meta)
@@ -171,7 +172,7 @@ func (r *Raft) readCommit(commitC <-chan *eraft.Commit, errorC <-chan error) {
 					logger.Warningf("alaya record object meta err: %v", err)
 				}
 				metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Inc(1)
-			case MetaOperate_DELETE:
+			case alaya.MetaOperate_DELETE:
 				logger.Infof("delete meta: %v", metaOperate.Meta.ObjId)
 				err = r.metaStorage.Delete(metaOperate.Meta.ObjId)
 				metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Dec(1)
@@ -395,8 +396,8 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 			logger.Warningf("faild to connect: %v", err)
 			continue
 		}
-		c := NewAlayaClient(conn)
-		_, err = c.SendRaftMessage(r.ctx, &PGRaftMessage{
+		c := alaya.NewAlayaClient(conn)
+		_, err = c.SendRaftMessage(r.ctx, &alaya.PGRaftMessage{
 			PgId:    r.pgID,
 			Message: &message,
 		})
@@ -408,7 +409,7 @@ func (r *Raft) sendMsgByRpc(messages []raftpb.Message) {
 
 // ProposeObjectMetaOperate Propose a request to operate object meta to raft group,
 // and wait it applied into meta storage
-func (r *Raft) ProposeObjectMetaOperate(operate *MetaOperate) error {
+func (r *Raft) ProposeObjectMetaOperate(operate *alaya.MetaOperate) error {
 	// 生成一个新的操作序列号
 	opID := r.reqIDGen.Next()
 	operate.OperateId = opID

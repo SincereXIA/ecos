@@ -3,9 +3,9 @@ package router
 import (
 	"bytes"
 	"context"
-	edgeNodeTest "ecos/common"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
+	edgeNodeTest "ecos/shared"
 	"ecos/utils/common"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"

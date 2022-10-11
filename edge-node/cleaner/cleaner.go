@@ -2,12 +2,12 @@ package cleaner
 
 import (
 	"context"
-	"ecos/common/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	"ecos/shared/gaia"
 	"strconv"
 )
 

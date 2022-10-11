@@ -107,6 +107,15 @@ func (r *Rainbow) SendRequest(request *Request, stream Rainbow_SendRequestServer
 	return nil
 }
 
+// SendRequestDirect 直接向边缘集群发送请求
+func (r *Rainbow) SendRequestDirect(request *Request) (<-chan *Response, error) {
+	respChan, err := r.SendRequestToEdgeLeader(request)
+	if err != nil {
+		return nil, err
+	}
+	return respChan, nil
+}
+
 func (r *Rainbow) GetClusterInfo() *infos.ClusterInfo {
 	r.rwMutex.RLock()
 	defer r.rwMutex.RUnlock()

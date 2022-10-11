@@ -3,10 +3,10 @@ package io
 import (
 	"context"
 	"ecos/client/config"
-	"ecos/common/gaia"
 	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/shared/gaia"
 	"ecos/utils/logger"
 )
 
