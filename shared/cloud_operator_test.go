@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 import "context"
 
@@ -23,6 +24,7 @@ func TestNewCloudBucketOperator(t *testing.T) {
 	})
 
 	watchers, _, _ := RunTestEdgeNodeCluster(t, ctx, false, basePath, 5)
+	time.Sleep(3 * time.Second)
 
 	conf := config.DefaultConfig
 	conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr

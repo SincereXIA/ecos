@@ -11,7 +11,6 @@ import (
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/shared/alaya"
-	"errors"
 )
 
 type MetaAgent struct {
@@ -39,6 +38,13 @@ func (c *MetaAgent) SubmitMeta(meta *object.ObjectMeta) (*common.Result, error) 
 	objID := meta.ObjId
 	_, _, key, _, _ := object.SplitID(objID)
 
+	switch c.conf.ConnectType {
+	case config.ConnectCloud:
+		meta.Position = object.ObjectMeta_POSITION_CLOUD
+	default:
+		meta.Position = object.ObjectMeta_POSITION_EDGE
+	}
+
 	client, err := c.getAlayaClient(key)
 	if err != nil {
 		return nil, err
@@ -50,22 +56,24 @@ func (c *MetaAgent) SubmitMeta(meta *object.ObjectMeta) (*common.Result, error) 
 
 // GetObjMeta provides a way to get ObjectMeta from AlayaServer
 func (c *MetaAgent) GetObjMeta(key string) (*object.ObjectMeta, error) {
-	switch c.conf.ConnectType {
-	case config.ConnectCloud:
-		return c.GetObjMetaByCloud(key)
-	case config.ConnectEdge:
-		return c.GetObjMetaByEdge(key)
-	default:
-		return nil, errors.New("unknown connect type")
-	}
+	return c.GetObjMetaByEdge(key)
 }
 
-func (c *MetaAgent) getAlayaClient(key string) (alaya.AlayaClient, error) {
+func (c *MetaAgent) getCloudAlayaClient(_ string) (alaya.AlayaClient, error) {
+	conn, err := messenger.GetRpcConn(c.conf.CloudAddr, c.conf.CloudPort)
+	if err != nil {
+		return nil, err
+	}
+	client := alaya.NewAlayaClient(conn)
+	return client, nil
+}
+
+func (c *MetaAgent) getEdgeAlayaClient(key string) (alaya.AlayaClient, error) {
 	clusterInfo := c.infoAgent.GetCurClusterInfo()
 	pgId := object.GenObjPgID(c.bucketInfo, key, clusterInfo.MetaPgNum)
 	pipes, _ := pipeline.NewClusterPipelines(clusterInfo)
 
-	metaServerIdString := pipes.GetBlockPGNodeID(pgId)[0]
+	metaServerIdString := pipes.GetMetaPGNodeID(pgId)[0]
 	info, _ := c.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
 	nodeInfo := info.BaseInfo().GetNodeInfo()
 
@@ -75,6 +83,15 @@ func (c *MetaAgent) getAlayaClient(key string) (alaya.AlayaClient, error) {
 	}
 	client := alaya.NewAlayaClient(conn)
 	return client, nil
+}
+
+func (c *MetaAgent) getAlayaClient(key string) (alaya.AlayaClient, error) {
+	switch c.conf.ConnectType {
+	case config.ConnectCloud:
+		return c.getCloudAlayaClient(key)
+	default:
+		return c.getEdgeAlayaClient(key)
+	}
 }
 
 func (c *MetaAgent) GetObjMetaByEdge(key string) (*object.ObjectMeta, error) {

@@ -11,6 +11,7 @@ import (
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/shared/alaya"
 	"ecos/shared/gaia"
 	"ecos/utils/logger"
 	"errors"
@@ -258,8 +259,49 @@ func (o *Outpost) doMetaRequest(request *rainbow.Request) {
 		bucketName := split[len(split)-1]
 		bucket, _ := c.GetVolumeOperator().Get(bucketName)
 		obj, err := bucket.Get(key)
-		meta := obj.(*client.ObjectOperator).Meta
 		if err != nil {
+			o.returnFail(request, err)
+			break
+		}
+		meta := obj.(*client.ObjectOperator).Meta
+		o.sendChan <- &rainbow.Content{
+			Payload: &rainbow.Content_Response{
+				Response: &rainbow.Response{
+					ResponseTo: request.RequestSeq,
+					Result: &common.Result{
+						Status: common.Result_OK,
+					},
+					Metas: []*object.ObjectMeta{meta},
+				},
+			},
+		}
+	case rainbow.Request_PUT:
+		meta := request.GetMeta()
+		_, bucketID, key, _, _ := object.SplitID(meta.ObjId)
+		bucketInfo, err := o.w.GetMoon().GetInfoDirect(infos.InfoType_BUCKET_INFO, bucketID)
+		if err != nil {
+			logger.Errorf("get bucket info failed, err: %v", err)
+			o.returnFail(request, err)
+			break
+		}
+		clusterInfo := o.w.GetCurrentClusterInfo()
+		pipes, _ := pipeline.NewClusterPipelines(clusterInfo)
+		pgID := object.GenObjPgID(bucketInfo.BaseInfo().GetBucketInfo(), key, clusterInfo.MetaPgNum)
+
+		serverId := pipes.GetMetaPGNodeID(pgID)[0]
+
+		nodeInfo, _ := o.w.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO, serverId)
+		conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo.BaseInfo().GetNodeInfo())
+		if err != nil {
+			logger.Errorf("get rpc conn failed, err: %v", err)
+			o.returnFail(request, err)
+			break
+		}
+		c := alaya.NewAlayaClient(conn)
+		ctx, _ := alaya.SetTermToContext(o.ctx, o.w.GetCurrentTerm())
+		_, err = c.RecordObjectMeta(ctx, meta)
+		if err != nil {
+			logger.Errorf("record object meta failed, err: %v", err)
 			o.returnFail(request, err)
 			break
 		}
@@ -270,7 +312,6 @@ func (o *Outpost) doMetaRequest(request *rainbow.Request) {
 					Result: &common.Result{
 						Status: common.Result_OK,
 					},
-					Metas: []*object.ObjectMeta{meta},
 				},
 			},
 		}

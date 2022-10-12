@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"path"
+	"runtime"
 	"strconv"
 )
 
@@ -23,40 +24,56 @@ type CloudAlaya struct {
 
 	storage alaya.MetaStorage
 	r       *Rainbow
+
+	syncEdgeChan chan *object.ObjectMeta
 }
 
 func NewCloudAlaya(ctx context.Context, server *messenger.RpcServer, conf *config.CloudConfig, r *Rainbow) *CloudAlaya {
 	a := &CloudAlaya{
-		ctx:     ctx,
-		conf:    conf,
-		storage: alaya.NewMemoryMetaStorage(),
-		r:       r,
+		ctx:          ctx,
+		conf:         conf,
+		storage:      alaya.NewMemoryMetaStorage(),
+		r:            r,
+		syncEdgeChan: make(chan *object.ObjectMeta, 100),
 	}
 	alaya.RegisterAlayaServer(server, a)
 	return a
 }
 
 func (a *CloudAlaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
-	saveToCloud := false
-	saveToEdge := false
-	if meta.Position&0x01 == 0x01 {
-		saveToEdge = true
+	logger.Infof("cloud Record meta: %v", meta)
+	meta.ObjId = object.CleanObjectKey(meta.ObjId)
+	err := a.storage.RecordMeta(meta)
+	if err != nil {
+		return nil, err
 	}
-	if meta.Position&0x02 == 0x02 {
-		saveToCloud = true
-	}
-	if saveToCloud {
-		err := a.storage.RecordMeta(meta)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if saveToEdge {
-		// TODO: * send to edge
-	}
+
+	// 通知边缘端
+	a.syncEdgeChan <- meta
+
 	return &common.Result{
 		Status: common.Result_OK,
 	}, nil
+}
+
+func (a *CloudAlaya) syncLoop() {
+	for {
+		select {
+		case meta := <-a.syncEdgeChan:
+			respChan, err := a.r.SendRequestDirect(&Request{
+				Method:   Request_PUT,
+				Resource: Request_META,
+				Meta:     meta,
+			})
+			if err != nil {
+				logger.Errorf("Send meta to edge failed: %v", err)
+				a.syncEdgeChan <- meta
+				runtime.Gosched()
+			}
+			_ = <-respChan
+			logger.Infof("Send meta: %v to edge success", meta.ObjId)
+		}
+	}
 }
 
 func (a *CloudAlaya) GetObjectMeta(ctx context.Context, req *alaya.MetaRequest) (*object.ObjectMeta, error) {
@@ -106,6 +123,7 @@ func (a *CloudAlaya) ListMeta(ctx context.Context, req *alaya.ListMetaRequest) (
 	// 获取所有 keySlot 中满足的 meta
 	for i := 1; i <= int(bucketInfo.Config.KeySlotNum); i++ {
 		prefix := path.Join(bucketID, strconv.Itoa(i), key)
+		prefix = object.CleanObjectKey(prefix)
 		ms, err := a.storage.List(prefix)
 		if err != nil {
 			return nil, err
