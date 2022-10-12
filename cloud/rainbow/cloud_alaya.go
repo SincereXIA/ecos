@@ -37,6 +37,7 @@ func NewCloudAlaya(ctx context.Context, server *messenger.RpcServer, conf *confi
 		syncEdgeChan: make(chan *object.ObjectMeta, 100),
 	}
 	alaya.RegisterAlayaServer(server, a)
+	go a.syncLoop()
 	return a
 }
 
@@ -59,6 +60,9 @@ func (a *CloudAlaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMe
 func (a *CloudAlaya) syncLoop() {
 	for {
 		select {
+		case <-a.ctx.Done():
+			logger.Infof("cloud alaya sync loop exit")
+			return
 		case meta := <-a.syncEdgeChan:
 			respChan, err := a.r.SendRequestDirect(&Request{
 				Method:   Request_PUT,

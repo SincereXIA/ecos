@@ -121,6 +121,7 @@ func (a *Alaya) checkObject(term uint64, meta *object.ObjectMeta) (err error) {
 // RecordObjectMeta record object meta to MetaStorage
 // 将对象元数据存储到 MetaStorage
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
+	logger.Infof("alaya: %v receive record meta request, obj_id: %v", a.selfInfo.RaftId, meta.ObjId)
 	timeStart := time.Now()
 	term, err := a.checkClientTerm(ctx)
 	if err != nil {
