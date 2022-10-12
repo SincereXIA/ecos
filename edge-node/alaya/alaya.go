@@ -2,9 +2,11 @@ package alaya
 
 import (
 	"context"
+	"ecos/cloud/rainbow"
 	"ecos/edge-node/cleaner"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
+	"ecos/edge-node/outpost"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
@@ -12,6 +14,7 @@ import (
 	"ecos/shared/alaya"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"errors"
 	"github.com/rcrowley/go-metrics"
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
@@ -54,6 +57,8 @@ type Alaya struct {
 	state State
 
 	clusterPipelines *pipeline.ClusterPipelines
+
+	o *outpost.Outpost
 }
 
 type State int
@@ -132,6 +137,21 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 		return nil, err
 	}
 	pgID := meta.PgId
+
+	// 先查询该元数据是否存在，判断是否需要失效
+	syncToCloud := false
+	if meta.Position == object.ObjectMeta_POSITION_EDGE {
+		// 只上传到边缘的元数据，判断是否冲突
+		storage, err := a.MetaStorageRegister.GetStorage(pgID)
+		if err != nil {
+			return nil, err
+		}
+		oldMeta, err := storage.GetMeta(meta.ObjId)
+		if oldMeta != nil && oldMeta.Position != object.ObjectMeta_POSITION_EDGE {
+			syncToCloud = true
+		}
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -150,6 +170,20 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 				Status:  common.Result_FAIL,
 				Message: err.Error(),
 			}, err
+		}
+		if syncToCloud {
+			// 上传到云端
+			respChan := a.o.Send(&rainbow.Request{
+				Method:    rainbow.Request_DELETE,
+				Resource:  rainbow.Request_META,
+				RequestId: meta.ObjId,
+				Meta:      meta,
+			})
+
+			resp, ok := <-respChan
+			if !ok || resp.Result.Status != common.Result_OK {
+				return nil, errors.New("sync to cloud failed")
+			}
 		}
 		logger.Infof("Alaya record object meta success, obj_id: %v, size: %v", meta.ObjId, meta.ObjSize)
 	}

@@ -12,6 +12,8 @@ type Config struct {
 	NodeInfoCommitInterval time.Duration
 	PrometheusAddr         string
 	ClusterName            string
+	CloudAddr              string
+	CloudPort              uint64
 }
 
 var DefaultConfig Config

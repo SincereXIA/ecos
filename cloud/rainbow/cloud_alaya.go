@@ -174,6 +174,11 @@ func (a *CloudAlaya) ListMeta(ctx context.Context, req *alaya.ListMetaRequest) (
 func (a *CloudAlaya) DeleteMeta(context.Context, *alaya.DeleteMetaRequest) (*common.Result, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteMeta not implemented")
 }
+
+func (a *CloudAlaya) doDelete(objID string) error {
+	return a.storage.Delete(objID)
+}
+
 func (a *CloudAlaya) SendRaftMessage(context.Context, *alaya.PGRaftMessage) (*alaya.PGRaftMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendRaftMessage not implemented")
 }

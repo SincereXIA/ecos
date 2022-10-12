@@ -12,6 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,10 @@ func GenTestWatcher(ctx context.Context, basePath string, sunAddr string) (*Watc
 	watcherConfig := DefaultConfig
 	watcherConfig.SunAddr = sunAddr
 	watcherConfig.SelfNodeInfo = *nodeInfo
+	cloudAddr := strings.Split(sunAddr, ":")[0]
+	cloudPort, _ := strconv.Atoi(strings.Split(sunAddr, ":")[1])
+	watcherConfig.CloudAddr = cloudAddr
+	watcherConfig.CloudPort = uint64(cloudPort)
 
 	return NewWatcher(ctx, &watcherConfig, nodeRpc, m, register), nodeRpc
 }
@@ -45,6 +50,10 @@ func GenTestMockWatcher(t gomock.TestReporter, ctx context.Context,
 	watcherConfig.SunAddr = sunAddr
 	watcherConfig.SelfNodeInfo = *nodeInfo
 	watcherConfig.NodeInfoCommitInterval = time.Second * 2
+	cloudAddr := strings.Split(sunAddr, ":")[0]
+	cloudPort, _ := strconv.Atoi(strings.Split(sunAddr, ":")[1])
+	watcherConfig.CloudAddr = cloudAddr
+	watcherConfig.CloudPort = uint64(cloudPort)
 
 	return mockCtrl, NewWatcher(ctx, &watcherConfig, nodeRpc, testMoon, register), nodeRpc
 }
