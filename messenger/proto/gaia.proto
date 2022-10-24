@@ -5,7 +5,7 @@ import "common.proto";
 import "object.proto";
 import "pipeline.proto";
 import "timestamp.proto";
-option go_package = "ecos/edge-node/gaia";
+option go_package = "ecos/common/gaia";
 
 service Gaia {
   rpc UploadBlockData(stream UploadBlockRequest) returns (Result) {}

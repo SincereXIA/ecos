@@ -1,10 +1,10 @@
-package client
+package shared
 
 import (
 	"context"
+	client2 "ecos/client"
 	"ecos/client/config"
 	"ecos/edge-node/infos"
-	edgeNodeTest "ecos/edge-node/test"
 	"ecos/edge-node/watcher"
 	"ecos/utils/common"
 	"ecos/utils/logger"
@@ -30,13 +30,13 @@ func TestClient(t *testing.T) {
 		_ = os.RemoveAll(basePath)
 	})
 	_ = common.InitAndClearPath(basePath)
-	watchers, alayas, rpcServers := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, false, basePath, 9)
+	watchers, alayas, rpcServers := RunTestEdgeNodeCluster(t, ctx, false, basePath, 9)
 
 	conf := config.DefaultConfig
 	conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
 	conf.NodePort = watchers[0].GetSelfInfo().RpcPort
 
-	client, err := New(&conf)
+	client, err := client2.New(&conf)
 	if err != nil {
 		t.Errorf("Failed to create client: %v", err)
 	}
@@ -65,6 +65,7 @@ func TestClient(t *testing.T) {
 	}
 
 	t.Run("test term change", func(t *testing.T) {
+		t.Logf("test term change")
 		oldTerm := watchers[0].GetCurrentTerm()
 		watchers[8].Monitor.Stop()
 		watchers[8].GetMoon().Stop()
@@ -72,9 +73,10 @@ func TestClient(t *testing.T) {
 		rpcServers[8].GracefulStop()
 		//watcher.WaitAllTestWatcherOK(watchers[0:8])
 		for oldTerm == watchers[0].GetCurrentTerm() {
+			logger.Infof("Waiting for term change, now term is %d, oldTerm: %v", watchers[0].GetCurrentTerm(), oldTerm)
 			time.Sleep(time.Second)
 		}
-		edgeNodeTest.WaiteAllAlayaOK(alayas[0:7])
+		WaiteAllAlayaOK(alayas[0:7])
 	})
 
 	t.Run("put object", func(t *testing.T) {
@@ -175,13 +177,13 @@ func BenchmarkClient(b *testing.B) {
 		_ = os.RemoveAll(basePath)
 	})
 	_ = common.InitAndClearPath(basePath)
-	watchers, _, _ := edgeNodeTest.RunTestEdgeNodeCluster(b, ctx, true, basePath, 9)
+	watchers, _, _ := RunTestEdgeNodeCluster(b, ctx, true, basePath, 9)
 
 	conf := config.DefaultConfig
 	conf.NodeAddr = watchers[0].GetSelfInfo().IpAddr
 	conf.NodePort = watchers[0].GetSelfInfo().RpcPort
 
-	client, err := New(&conf)
+	client, err := client2.New(&conf)
 	if err != nil {
 		b.Errorf("Failed to create client: %v", err)
 	}

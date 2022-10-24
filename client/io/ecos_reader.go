@@ -2,12 +2,15 @@ package io
 
 import (
 	"context"
-	"ecos/edge-node/alaya"
-	"ecos/edge-node/gaia"
+	"ecos/client/config"
+	"ecos/cloud/rainbow"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
+	"ecos/messenger"
+	"ecos/messenger/common"
+	"ecos/shared/gaia"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"fmt"
@@ -56,6 +59,97 @@ func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 	if block, ok := r.cachedBlocks.Load(blockID); ok {
 		return block.([]byte), nil
 	}
+	var block []byte
+	var err error
+	switch r.f.config.ConnectType {
+	case config.ConnectCloud:
+		block, err = r.GetBlockByCloud(blockInfo)
+	default:
+		block, err = r.GetBlockByEdge(blockInfo)
+	}
+	if err != nil {
+		return nil, err
+	}
+	r.cachedBlocks.Store(blockID, block)
+	return block, nil
+}
+
+func (r *EcosReader) GetBlockByCloud(blockInfo *object.BlockInfo) ([]byte, error) {
+	conn, err := messenger.GetRpcConn(r.f.config.CloudAddr, r.f.config.CloudPort)
+	if err != nil {
+		return nil, err
+	}
+	client := gaia.NewGaiaClient(conn)
+	if err != nil {
+		return nil, err
+	}
+	req := &gaia.GetBlockRequest{
+		BlockId:  blockInfo.BlockId,
+		CurChunk: 0,
+		Term:     r.meta.Term,
+	}
+	res, err := client.GetBlockData(r.ctx, req)
+	defer func(res gaia.Gaia_GetBlockDataClient) {
+		err := res.CloseSend()
+		if err != nil {
+			logger.Errorf("close stream failed, err: %v", err)
+		}
+	}(res)
+	if err != nil {
+		logger.Warningf("blockClient responds err: %v", err)
+		return nil, err
+	}
+	block := make([]byte, 0, r.f.bucketInfo.Config.BlockSize)
+	for {
+		rs, err := res.Recv()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			logger.Warningf("res.Recv err: %v", err)
+			return nil, err
+		}
+		block = append(block, rs.GetChunk().Content...)
+	}
+	return block, nil
+}
+
+func (r *EcosReader) GetBlockInEdgeByCloud(blockInfo *object.BlockInfo) ([]byte, error) {
+	conn, err := messenger.GetRpcConn(r.f.config.CloudAddr, r.f.config.CloudPort)
+	if err != nil {
+		return nil, err
+	}
+	client := rainbow.NewRainbowClient(conn)
+
+	stream, err := client.SendRequest(r.ctx, &rainbow.Request{
+		Method:    rainbow.Request_GET,
+		Resource:  rainbow.Request_BLOCK,
+		RequestId: blockInfo.BlockId,
+		InfoType:  0,
+		Info:      nil,
+		Meta:      nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	block := make([]byte, 0, blockInfo.BlockSize)
+	for {
+		res, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		if res.Result.Status != common.Result_OK {
+			return nil, fmt.Errorf("get block %s failed, err: %s", blockInfo.BlockId, res.Result.Message)
+		}
+		block = append(block, res.Chunk...)
+	}
+	return block, nil
+}
+
+func (r *EcosReader) GetBlockByEdge(blockInfo *object.BlockInfo) ([]byte, error) {
 	pgID := object.GenBlockPgID(blockInfo.BlockId, r.clusterInfo.BlockPgNum)
 	gaiaServerId := r.pipes.GetBlockPG(pgID)
 	info, err := r.f.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(gaiaServerId[0], 10))
@@ -63,7 +157,7 @@ func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 	if err != nil {
 		logger.Errorf("get gaia server info failed, err: %v", err)
 	}
-	logger.Debugf("get block %10.10s from %v", blockID, gaiaServerInfo.RaftId)
+	logger.Debugf("get block %10.10s from %v", blockInfo.BlockId, gaiaServerInfo.RaftId)
 	client, err := NewGaiaClient(gaiaServerInfo, r.f.config)
 	if err != nil {
 		return nil, err
@@ -73,7 +167,7 @@ func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		CurChunk: 0,
 		Term:     r.meta.Term,
 	}
-	res, err := client.client.GetBlockData(context.Background(), req)
+	res, err := client.client.GetBlockData(r.ctx, req)
 	if err != nil {
 		logger.Warningf("blockClient responds err: %v", err)
 		return nil, err
@@ -94,7 +188,6 @@ func (r *EcosReader) GetBlock(blockInfo *object.BlockInfo) ([]byte, error) {
 		}
 		block = append(block, rs.GetChunk().Content...)
 	}
-	r.cachedBlocks.Store(blockID, block)
 	return block, nil
 }
 
@@ -140,20 +233,12 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 
 func (r *EcosReader) getObjMeta() error {
 retry:
-	// use key to get pdId
-	pgId := object.GenObjPgID(r.f.bucketInfo, r.key, 10)
-	// Use Latest ClusterInfo and Pipeline
-	pipes, _ := pipeline.NewClusterPipelines(r.f.infoAgent.GetCurClusterInfo())
-	metaServerIdString := pipes.GetBlockPGNodeID(pgId)[0]
-	metaServerInfo, _ := r.f.infoAgent.Get(infos.InfoType_NODE_INFO, metaServerIdString)
-	ctx, _ := alaya.SetTermToContext(r.ctx, r.f.infoAgent.GetCurClusterInfo().Term)
-	metaClient, err := NewMetaClient(ctx, metaServerInfo.BaseInfo().GetNodeInfo(), r.f.config)
+	metaClient, err := NewMetaAgent(r.ctx, r.f.config, r.f.infoAgent, r.f.bucketInfo)
 	if err != nil {
 		logger.Errorf("New meta client failed, err: %v", err)
 		return err
 	}
-	objID := object.GenObjectId(r.f.bucketInfo, r.key)
-	r.meta, err = metaClient.GetObjMeta(objID)
+	r.meta, err = metaClient.GetObjMeta(r.key)
 	if err != nil {
 		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
 			err = r.f.infoAgent.UpdateCurClusterInfo()
@@ -165,7 +250,7 @@ retry:
 		logger.Errorf("get objMeta failed, err: %v", err)
 		return err
 	}
-	logger.Infof("get objMeta from raft [%v], success, meta: %v", metaServerIdString, r.meta)
+	logger.Infof("get objMeta success, meta: %v", r.meta)
 	return nil
 }
 

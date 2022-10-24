@@ -7,6 +7,7 @@ import (
 	"ecos/edge-node/moon"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	moon2 "ecos/shared/moon"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
@@ -40,7 +41,7 @@ type Watcher struct {
 	register     *infos.StorageRegister
 	timer        *time.Timer
 	timerMutex   sync.Mutex
-	config       *Config
+	Config       *Config
 
 	addNodeMutex sync.Mutex
 
@@ -70,12 +71,12 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	}
 
 	if flag {
-		request := &moon.ProposeInfoRequest{
+		request := &moon2.ProposeInfoRequest{
 			Head: &common.Head{
 				Timestamp: timestamp.Now(),
 				Term:      w.GetCurrentTerm(),
 			},
-			Operate:  moon.ProposeInfoRequest_ADD,
+			Operate:  moon2.ProposeInfoRequest_ADD,
 			Id:       strconv.FormatUint(info.RaftId, 10),
 			BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_NodeInfo{NodeInfo: info}},
 		}
@@ -249,10 +250,10 @@ func (w *Watcher) GetMoon() moon.InfoController {
 }
 
 func (w *Watcher) AskSky() (leaderInfo *infos.NodeInfo, err error) {
-	if w.config.SunAddr == "" {
+	if w.Config.SunAddr == "" {
 		return nil, errno.ConnectSunFail
 	}
-	conn, err := grpc.Dial(w.config.SunAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(w.Config.SunAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
@@ -316,8 +317,8 @@ func (w *Watcher) initCluster() {
 		return
 	}
 	logger.Infof("init root default bucket")
-	_, err = w.moon.ProposeInfo(w.ctx, &moon.ProposeInfoRequest{
-		Operate:  moon.ProposeInfoRequest_ADD,
+	_, err = w.moon.ProposeInfo(w.ctx, &moon2.ProposeInfoRequest{
+		Operate:  moon2.ProposeInfoRequest_ADD,
 		Id:       rootDefaultBucket.GetID(),
 		BaseInfo: rootDefaultBucket.BaseInfo(),
 	})
@@ -330,12 +331,12 @@ func (w *Watcher) proposeClusterInfo(clusterInfo *infos.ClusterInfo) {
 	if !w.moon.IsLeader() {
 		return
 	}
-	request := &moon.ProposeInfoRequest{
+	request := &moon2.ProposeInfoRequest{
 		Head: &common.Head{
 			Timestamp: timestamp.Now(),
 			Term:      w.GetCurrentTerm(),
 		},
-		Operate: moon.ProposeInfoRequest_ADD,
+		Operate: moon2.ProposeInfoRequest_ADD,
 		Id:      strconv.FormatUint(clusterInfo.Term, 10),
 		BaseInfo: &infos.BaseInfo{Info: &infos.BaseInfo_ClusterInfo{
 			ClusterInfo: clusterInfo,
@@ -359,10 +360,10 @@ func (w *Watcher) nodeInfoChanged(_ infos.Information) {
 		return
 	}
 	if w.timer != nil && w.timer.Stop() {
-		w.timer.Reset(w.config.NodeInfoCommitInterval)
+		w.timer.Reset(w.Config.NodeInfoCommitInterval)
 		return
 	}
-	w.timer = time.AfterFunc(w.config.NodeInfoCommitInterval, func() {
+	w.timer = time.AfterFunc(w.Config.NodeInfoCommitInterval, func() {
 		select {
 		case <-w.ctx.Done():
 			return
@@ -388,6 +389,20 @@ func (w *Watcher) clusterInfoChanged(info infos.Information) {
 	w.currentClusterInfo = *info.BaseInfo().GetClusterInfo()
 }
 
+func (w *Watcher) WaitClusterOK() (ok bool) {
+	for {
+		select {
+		case <-w.ctx.Done():
+			return false
+		default:
+			if w.GetCurrentClusterInfo().Term != uint64(0) && w.selfNodeInfo.RaftId != 0 {
+				return true
+			}
+			time.Sleep(time.Second)
+		}
+	}
+}
+
 func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer,
 	m moon.InfoController, register *infos.StorageRegister) *Watcher {
 	watcherCtx, cancelFunc := context.WithCancel(ctx)
@@ -395,7 +410,7 @@ func NewWatcher(ctx context.Context, config *Config, server *messenger.RpcServer
 	watcher := &Watcher{
 		moon:         m,
 		register:     register,
-		config:       config,
+		Config:       config,
 		selfNodeInfo: &config.SelfNodeInfo,
 		ctx:          watcherCtx,
 		cancelFunc:   cancelFunc,

@@ -2,15 +2,19 @@ package alaya
 
 import (
 	"context"
+	"ecos/cloud/rainbow"
 	"ecos/edge-node/cleaner"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
+	"ecos/edge-node/outpost"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/shared/alaya"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"errors"
 	"github.com/rcrowley/go-metrics"
 	"github.com/wxnacy/wgo/arrays"
 	"go.etcd.io/etcd/raft/v3/raftpb"
@@ -19,7 +23,7 @@ import (
 )
 
 type Alayaer interface {
-	AlayaServer
+	alaya.AlayaServer
 	Run()
 	Stop()
 	IsAllPipelinesOK() bool
@@ -30,7 +34,7 @@ type Alayaer interface {
 // 阿赖耶处理对象元数据的存储和查询请求
 // 一切众生阿赖耶识，本来而有圆满清净，出过于世同于涅槃
 type Alaya struct {
-	UnimplementedAlayaServer
+	alaya.UnimplementedAlayaServer
 
 	config *Config
 
@@ -47,12 +51,14 @@ type Alaya struct {
 	mutex            sync.Mutex
 	raftNodeStopChan chan uint64 // 内部 raft node 主动退出时，使用该 chan 通知 alaya
 
-	MetaStorageRegister MetaStorageRegister
+	MetaStorageRegister alaya.MetaStorageRegister
 	cleaner             *cleaner.Cleaner
 
 	state State
 
 	clusterPipelines *pipeline.ClusterPipelines
+
+	o *outpost.Outpost
 }
 
 type State int
@@ -93,7 +99,7 @@ func (a *Alaya) calculateObjectPGID(term uint64, objectID string) uint64 {
 }
 
 func (a *Alaya) checkClientTerm(ctx context.Context) (uint64, error) {
-	clientTerm, err := GetTermFromContext(ctx)
+	clientTerm, err := alaya.GetTermFromContext(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -120,6 +126,7 @@ func (a *Alaya) checkObject(term uint64, meta *object.ObjectMeta) (err error) {
 // RecordObjectMeta record object meta to MetaStorage
 // 将对象元数据存储到 MetaStorage
 func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
+	logger.Infof("alaya: %v receive record meta request, obj_id: %v", a.selfInfo.RaftId, meta.ObjId)
 	timeStart := time.Now()
 	term, err := a.checkClientTerm(ctx)
 	if err != nil {
@@ -130,6 +137,21 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 		return nil, err
 	}
 	pgID := meta.PgId
+
+	// 先查询该元数据是否存在，判断是否需要失效
+	syncToCloud := false
+	if meta.Position == object.ObjectMeta_POSITION_EDGE {
+		// 只上传到边缘的元数据，判断是否冲突
+		storage, err := a.MetaStorageRegister.GetStorage(pgID)
+		if err != nil {
+			return nil, err
+		}
+		oldMeta, err := storage.GetMeta(meta.ObjId)
+		if oldMeta != nil && oldMeta.Position != object.ObjectMeta_POSITION_EDGE {
+			syncToCloud = true
+		}
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -139,8 +161,8 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 			return nil, errno.RaftNodeNotFound
 		}
 		// 这里是同步操作
-		err = a.getRaftNode(pgID).ProposeObjectMetaOperate(&MetaOperate{
-			Operate: MetaOperate_PUT,
+		err = a.getRaftNode(pgID).ProposeObjectMetaOperate(&alaya.MetaOperate{
+			Operate: alaya.MetaOperate_PUT,
 			Meta:    meta,
 		})
 		if err != nil {
@@ -148,6 +170,20 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 				Status:  common.Result_FAIL,
 				Message: err.Error(),
 			}, err
+		}
+		if syncToCloud {
+			// 上传到云端
+			respChan := a.o.Send(&rainbow.Request{
+				Method:    rainbow.Request_DELETE,
+				Resource:  rainbow.Request_META,
+				RequestId: meta.ObjId,
+				Meta:      meta,
+			})
+
+			resp, ok := <-respChan
+			if !ok || resp.Result.Status != common.Result_OK {
+				return nil, errors.New("sync to cloud failed")
+			}
 		}
 		logger.Infof("Alaya record object meta success, obj_id: %v, size: %v", meta.ObjId, meta.ObjSize)
 	}
@@ -158,7 +194,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 	}, nil
 }
 
-func (a *Alaya) GetObjectMeta(ctx context.Context, req *MetaRequest) (*object.ObjectMeta, error) {
+func (a *Alaya) GetObjectMeta(ctx context.Context, req *alaya.MetaRequest) (*object.ObjectMeta, error) {
 	// clear meta object id
 	timeStart := time.Now()
 	term, err := a.checkClientTerm(ctx)
@@ -185,13 +221,13 @@ func (a *Alaya) GetObjectMeta(ctx context.Context, req *MetaRequest) (*object.Ob
 }
 
 // DeleteMeta delete meta from metaStorage, and request delete object blocks
-func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common.Result, error) {
-	_, err := GetTermFromContext(ctx)
+func (a *Alaya) DeleteMeta(ctx context.Context, req *alaya.DeleteMetaRequest) (*common.Result, error) {
+	_, err := alaya.GetTermFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	objID := object.CleanObjectKey(req.ObjId)
-	objMeta, err := a.GetObjectMeta(ctx, &MetaRequest{ObjId: objID})
+	objMeta, err := a.GetObjectMeta(ctx, &alaya.MetaRequest{ObjId: objID})
 	if err != nil {
 		logger.Errorf("alaya get meta by objID failed, err: %v", err)
 		return nil, err
@@ -207,8 +243,8 @@ func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common
 			return nil, errno.RaftNodeNotFound
 		}
 		// 这里是同步操作
-		err = a.getRaftNode(pgID).ProposeObjectMetaOperate(&MetaOperate{
-			Operate: MetaOperate_DELETE,
+		err = a.getRaftNode(pgID).ProposeObjectMetaOperate(&alaya.MetaOperate{
+			Operate: alaya.MetaOperate_DELETE,
 			Meta:    objMeta,
 		})
 		if err != nil {
@@ -231,8 +267,8 @@ func (a *Alaya) DeleteMeta(ctx context.Context, req *DeleteMetaRequest) (*common
 	}, nil
 }
 
-func (a *Alaya) ListMeta(ctx context.Context, req *ListMetaRequest) (*ObjectMetaList, error) {
-	_, err := GetTermFromContext(ctx)
+func (a *Alaya) ListMeta(ctx context.Context, req *alaya.ListMetaRequest) (*alaya.ObjectMetaList, error) {
+	_, err := alaya.GetTermFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +280,7 @@ func (a *Alaya) ListMeta(ctx context.Context, req *ListMetaRequest) (*ObjectMeta
 		metasList = append(metasList, metas)
 	}
 	if len(metasList) == 0 {
-		return &ObjectMetaList{}, nil
+		return &alaya.ObjectMetaList{}, nil
 	}
 	size := 0
 	for _, metas := range metasList {
@@ -254,12 +290,12 @@ func (a *Alaya) ListMeta(ctx context.Context, req *ListMetaRequest) (*ObjectMeta
 	for _, meta := range metasList {
 		metas = append(metas, meta...)
 	}
-	return &ObjectMetaList{
+	return &alaya.ObjectMetaList{
 		Metas: metas,
 	}, nil
 }
 
-func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (*PGRaftMessage, error) {
+func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *alaya.PGRaftMessage) (*alaya.PGRaftMessage, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -268,18 +304,18 @@ func (a *Alaya) SendRaftMessage(ctx context.Context, pgMessage *PGRaftMessage) (
 	pgID := pgMessage.PgId
 
 	if _, ok := a.PGRaftNode.Load(pgID); !ok {
-		logger.Warningf("%v receive raft message from: %v, but pg: %v not exist", a.selfInfo.RaftId, pgMessage.Message.From, pgID)
+		logger.Warningf("%v receive raft message from: %v, but pg: %v not exist", a.selfInfo.RaftId, pgMessage.Message, pgID)
 		return nil, errno.PGNotExist
 	}
 
 	if msgChan, ok := a.PGMessageChans.Load(pgID); ok {
 		msgChan.(chan raftpb.Message) <- *pgMessage.Message
-		return &PGRaftMessage{
+		return &alaya.PGRaftMessage{
 			PgId:    pgMessage.PgId,
 			Message: &raftpb.Message{},
 		}, nil
 	}
-	logger.Errorf("%v receive raft message from: %v, but pg: %v channel not exist", a.selfInfo.RaftId, pgMessage.Message.From, pgID)
+	logger.Errorf("%v receive raft message from: %v, but pg: %v channel not exist", a.selfInfo.RaftId, pgMessage.GetMessage(), pgID)
 	return nil, errno.PGNotExist
 }
 
@@ -350,8 +386,8 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 		//	// 若当前节点不是 leader，并且原有 leader 仍然在新 pg 中，则当前 pg 可以跳过
 		//	return true
 		//}
-		// if this node is leader, add new pipelines node first
-		raftNode.ProposeNewPipeline(p, oldPipelines.MetaPipelines[pgID-1])
+
+		raftNode.ProposeNewPipeline(p)
 		return true
 	})
 
@@ -380,7 +416,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 }
 
 func NewAlaya(ctx context.Context, watcher *watcher.Watcher, config *Config,
-	metaStorageRegister MetaStorageRegister, rpcServer *messenger.RpcServer) Alayaer {
+	metaStorageRegister alaya.MetaStorageRegister, rpcServer *messenger.RpcServer) Alayaer {
 	ctx, cancel := context.WithCancel(ctx)
 	c := cleaner.NewCleaner(ctx, watcher)
 	a := Alaya{
@@ -396,7 +432,7 @@ func NewAlaya(ctx context.Context, watcher *watcher.Watcher, config *Config,
 		cleaner:             c,
 		raftNodeStopChan:    make(chan uint64),
 	}
-	RegisterAlayaServer(rpcServer, &a)
+	alaya.RegisterAlayaServer(rpcServer, &a)
 	clusterInfo := watcher.GetCurrentClusterInfo()
 	a.ApplyNewClusterInfo(&clusterInfo)
 	a.state = READY

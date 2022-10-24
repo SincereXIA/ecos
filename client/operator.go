@@ -3,17 +3,16 @@ package client
 import (
 	"bytes"
 	"context"
-	"ecos/edge-node/alaya"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	"ecos/shared/alaya"
+	"ecos/shared/moon"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"encoding/json"
-	"errors"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -30,8 +29,20 @@ type Operator interface {
 	Info() (interface{}, error)
 }
 
+type VolumeOperator interface {
+	Operator
+	CreateBucket(bucketInfo *infos.BucketInfo) error
+	DeleteBucket(bucketInfo *infos.BucketInfo) error
+}
+
 type ClusterOperator struct {
 	client *Client
+}
+
+func NewClusterOperator(ctx context.Context, client *Client) *ClusterOperator {
+	return &ClusterOperator{
+		client: client,
+	}
 }
 
 func (c *ClusterOperator) List(prefix string) ([]Operator, error) {
@@ -47,7 +58,7 @@ func (c *ClusterOperator) Remove(key string) error {
 }
 
 func (c *ClusterOperator) Info() (interface{}, error) {
-	leaderInfo := c.client.infoAgent.GetCurClusterInfo().LeaderInfo
+	leaderInfo := c.client.InfoAgent.GetCurClusterInfo().LeaderInfo
 	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
 	if err != nil {
 		return "", err
@@ -58,7 +69,7 @@ func (c *ClusterOperator) Info() (interface{}, error) {
 }
 
 func (c *ClusterOperator) State() (string, error) {
-	clusterInfo := c.client.infoAgent.GetCurClusterInfo()
+	clusterInfo := c.client.InfoAgent.GetCurClusterInfo()
 	leaderInfo := clusterInfo.LeaderInfo
 	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
 	if err != nil {
@@ -99,31 +110,43 @@ func (c *ClusterOperator) State() (string, error) {
 	return base + "\n" + pipelines + "\n" + state, nil
 }
 
-type VolumeOperator struct {
+type EdgeVolumeOperator struct {
 	volumeID string
 	client   *Client
+	ctx      context.Context
 }
 
-// Remove Deprecated
-func (v *VolumeOperator) Remove(_ string) error {
-	return errors.New("remove is deprecated, use DeleteBucket instead")
+func NewEdgeVolumeOperator(ctx context.Context, volumeID string, client *Client) *EdgeVolumeOperator {
+	return &EdgeVolumeOperator{
+		volumeID: volumeID,
+		client:   client,
+		ctx:      ctx,
+	}
 }
 
-func (v *VolumeOperator) State() (string, error) {
+func (v *EdgeVolumeOperator) Remove(bucketName string) error {
+	bucketInfo := &infos.BucketInfo{
+		VolumeId:   v.volumeID,
+		BucketName: bucketName,
+	}
+	return v.DeleteBucket(bucketInfo)
+}
+
+func (v *EdgeVolumeOperator) State() (string, error) {
 	panic("volume operator does not support state")
 }
 
-func (v *VolumeOperator) Info() (interface{}, error) {
+func (v *EdgeVolumeOperator) Info() (interface{}, error) {
 	panic("volume operator does not support info")
 }
 
-func (v *VolumeOperator) Get(key string) (Operator, error) {
+func (v *EdgeVolumeOperator) Get(key string) (Operator, error) {
 	moonClient, nodeId, err := v.client.GetMoon()
 	if err != nil {
 		logger.Errorf("get moon client err: %v", err.Error())
 		return nil, err
 	}
-	info, err := moonClient.GetInfo(context.Background(), &moon.GetInfoRequest{
+	info, err := moonClient.GetInfo(v.ctx, &moon.GetInfoRequest{
 		InfoType: infos.InfoType_BUCKET_INFO,
 		InfoId:   infos.GenBucketID(v.volumeID, key),
 	})
@@ -131,19 +154,16 @@ func (v *VolumeOperator) Get(key string) (Operator, error) {
 		logger.Errorf("get info by moon: %v err: %v", nodeId, err.Error())
 		return nil, err
 	}
-	return &BucketOperator{
-		bucketInfo: info.BaseInfo.GetBucketInfo(),
-		client:     v.client,
-	}, err
+	return NewBucketOperator(v.ctx, info.BaseInfo.GetBucketInfo(), v.client), nil
 }
 
-func (v *VolumeOperator) List(key string) ([]Operator, error) {
+func (v *EdgeVolumeOperator) List(key string) ([]Operator, error) {
 	moonClient, _, err := v.client.GetMoon()
 	if err != nil {
 		logger.Errorf("get moon client err: %v", err.Error())
 		return nil, err
 	}
-	reply, err := moonClient.ListInfo(context.Background(), &moon.ListInfoRequest{
+	reply, err := moonClient.ListInfo(v.ctx, &moon.ListInfoRequest{
 		InfoType: infos.InfoType_BUCKET_INFO,
 		Prefix:   infos.GenBucketID(v.volumeID, key),
 	})
@@ -160,13 +180,13 @@ func (v *VolumeOperator) List(key string) ([]Operator, error) {
 	return buckets, nil
 }
 
-func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
+func (v *EdgeVolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
 	moonClient, _, err := v.client.GetMoon()
 	if err != nil {
 		logger.Errorf("get moon client err: %v", err.Error())
 		return err
 	}
-	_, err = moonClient.ProposeInfo(context.Background(), &moon.ProposeInfoRequest{
+	_, err = moonClient.ProposeInfo(v.ctx, &moon.ProposeInfoRequest{
 		Operate:  moon.ProposeInfoRequest_ADD,
 		Id:       bucketInfo.GetID(),
 		BaseInfo: bucketInfo.BaseInfo(),
@@ -177,7 +197,7 @@ func (v *VolumeOperator) CreateBucket(bucketInfo *infos.BucketInfo) error {
 // DeleteBucket deletes a bucket by bucketInfo from its volume.
 //
 // The Bucket must be empty.
-func (v *VolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
+func (v *EdgeVolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
 	moonClient, _, err := v.client.GetMoon()
 	if err != nil {
 		logger.Errorf("get moon client err: %v", err.Error())
@@ -194,25 +214,43 @@ func (v *VolumeOperator) DeleteBucket(bucketInfo *infos.BucketInfo) error {
 type BucketOperator struct {
 	bucketInfo *infos.BucketInfo
 	client     *Client
+	ctx        context.Context
+}
+
+func NewBucketOperator(ctx context.Context, bucketInfo *infos.BucketInfo, client *Client) *BucketOperator {
+	return &BucketOperator{
+		bucketInfo: bucketInfo,
+		client:     client,
+		ctx:        ctx,
+	}
 }
 
 // List
 // Deprecated
 // Use Client.ListObjects instead
 func (b *BucketOperator) List(prefix string) ([]Operator, error) {
-	//TODO implement me
-	panic("implement me")
+	metas, err := b.client.ListObjects(b.ctx, b.bucketInfo.BucketName, prefix)
+	if err != nil {
+		return nil, err
+	}
+	ops := make([]Operator, 0, len(metas))
+	for _, meta := range metas {
+		ops = append(ops, &CloudObjectOperator{
+			meta: meta,
+		})
+	}
+	return ops, nil
 }
 
 func (b *BucketOperator) getAlayaClient(key string) (alaya.AlayaClient, error) {
-	pgID := object.GenObjPgID(b.bucketInfo, key, b.client.infoAgent.GetCurClusterInfo().MetaPgNum)
-	cp, err := pipeline.NewClusterPipelines(b.client.infoAgent.GetCurClusterInfo())
+	pgID := object.GenObjPgID(b.bucketInfo, key, b.client.InfoAgent.GetCurClusterInfo().MetaPgNum)
+	cp, err := pipeline.NewClusterPipelines(b.client.InfoAgent.GetCurClusterInfo())
 	if err != nil {
 		return nil, err
 	}
 
 	nodeID := cp.GetMetaPG(pgID)[0]
-	info, err := b.client.infoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
+	info, err := b.client.InfoAgent.Get(infos.InfoType_NODE_INFO, strconv.FormatUint(nodeID, 10))
 	if err != nil {
 		return nil, err
 	}
@@ -230,20 +268,20 @@ retry:
 	if err != nil {
 		return err
 	}
-	ctx, _ := alaya.SetTermToContext(context.Background(), b.client.infoAgent.GetCurClusterInfo().Term)
+	ctx, _ := alaya.SetTermToContext(context.Background(), b.client.InfoAgent.GetCurClusterInfo().Term)
 	_, err = alayaClient.DeleteMeta(ctx, &alaya.DeleteMetaRequest{
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
 			logger.Warningf("term not match, retry")
-			err = b.client.infoAgent.UpdateCurClusterInfo()
+			err = b.client.InfoAgent.UpdateCurClusterInfo()
 			if err != nil {
 				return err
 			}
 			goto retry
 		}
-		logger.Warningf("delete meta: %v failed, err: %v", object.GenObjectId(b.bucketInfo, key), err)
+		logger.Warningf("delete Meta: %v failed, err: %v", object.GenObjectId(b.bucketInfo, key), err)
 	}
 	return err
 }
@@ -262,14 +300,14 @@ retry:
 	if err != nil {
 		return nil, err
 	}
-	ctx, _ := alaya.SetTermToContext(b.client.ctx, b.client.infoAgent.GetCurClusterInfo().Term)
+	ctx, _ := alaya.SetTermToContext(b.ctx, b.client.InfoAgent.GetCurClusterInfo().Term)
 	reply, err := alayaClient.GetObjectMeta(ctx, &alaya.MetaRequest{
 		ObjId: object.GenObjectId(b.bucketInfo, key),
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), errno.TermNotMatch.Error()) {
 			logger.Warningf("term not match, retry")
-			err = b.client.infoAgent.UpdateCurClusterInfo()
+			err = b.client.InfoAgent.UpdateCurClusterInfo()
 			if err != nil {
 				return nil, err
 			}
@@ -277,11 +315,11 @@ retry:
 		}
 		return nil, err
 	}
-	return &ObjectOperator{meta: reply}, nil
+	return &ObjectOperator{Meta: reply}, nil
 }
 
 type ObjectOperator struct {
-	meta *object.ObjectMeta
+	Meta *object.ObjectMeta
 }
 
 func (o *ObjectOperator) List(prefix string) ([]Operator, error) {
@@ -297,7 +335,7 @@ func (o *ObjectOperator) Remove(key string) error {
 }
 
 func (o *ObjectOperator) State() (string, error) {
-	return protoToJson(o.meta)
+	return protoToJson(o.Meta)
 }
 
 func protoToJson(pb proto.Message) (string, error) {
@@ -330,5 +368,5 @@ func interfaceToJson(data interface{}) (string, error) {
 }
 
 func (o *ObjectOperator) Info() (interface{}, error) {
-	return o.meta, nil
+	return o.Meta, nil
 }

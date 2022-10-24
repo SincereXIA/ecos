@@ -5,7 +5,7 @@ import "raftpb/raft.proto";
 import "common.proto";
 import "infos.proto";
 
-option go_package = "ecos/edge-node/moon";
+option go_package = "ecos/shared/moon";
 
 service Moon {
   rpc SendRaftMessage (raftpb.Message) returns (raftpb.Message) {}

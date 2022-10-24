@@ -3,6 +3,7 @@ package alaya
 import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
+	"ecos/shared/alaya"
 	"ecos/utils/common"
 	"ecos/utils/database"
 	"ecos/utils/errno"
@@ -24,7 +25,7 @@ func pgIdToStr(pgID uint64) string {
 	return strconv.FormatUint(pgID, 10)
 }
 
-func (register *RocksDBMetaStorageRegister) NewStorage(pgID uint64) (MetaStorage, error) {
+func (register *RocksDBMetaStorageRegister) NewStorage(pgID uint64) (alaya.MetaStorage, error) {
 	pgIDStr := pgIdToStr(pgID)
 	if storage, ok := register.storageMap[pgID]; ok {
 		return storage, nil
@@ -41,15 +42,15 @@ func (register *RocksDBMetaStorageRegister) NewStorage(pgID uint64) (MetaStorage
 	return storage, nil
 }
 
-func (register *RocksDBMetaStorageRegister) GetStorage(pgID uint64) (MetaStorage, error) {
+func (register *RocksDBMetaStorageRegister) GetStorage(pgID uint64) (alaya.MetaStorage, error) {
 	if storage, ok := register.storageMap[pgID]; ok {
 		return storage, nil
 	}
 	return nil, errno.MetaStorageNotExist
 }
 
-func (register *RocksDBMetaStorageRegister) GetAllStorage() []MetaStorage {
-	result := make([]MetaStorage, 0)
+func (register *RocksDBMetaStorageRegister) GetAllStorage() []alaya.MetaStorage {
+	result := make([]alaya.MetaStorage, 0)
 	for _, storage := range register.storageMap {
 		result = append(result, storage)
 	}

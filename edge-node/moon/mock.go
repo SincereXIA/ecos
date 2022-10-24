@@ -5,6 +5,7 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/messenger"
 	"ecos/messenger/common"
+	"ecos/shared/moon"
 	"github.com/golang/mock/gomock"
 	"sync"
 )
@@ -30,24 +31,24 @@ func (state *State) GetInfoDirect(infoType infos.InfoType, id string) (infos.Inf
 	return state.InfoStorageRegister.Get(infoType, id)
 }
 
-func (state *State) ProposeInfo(_ context.Context, req *ProposeInfoRequest) (*ProposeInfoReply, error) {
+func (state *State) ProposeInfo(_ context.Context, req *moon.ProposeInfoRequest) (*moon.ProposeInfoReply, error) {
 	_ = state.InfoStorageRegister.Update(req.BaseInfo)
-	return &ProposeInfoReply{}, nil
+	return &moon.ProposeInfoReply{}, nil
 }
 
-func (state *State) GetInfo(_ context.Context, req *GetInfoRequest) (*GetInfoReply, error) {
+func (state *State) GetInfo(_ context.Context, req *moon.GetInfoRequest) (*moon.GetInfoReply, error) {
 	infoType := req.InfoType
 	id := req.InfoId
 	info, err := state.GetInfoDirect(infoType, id)
 	if err != nil {
 		return nil, err
 	}
-	return &GetInfoReply{
+	return &moon.GetInfoReply{
 		BaseInfo: info.BaseInfo(),
 	}, nil
 }
 
-func (state *State) ListInfo(_ context.Context, req *ListInfoRequest) (*ListInfoReply, error) {
+func (state *State) ListInfo(_ context.Context, req *moon.ListInfoRequest) (*moon.ListInfoReply, error) {
 	infoType := req.InfoType
 	result, err := state.InfoStorageRegister.List(infoType, req.Prefix)
 	if err != nil {
@@ -57,7 +58,7 @@ func (state *State) ListInfo(_ context.Context, req *ListInfoRequest) (*ListInfo
 	for _, info := range result {
 		baseInfos = append(baseInfos, info.BaseInfo())
 	}
-	return &ListInfoReply{
+	return &moon.ListInfoReply{
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
@@ -93,5 +94,5 @@ func InitMock(m *MockInfoController, rpcServer *messenger.RpcServer,
 	m.EXPECT().GetLeaderID().DoAndReturn(state.GetLeaderID).AnyTimes()
 	m.EXPECT().Stop().AnyTimes()
 	m.EXPECT().ListInfo(gomock.Any(), gomock.Any()).DoAndReturn(state.ListInfo).AnyTimes()
-	RegisterMoonServer(rpcServer, m)
+	moon.RegisterMoonServer(rpcServer, m)
 }

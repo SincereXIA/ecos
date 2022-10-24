@@ -2,12 +2,14 @@ package io
 
 import (
 	"context"
+	"ecos/client/config"
 	agent "ecos/client/info-agent"
-	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/messenger"
 	messengerCommon "ecos/messenger/common"
+	"ecos/shared/gaia"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
@@ -31,7 +33,9 @@ const (
 )
 
 type Block struct {
+	ctx context.Context
 	object.BlockInfo
+	conf *config.ClientConfig
 
 	// status describes current status of block
 	status BlockStatus
@@ -51,8 +55,56 @@ type Block struct {
 	delFunc     func(*Block)
 }
 
+func (b *Block) Upload() error {
+	switch b.conf.ConnectType {
+	case config.ConnectCloud:
+		return b.uploadByCloud()
+	}
+	return b.uploadByEdge()
+}
+
+func (b *Block) uploadByCloud() error {
+	conn, err := messenger.GetRpcConn(b.conf.CloudAddr, b.conf.CloudPort)
+	if err != nil {
+		logger.Errorf("Get cloud connection failed: %v", err)
+		return err
+	}
+	client := gaia.NewGaiaClient(conn)
+	stream, err := client.UploadBlockData(b.ctx)
+	if err != nil {
+		logger.Errorf("Upload block data failed: %v", err)
+		return err
+	}
+	return b.uploadByStream(stream)
+}
+
+func (b *Block) uploadByEdge() error {
+	nodes := b.pipes.GetBlockPGNodeID(b.PgId)
+	for _, node := range nodes {
+		serverInfo, err := b.infoAgent.Get(infos.InfoType_NODE_INFO, node)
+		conn, err := messenger.GetRpcConnByNodeInfo(serverInfo.BaseInfo().GetNodeInfo())
+		if err != nil {
+			logger.Warningf("Get node info failed: %v", err)
+			continue
+		}
+		client := gaia.NewGaiaClient(conn)
+		stream, err := client.UploadBlockData(b.ctx)
+		if err != nil {
+			logger.Warningf("Upload block data failed: %v", err)
+			continue
+		}
+		err = b.uploadByStream(stream)
+		if err != nil {
+			logger.Warningf("Upload block data failed: %v", err)
+			continue
+		}
+		return nil
+	}
+	return errno.RemoteGaiaFail
+}
+
 // Upload provides a way to upload self to a given stream
-func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
+func (b *Block) uploadByStream(stream gaia.Gaia_UploadBlockDataClient) error {
 	// Start Upload by ControlMessage with Code BEGIN
 	pipe := b.pipes.GetBlockPipeline(b.PgId)
 	start := &gaia.UploadBlockRequest{
@@ -104,6 +156,13 @@ func (b *Block) Upload(stream gaia.Gaia_UploadBlockDataClient) error {
 	if err != nil && err != io.EOF {
 		logger.Errorf("uploadBlock send EOF error: %v", err)
 		return err
+	}
+	_, err = stream.CloseAndRecv()
+	if err != nil {
+		logger.Errorf("Unable to get result form server: %v", err)
+		return err
+	} else {
+		logger.Infof("Block upload success")
 	}
 	return nil
 }

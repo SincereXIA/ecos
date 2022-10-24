@@ -7,9 +7,11 @@ import (
 	"ecos/edge-node/gaia"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/moon"
+	"ecos/edge-node/outpost"
 	"ecos/edge-node/watcher"
 	gateway "ecos/gateway/router"
 	"ecos/messenger"
+	alaya2 "ecos/shared/alaya"
 	configUtil "ecos/utils/config"
 	"ecos/utils/logger"
 	"github.com/gin-gonic/gin"
@@ -72,12 +74,19 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	//dbBasePath := path.Join(conf.StoragePath, "/db")
 	//metaDBPath := path.Join(dbBasePath, "/meta")
 	//metaStorage := alaya.NewStableMetaStorage(metaDBPath)
-	metaStorageRegister := alaya.NewMemoryMetaStorageRegister()
+	metaStorageRegister := alaya2.NewMemoryMetaStorageRegister()
 	a := alaya.NewAlaya(ctx, w, &conf.AlayaConfig, metaStorageRegister, rpc)
 
 	// Gen Gaia
 	logger.Infof("Start init Gaia ...")
 	_ = gaia.NewGaia(ctx, rpc, w, &conf.GaiaConfig)
+
+	// Gen Outpost
+	logger.Infof("Start init Outpost ...")
+	_, err = outpost.NewOutpost(ctx, conf.WatcherConfig.SunAddr, w)
+	if err != nil {
+		logger.Errorf("init outpost fail: %v", err)
+	}
 
 	// Run
 	go func() {

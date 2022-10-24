@@ -7,6 +7,7 @@ package moon
 import (
 	context "context"
 	infos "ecos/edge-node/infos"
+	"ecos/shared/moon"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -17,6 +18,7 @@ import (
 type MockInfoController struct {
 	ctrl     *gomock.Controller
 	recorder *MockInfoControllerMockRecorder
+	moon.UnimplementedMoonServer
 }
 
 // MockInfoControllerMockRecorder is the mock recorder for MockInfoController.
@@ -37,10 +39,10 @@ func (m *MockInfoController) EXPECT() *MockInfoControllerMockRecorder {
 }
 
 // GetInfo mocks base method.
-func (m *MockInfoController) GetInfo(arg0 context.Context, arg1 *GetInfoRequest) (*GetInfoReply, error) {
+func (m *MockInfoController) GetInfo(arg0 context.Context, arg1 *moon.GetInfoRequest) (*moon.GetInfoReply, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetInfo", arg0, arg1)
-	ret0, _ := ret[0].(*GetInfoReply)
+	ret0, _ := ret[0].(*moon.GetInfoReply)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -95,10 +97,10 @@ func (mr *MockInfoControllerMockRecorder) IsLeader() *gomock.Call {
 }
 
 // ListInfo mocks base method.
-func (m *MockInfoController) ListInfo(arg0 context.Context, arg1 *ListInfoRequest) (*ListInfoReply, error) {
+func (m *MockInfoController) ListInfo(arg0 context.Context, arg1 *moon.ListInfoRequest) (*moon.ListInfoReply, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListInfo", arg0, arg1)
-	ret0, _ := ret[0].(*ListInfoReply)
+	ret0, _ := ret[0].(*moon.ListInfoReply)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -136,10 +138,10 @@ func (mr *MockInfoControllerMockRecorder) ProposeConfChangeAddNode(ctx, nodeInfo
 }
 
 // ProposeInfo mocks base method.
-func (m *MockInfoController) ProposeInfo(arg0 context.Context, arg1 *ProposeInfoRequest) (*ProposeInfoReply, error) {
+func (m *MockInfoController) ProposeInfo(arg0 context.Context, arg1 *moon.ProposeInfoRequest) (*moon.ProposeInfoReply, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ProposeInfo", arg0, arg1)
-	ret0, _ := ret[0].(*ProposeInfoReply)
+	ret0, _ := ret[0].(*moon.ProposeInfoReply)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

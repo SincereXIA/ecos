@@ -3,11 +3,12 @@ package alaya
 import (
 	"context"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/moon"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
+	"ecos/shared/alaya"
+	"ecos/shared/moon"
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
@@ -37,7 +38,7 @@ func testAlaya(t *testing.T, mock bool) {
 	nodeNum := 9
 	var alayas []Alayaer
 	watchers, rpcServers, sunAddr := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
-	mockMetaStorage := NewMemoryMetaStorage()
+	mockMetaStorage := alaya.NewMemoryMetaStorage()
 	if mock {
 		alayas = GenMockAlayaCluster(t, ctx, basePath, mockMetaStorage, watchers, rpcServers)
 	} else {
@@ -103,9 +104,9 @@ func testAlaya(t *testing.T, mock bool) {
 			for i := 1; i <= int(bucketInfo.Config.KeySlotNum); i++ {
 				pgID := object.GenSlotPgID(bucketInfo.GetID(), int32(i), watchers[0].GetCurrentClusterInfo().MetaPgNum)
 				nodeID := pipelines[pgID-1].RaftId[0]
-				alaya := alayas[nodeID-1]
-				ctx, _ = SetTermToIncomingContext(ctx, watchers[0].GetCurrentTerm())
-				ms, err := alaya.ListMeta(ctx, &ListMetaRequest{
+				a := alayas[nodeID-1]
+				ctx, _ = alaya.SetTermToIncomingContext(ctx, watchers[0].GetCurrentTerm())
+				ms, err := a.ListMeta(ctx, &alaya.ListMetaRequest{
 					Prefix: path.Join(bucketInfo.GetID(), strconv.Itoa(i)),
 				})
 				if err != nil {
@@ -173,20 +174,20 @@ func testAlaya(t *testing.T, mock bool) {
 		pgID := object.GenObjPgID(bucketInfo, key, watchers[0].GetCurrentClusterInfo().MetaPgNum)
 		nodeIndex := pipelines[pgID-1].RaftId[0]
 		a := alayas[nodeIndex-1]
-		ctx, _ = SetTermToIncomingContext(ctx, watchers[0].GetCurrentTerm())
-		reply, err := a.GetObjectMeta(ctx, &MetaRequest{
+		ctx, _ = alaya.SetTermToIncomingContext(ctx, watchers[0].GetCurrentTerm())
+		reply, err := a.GetObjectMeta(ctx, &alaya.MetaRequest{
 			ObjId: meta.ObjId,
 		})
 		assert.NoError(t, err, "meta need to delete should exist")
 		assert.Equal(t, meta.ObjId, reply.ObjId, "meta objID not equal")
-		_, err = a.DeleteMeta(ctx, &DeleteMetaRequest{
+		_, err = a.DeleteMeta(ctx, &alaya.DeleteMetaRequest{
 			ObjId: meta.ObjId,
 		})
 		if err != nil {
 			t.Errorf("delete object meta err: %v", err)
 		}
 
-		_, err = a.GetObjectMeta(ctx, &MetaRequest{
+		_, err = a.GetObjectMeta(ctx, &alaya.MetaRequest{
 			ObjId: meta.ObjId,
 		})
 		assert.Error(t, err, "get not exist meta should return error")
@@ -227,7 +228,7 @@ func updateMetas(t *testing.T, watchers []*watcher.Watcher,
 		logger.Debugf("Obj: %v, pgID: %v, nodeID: %v", meta.ObjId, pgID, nodeIndex)
 
 		meta.PgId = pgID
-		ctx, _ = SetTermToIncomingContext(ctx, meta.Term)
+		ctx, _ = alaya.SetTermToIncomingContext(ctx, meta.Term)
 		_, err = a.RecordObjectMeta(ctx, meta)
 		assert.NoError(t, err)
 	}
@@ -250,7 +251,7 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 	return alayas
 }
 
-func GenMockAlayaCluster(t *testing.T, ctx context.Context, basePath string, storage MetaStorage,
+func GenMockAlayaCluster(t *testing.T, ctx context.Context, basePath string, storage alaya.MetaStorage,
 	watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []Alayaer {
 	var alayas []Alayaer
 	nodeNum := len(watchers)

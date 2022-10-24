@@ -7,8 +7,6 @@ import (
 	agent "ecos/client/info-agent"
 	"ecos/edge-node/infos"
 	"ecos/edge-node/pipeline"
-	"ecos/edge-node/watcher"
-	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
@@ -30,8 +28,6 @@ type EcosIOFactory struct {
 	bucketInfo *infos.BucketInfo
 	chunkPool  *common.Pool
 
-	clusterInfo *infos.ClusterInfo
-
 	// for multipart upload
 	multipartJobs cmap.ConcurrentMap
 }
@@ -40,7 +36,17 @@ type EcosIOFactory struct {
 //
 // nodeAddr shall provide the address to get ClusterInfo from
 func NewEcosIOFactory(ctx context.Context, config *config.ClientConfig, volumeID, bucketName string) (*EcosIOFactory, error) {
-	infoAgent, err := agent.NewInfoAgent(ctx, config.NodeAddr, config.NodePort)
+	clusterInfo := &infos.ClusterInfo{
+		NodesInfo: []*infos.NodeInfo{
+			{
+				RaftId:  0,
+				IpAddr:  config.NodeAddr,
+				RpcPort: config.NodePort,
+				State:   infos.NodeState_ONLINE,
+			},
+		},
+	}
+	infoAgent, err := agent.NewInfoAgent(ctx, clusterInfo, config.CloudAddr, config.CloudPort, config.ConnectType)
 	if err != nil {
 		return nil, err
 	}
@@ -61,23 +67,6 @@ func NewEcosIOFactory(ctx context.Context, config *config.ClientConfig, volumeID
 	ret.bucketInfo = info.BaseInfo().GetBucketInfo()
 	ret.multipartJobs = cmap.New()
 	return ret, err
-}
-
-func (f *EcosIOFactory) GetLatestClusterInfo() error {
-	conn, err := messenger.GetRpcConn(f.config.NodeAddr, f.config.NodePort)
-	if err != nil {
-		return err
-	}
-	watcherClient := watcher.NewWatcherClient(conn)
-	reply, err := watcherClient.GetClusterInfo(context.Background(),
-		&watcher.GetClusterInfoRequest{Term: 0})
-	if err != nil {
-		logger.Errorf("get group info fail: %v", err)
-		return err
-	}
-	clusterInfo := reply.GetClusterInfo()
-	*(f.clusterInfo) = *clusterInfo
-	return nil
 }
 
 func (f *EcosIOFactory) IsConnected() bool {

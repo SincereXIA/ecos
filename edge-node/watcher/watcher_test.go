@@ -3,8 +3,8 @@ package watcher
 import (
 	"context"
 	"ecos/edge-node/infos"
-	moon2 "ecos/edge-node/moon"
 	"ecos/messenger"
+	moon2 "ecos/shared/moon"
 	"testing"
 )
 

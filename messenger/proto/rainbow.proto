@@ -1,0 +1,65 @@
+syntax = "proto3";
+package messenger;
+
+import "infos.proto";
+import "common.proto";
+import "object.proto";
+
+option go_package = "ecos/cloud/rainbow";
+
+service Rainbow {
+  // GetStream used by edge-node registers a new stream to the cloud server.
+  rpc GetStream(stream Content) returns (stream Content) {}
+  // SendRequest used by client, send a request to the cloud server.
+  // And the cloud server will forward the request to the edge-node.
+  rpc SendRequest(Request) returns (stream Response) {}
+}
+
+message Content {
+  oneof payload {
+    Request request = 1;
+    Response response = 2;
+  }
+}
+
+message Request {
+  enum Method {
+    UNKNOWN_Method = 0;
+    GET = 1;
+    PUT = 2;
+    DELETE = 3;
+    LIST = 4;
+  }
+
+  enum Resource {
+    UNKNOWN_Resource = 0;
+    INFO = 1;
+    META = 2;
+    OBJECT = 3;
+    BLOCK = 4;
+  }
+
+  uint64 request_seq = 1;
+  Method method = 2;
+  Resource resource = 3;
+  uint64 term = 4;
+
+  string request_id = 5;
+  InfoType info_type = 6;
+  BaseInfo info = 7;
+  ObjectMeta meta = 8;
+}
+
+message Response {
+  uint64 response_to = 1;
+  Result result = 2;
+
+  bytes chunk = 3;
+  repeated ObjectMeta metas = 4;
+  repeated BaseInfo infos = 5;
+
+  bool is_last = 6;
+}
+
+
+
