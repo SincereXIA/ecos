@@ -5,8 +5,10 @@ import (
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/utils/logger"
+	"encoding/csv"
 	"errors"
 	"math/rand"
+	"os"
 	"strconv"
 )
 
@@ -19,6 +21,9 @@ type MockCluster struct {
 
 	blockPgNum  int32
 	blockPgSize int32
+
+	outputFile *os.File
+	csvWriter  *csv.Writer
 }
 
 func (c *MockCluster) PutBlock(blockID string, size uint64) error {
@@ -31,7 +36,7 @@ func (c *MockCluster) PutBlock(blockID string, size uint64) error {
 		}
 	}
 	// output every 100 times
-	if rand.Intn(1000) == 0 {
+	if rand.Intn(100) == 0 {
 		difference := c.CheckDifference()
 		logger.Infof("difference: %v", difference)
 		if difference > 0.001 {
@@ -39,6 +44,11 @@ func (c *MockCluster) PutBlock(blockID string, size uint64) error {
 		}
 	}
 	return nil
+}
+
+func (c *MockCluster) Close() {
+	c.csvWriter.Flush()
+	_ = c.outputFile.Close()
 }
 
 func (c *MockCluster) ProposeNewClusterInfo() {
@@ -104,6 +114,8 @@ func NewMockCluster(capacities []uint64, blockPgNum int) *MockCluster {
 	clusterPipelines, _ := pipeline.NewClusterPipelines(clusterInfo)
 	volumesUsed := make([]uint64, len(capacities))
 	lastTermVolumesUsed := make([]uint64, len(capacities))
+	outputFile, _ := os.Create("output.csv")
+
 	cluster := &MockCluster{
 		clusterInfo:        clusterInfo,
 		volumesTotal:       capacities,
@@ -112,6 +124,7 @@ func NewMockCluster(capacities []uint64, blockPgNum int) *MockCluster {
 		pipelines:          clusterPipelines,
 		blockPgSize:        int32(blockPgSize),
 		blockPgNum:         int32(blockPgNum),
+		csvWriter:          csv.NewWriter(outputFile),
 	}
 	p := clusterPipelines.BlockPipelines
 	count := make([]int, len(nodesInfo))
@@ -124,13 +137,27 @@ func NewMockCluster(capacities []uint64, blockPgNum int) *MockCluster {
 	for i := 0; i < len(count); i++ {
 		logger.Infof("Node %d: %d", i+1, count[i])
 	}
+
+	header := []string{"Total Write", "Term"}
+	for i := 0; i < len(nodesInfo); i++ {
+		header = append(header, "Node "+strconv.Itoa(i+1)+" Write")
+	}
+	for i := 0; i < len(nodesInfo); i++ {
+		header = append(header, "Node "+strconv.Itoa(i+1)+" Remain Percent")
+	}
+	header = append(header, "variance")
+
+	_ = cluster.csvWriter.Write(header)
+
 	return cluster
 }
 
 func (c *MockCluster) CheckDifference() float64 {
 	var diff []uint64
+	var totalWrite uint64
 	for i := 0; i < len(c.volumesUsed); i++ {
 		diff = append(diff, c.volumesUsed[i]-c.lastTermVolumeUsed[i])
+		totalWrite += c.volumesUsed[i]
 	}
 	var usePercent []float64
 	for i := 0; i < len(diff); i++ {
@@ -147,6 +174,16 @@ func (c *MockCluster) CheckDifference() float64 {
 		variance += (usePercent[i] - average) * (usePercent[i] - average)
 	}
 	variance /= float64(len(usePercent) - 1)
+
+	csvRecord := []string{strconv.Itoa(int(totalWrite)), strconv.Itoa(int(c.clusterInfo.Term))}
+	for i := 0; i < len(c.volumesUsed); i++ {
+		csvRecord = append(csvRecord, strconv.Itoa(int(c.volumesUsed[i])))
+	}
+	for i := 0; i < len(c.volumesUsed); i++ {
+		csvRecord = append(csvRecord, strconv.FormatFloat(usePercent[i], 'f', 8, 64))
+	}
+	csvRecord = append(csvRecord, strconv.FormatFloat(variance, 'f', 10, 64))
+	_ = c.csvWriter.Write(csvRecord)
 	return variance
 }
 
@@ -166,6 +203,7 @@ func balanceTest() {
 	//}
 
 	cluster := NewMockCluster(capacities, 1000)
+	defer cluster.Close()
 
 	r := rand.New(rand.NewSource(99))
 
