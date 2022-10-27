@@ -24,7 +24,14 @@ type MockCluster struct {
 
 	outputFile *os.File
 	csvWriter  *csv.Writer
+
+	behave int
 }
+
+const (
+	CEPH_LIKE = iota
+	ECOS
+)
 
 func (c *MockCluster) PutBlock(blockID string, size uint64) error {
 	pgID := object.GenBlockPgID(blockID, c.clusterInfo.BlockPgNum)
@@ -39,8 +46,12 @@ func (c *MockCluster) PutBlock(blockID string, size uint64) error {
 	if rand.Intn(100) == 0 {
 		difference := c.CheckDifference()
 		logger.Infof("difference: %v", difference)
-		if difference > 0.001 {
-			c.ProposeNewClusterInfo()
+
+		switch c.behave {
+		case ECOS:
+			if difference > 0.001 {
+				c.ProposeNewClusterInfo()
+			}
 		}
 	}
 	return nil
@@ -88,7 +99,7 @@ func (c *MockCluster) PrintRemainVolumePercent() {
 	}
 }
 
-func NewMockCluster(capacities []uint64, blockPgNum int) *MockCluster {
+func NewMockCluster(capacities []uint64, blockPgNum int, clusterName string, behave int) *MockCluster {
 	blockPgSize := 3
 	var nodesInfo []*infos.NodeInfo
 	for i := 0; i < len(capacities); i++ {
@@ -114,7 +125,7 @@ func NewMockCluster(capacities []uint64, blockPgNum int) *MockCluster {
 	clusterPipelines, _ := pipeline.NewClusterPipelines(clusterInfo)
 	volumesUsed := make([]uint64, len(capacities))
 	lastTermVolumesUsed := make([]uint64, len(capacities))
-	outputFile, _ := os.Create("output.csv")
+	outputFile, _ := os.Create(clusterName + ".csv")
 
 	cluster := &MockCluster{
 		clusterInfo:        clusterInfo,
@@ -125,6 +136,7 @@ func NewMockCluster(capacities []uint64, blockPgNum int) *MockCluster {
 		blockPgSize:        int32(blockPgSize),
 		blockPgNum:         int32(blockPgNum),
 		csvWriter:          csv.NewWriter(outputFile),
+		behave:             behave,
 	}
 	p := clusterPipelines.BlockPipelines
 	count := make([]int, len(nodesInfo))
@@ -143,7 +155,7 @@ func NewMockCluster(capacities []uint64, blockPgNum int) *MockCluster {
 		header = append(header, "Node "+strconv.Itoa(i+1)+" Write")
 	}
 	for i := 0; i < len(nodesInfo); i++ {
-		header = append(header, "Node "+strconv.Itoa(i+1)+" Remain Percent")
+		header = append(header, "Node "+strconv.Itoa(i+1)+" Used Percent")
 	}
 	header = append(header, "variance")
 
@@ -160,29 +172,37 @@ func (c *MockCluster) CheckDifference() float64 {
 		totalWrite += c.volumesUsed[i]
 	}
 	var usePercent []float64
+	var totalUsePercent []float64
 	for i := 0; i < len(diff); i++ {
 		usePercent = append(usePercent, float64(diff[i])/float64(c.volumesTotal[i]-c.lastTermVolumeUsed[i]))
+		totalUsePercent = append(totalUsePercent, float64(c.volumesUsed[i])/float64(c.volumesTotal[i]))
 	}
 	average := 0.0
+	totalAverage := 0.0
 	for i := 0; i < len(usePercent); i++ {
 		average += usePercent[i]
+		totalAverage += totalUsePercent[i]
 	}
 	average /= float64(len(usePercent))
+	totalAverage /= float64(len(totalUsePercent))
 
 	variance := 0.0
+	totalVariance := 0.0
 	for i := 0; i < len(usePercent); i++ {
 		variance += (usePercent[i] - average) * (usePercent[i] - average)
+		totalVariance += (totalUsePercent[i] - totalAverage) * (totalUsePercent[i] - totalAverage)
 	}
 	variance /= float64(len(usePercent) - 1)
+	totalVariance /= float64(len(totalUsePercent) - 1)
 
 	csvRecord := []string{strconv.Itoa(int(totalWrite)), strconv.Itoa(int(c.clusterInfo.Term))}
 	for i := 0; i < len(c.volumesUsed); i++ {
 		csvRecord = append(csvRecord, strconv.Itoa(int(c.volumesUsed[i])))
 	}
 	for i := 0; i < len(c.volumesUsed); i++ {
-		csvRecord = append(csvRecord, strconv.FormatFloat(usePercent[i], 'f', 8, 64))
+		csvRecord = append(csvRecord, strconv.FormatFloat(totalUsePercent[i], 'f', 8, 64))
 	}
-	csvRecord = append(csvRecord, strconv.FormatFloat(variance, 'f', 10, 64))
+	csvRecord = append(csvRecord, strconv.FormatFloat(totalVariance, 'f', 10, 64))
 	_ = c.csvWriter.Write(csvRecord)
 	return variance
 }
@@ -198,12 +218,11 @@ func balanceTest() {
 		500 * 1000 * 1000 * 1000,      // 500 GB
 		500 * 1000 * 1000 * 1000,      // 500 GB
 	}
-	//capacities := []int{
-	//	1000, 1000, 1000, 1000, 1000, 500, 500, 500,
-	//}
 
-	cluster := NewMockCluster(capacities, 1000)
+	cluster := NewMockCluster(capacities, 100, "ceph-like", CEPH_LIKE)
+	ecosCluster := NewMockCluster(capacities, 100, "ecos", ECOS)
 	defer cluster.Close()
+	defer ecosCluster.Close()
 
 	r := rand.New(rand.NewSource(99))
 
@@ -241,4 +260,36 @@ func balanceTest() {
 		}
 	}
 	cluster.PrintRemainVolumePercent()
+	for {
+		// 文件大小（B），平均 16MB, 波动 8MB
+		size := int64(16*1000*1000 + (r.NormFloat64() * 8 * 1000 * 1000))
+		if size < 0 {
+			size = 0
+		}
+		var blocks []uint64
+		for size > 0 {
+			b := int64(4 * 1000 * 1000)
+			if size < b {
+				b = size
+			}
+			blocks = append(blocks, uint64(b))
+			size -= b
+		}
+		end := false
+		for _, blockSize := range blocks {
+			bid += 1
+			blockID := strconv.Itoa(bid)
+			err := ecosCluster.PutBlock(blockID, blockSize)
+			if err != nil {
+				end = true
+				break
+			}
+			if end {
+				break
+			}
+		}
+		if end {
+			break
+		}
+	}
 }
