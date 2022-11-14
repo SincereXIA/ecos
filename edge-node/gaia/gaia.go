@@ -3,7 +3,9 @@ package gaia
 import (
 	"bufio"
 	"context"
+	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
+	"ecos/edge-node/pipeline"
 	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
@@ -12,8 +14,12 @@ import (
 	"ecos/utils/logger"
 	"github.com/rcrowley/go-metrics"
 	"io"
+	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
+	"strconv"
+	"sync"
 	"time"
 )
 
@@ -28,6 +34,8 @@ type Gaia struct {
 	watcher *watcher.Watcher
 
 	config *Config
+
+	transMu sync.Mutex
 }
 
 func (g *Gaia) UploadBlockData(stream gaia.Gaia_UploadBlockDataServer) error {
@@ -81,6 +89,10 @@ func (g *Gaia) UploadBlockData(stream gaia.Gaia_UploadBlockDataServer) error {
 			return err
 		}
 	}
+}
+
+func (g *Gaia) getBlockBasePath() string {
+	return path.Join(g.config.BasePath)
 }
 
 // GetBlockData return local block data to client
@@ -158,6 +170,58 @@ func (g *Gaia) DeleteBlock(_ context.Context, req *gaia.DeleteBlockRequest) (*co
 	return &common.Result{Status: common.Result_OK}, nil
 }
 
+func (g *Gaia) transformBlocks(info infos.Information) {
+	// open block file in basePath
+	clusterInfo := info.BaseInfo().GetClusterInfo()
+	chunkBuffer := make([]byte, g.config.ChunkSize)
+	g.transMu.Lock()
+	defer g.transMu.Unlock()
+	basePath := g.config.BasePath
+	files, err := ioutil.ReadDir(basePath)
+	if err != nil {
+		logger.Warningf("read dir: %v failed, err: %v", basePath, err)
+		return
+	}
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		filePath := path.Join(basePath, file.Name())
+		f, err := os.Open(filePath)
+		if err != nil {
+			logger.Warningf("open file: %v failed, err: %v", filePath, err)
+			continue
+		}
+		defer f.Close()
+		logger.Infof("transform block: %v", file.Name())
+		blockId := file.Name()
+		pgID := object.GenBlockPgID(blockId, clusterInfo.BlockPgNum)
+		blockInfo := &object.BlockInfo{
+			BlockId: blockId,
+			PgId:    pgID,
+		}
+		clusterPipelines, err := pipeline.NewClusterPipelines(*clusterInfo)
+		if err != nil {
+			logger.Errorf("new cluster pipelines failed, err: %v", err)
+			return
+		}
+		pipeline := clusterPipelines.GetBlockPipeline(pgID)
+
+		// get block transporter
+		t, err := gaia.NewPrimaryCopyTransporter(g.ctx, blockInfo, pipeline, g.watcher.GetSelfInfo().RaftId,
+			clusterInfo, g.config.BasePath)
+		if err != nil {
+			logger.Errorf("new primary copy transporter failed, err: %v", err)
+			t.Close()
+			continue
+		}
+		// transform block
+
+		_, _ = io.CopyBuffer(t, f, chunkBuffer)
+		t.Close()
+	}
+}
+
 // processControlMessage will modify transporter when receive ControlMessage_BEGIN
 func (g *Gaia) processControlMessage(message *gaia.UploadBlockRequest_Message, transporter *gaia.PrimaryCopyTransporter,
 	stream gaia.Gaia_UploadBlockDataServer) (err error) {
@@ -232,5 +296,9 @@ func NewGaia(ctx context.Context, rpcServer *messenger.RpcServer, watcher *watch
 		config:  config,
 	}
 	gaia.RegisterGaiaServer(rpcServer, &g)
+	err := watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO, "gaia"+strconv.Itoa(rand.Int()), g.transformBlocks)
+	if err != nil {
+		return nil
+	}
 	return &g
 }

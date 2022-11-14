@@ -26,6 +26,8 @@ type MockCluster struct {
 	csvWriter  *csv.Writer
 
 	behave int
+
+	maxDifference float64
 }
 
 const (
@@ -44,8 +46,11 @@ func (c *MockCluster) PutBlock(blockID string, size uint64) error {
 	}
 	// output every 100 times
 	if rand.Intn(100) == 0 {
-		difference := c.CheckDifference()
-		logger.Infof("difference: %v", difference)
+		difference, totalVariance := c.CheckDifference()
+		if totalVariance > c.maxDifference {
+			c.maxDifference = totalVariance
+		}
+		//logger.Infof("difference: %v", difference)
 
 		switch c.behave {
 		case ECOS:
@@ -88,7 +93,6 @@ func (c *MockCluster) ProposeNewClusterInfo() {
 	for i := 0; i < len(c.volumesTotal); i++ {
 		c.lastTermVolumeUsed[i] = c.volumesUsed[i]
 	}
-	logger.Debugf("ProposeNewClusterInfo: %v", clusterInfo.Term)
 }
 
 func (c *MockCluster) PrintRemainVolumePercent() {
@@ -164,7 +168,7 @@ func NewMockCluster(capacities []uint64, blockPgNum int, clusterName string, beh
 	return cluster
 }
 
-func (c *MockCluster) CheckDifference() float64 {
+func (c *MockCluster) CheckDifference() (variance float64, totalVariance float64) {
 	var diff []uint64
 	var totalWrite uint64
 	for i := 0; i < len(c.volumesUsed); i++ {
@@ -186,8 +190,6 @@ func (c *MockCluster) CheckDifference() float64 {
 	average /= float64(len(usePercent))
 	totalAverage /= float64(len(totalUsePercent))
 
-	variance := 0.0
-	totalVariance := 0.0
 	for i := 0; i < len(usePercent); i++ {
 		variance += (usePercent[i] - average) * (usePercent[i] - average)
 		totalVariance += (totalUsePercent[i] - totalAverage) * (totalUsePercent[i] - totalAverage)
@@ -204,27 +206,26 @@ func (c *MockCluster) CheckDifference() float64 {
 	}
 	csvRecord = append(csvRecord, strconv.FormatFloat(totalVariance, 'f', 10, 64))
 	_ = c.csvWriter.Write(csvRecord)
-	return variance
+	return variance, totalVariance
 }
 
-func balanceTest() {
+func balanceTest(blockPgNum int, chunkSize int, behave int) (totalWrite uint64, variance float64) {
 	capacities := []uint64{
 		1 * 1000 * 1000 * 1000 * 1000, // 1 TB
 		1 * 1000 * 1000 * 1000 * 1000, // 1 TB
 		1 * 1000 * 1000 * 1000 * 1000, // 1 TB
 		1 * 1000 * 1000 * 1000 * 1000, // 1 TB
 		1 * 1000 * 1000 * 1000 * 1000, // 1 TB
-		500 * 1000 * 1000 * 1000,      // 500 GB
-		500 * 1000 * 1000 * 1000,      // 500 GB
-		500 * 1000 * 1000 * 1000,      // 500 GB
+		200 * 1000 * 1000 * 1000,      // 500 GB
+		200 * 1000 * 1000 * 1000,      // 500 GB
+		200 * 1000 * 1000 * 1000,      // 500 GB
 	}
 
-	cluster := NewMockCluster(capacities, 100, "ceph-like", CEPH_LIKE)
-	ecosCluster := NewMockCluster(capacities, 100, "ecos", ECOS)
+	cluster := NewMockCluster(capacities, blockPgNum, "ceph-like", behave)
 	defer cluster.Close()
-	defer ecosCluster.Close()
 
 	r := rand.New(rand.NewSource(99))
+	totalWrite = uint64(0)
 
 	bid := 0
 	for {
@@ -233,9 +234,10 @@ func balanceTest() {
 		if size < 0 {
 			size = 0
 		}
+		totalWrite += uint64(size)
 		var blocks []uint64
 		for size > 0 {
-			b := int64(4 * 1000 * 1000)
+			b := int64(chunkSize)
 			if size < b {
 				b = size
 			}
@@ -249,6 +251,7 @@ func balanceTest() {
 			err := cluster.PutBlock(blockID, blockSize)
 			if err != nil {
 				end = true
+				//
 				break
 			}
 			if end {
@@ -260,36 +263,6 @@ func balanceTest() {
 		}
 	}
 	cluster.PrintRemainVolumePercent()
-	for {
-		// 文件大小（B），平均 16MB, 波动 8MB
-		size := int64(16*1000*1000 + (r.NormFloat64() * 8 * 1000 * 1000))
-		if size < 0 {
-			size = 0
-		}
-		var blocks []uint64
-		for size > 0 {
-			b := int64(4 * 1000 * 1000)
-			if size < b {
-				b = size
-			}
-			blocks = append(blocks, uint64(b))
-			size -= b
-		}
-		end := false
-		for _, blockSize := range blocks {
-			bid += 1
-			blockID := strconv.Itoa(bid)
-			err := ecosCluster.PutBlock(blockID, blockSize)
-			if err != nil {
-				end = true
-				break
-			}
-			if end {
-				break
-			}
-		}
-		if end {
-			break
-		}
-	}
+	variance = cluster.maxDifference
+	return totalWrite, variance
 }
