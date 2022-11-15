@@ -125,6 +125,11 @@ ecos-docker-build:
     - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
     - docker tag $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
     - docker push $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
+    - export APP_NAME=ecos-client-exp
+    - docker build -f ecos-client-exp -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
+    - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
+    - docker tag $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
+    - docker push $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
 
 deploy-job:      # This job runs in the deploy stage.
   stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
@@ -149,6 +154,8 @@ deploy-job:      # This job runs in the deploy stage.
     - kubectl apply -f ecos-cloud.yaml
     - kubectl delete -f ecos-client.yaml || true
     - kubectl apply -f ecos-client.yaml
+    - kubectl delete -f ecos-client-exp.yaml || true
+    - kubectl apply -f ecos-client-exp.yaml
     - sleep 10
     - kubectl delete -f ecos-edge.yaml || true
     - kubectl apply -f ecos-edge.yaml
