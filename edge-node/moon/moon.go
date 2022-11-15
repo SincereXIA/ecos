@@ -223,6 +223,7 @@ func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Informat
 
 func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
 	data, _ := nodeInfo.Marshal()
+	logger.Infof("ProposeConfChangeAddNode: %v", nodeInfo)
 
 	m.raft.ConfChangeC <- raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,

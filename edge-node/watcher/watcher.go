@@ -60,6 +60,7 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	defer w.addNodeMutex.Unlock()
 
 	flag := true
+	logger.Infof("add new node to cluster: %v", info.RaftId)
 
 	currentPeerInfos := w.getCurrentPeerInfo()
 	for _, peerInfo := range currentPeerInfos {
@@ -232,6 +233,7 @@ func (w *Watcher) RequestJoinCluster(leaderInfo *infos.NodeInfo) error {
 		return err
 	}
 	client := NewWatcherClient(conn)
+	logger.Infof("send Join group request to leader")
 	reply, err := client.AddNewNodeToCluster(w.ctx, w.selfNodeInfo)
 	if err != nil {
 		logger.Errorf("Request join to group err: %v", err.Error())
@@ -281,6 +283,7 @@ func (w *Watcher) Run() {
 	if err != nil {
 		logger.Warningf("watcher ask sky err: %v", err)
 	} else {
+		logger.Infof("watcher ask sky success, leader: %v, addr: %v", leaderInfo.RaftId, leaderInfo.IpAddr)
 		err = w.RequestJoinCluster(leaderInfo)
 		if err != nil {
 			logger.Errorf("watcher request join to cluster err: %v", err)

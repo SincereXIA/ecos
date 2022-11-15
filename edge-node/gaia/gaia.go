@@ -172,6 +172,7 @@ func (g *Gaia) DeleteBlock(_ context.Context, req *gaia.DeleteBlockRequest) (*co
 
 func (g *Gaia) transformBlocks(info infos.Information) {
 	// open block file in basePath
+	logger.Infof("gaia start transform block")
 	clusterInfo := info.BaseInfo().GetClusterInfo()
 	chunkBuffer := make([]byte, g.config.ChunkSize)
 	g.transMu.Lock()
