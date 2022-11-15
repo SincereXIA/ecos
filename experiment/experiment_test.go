@@ -8,7 +8,7 @@ func TestExpBalance(t *testing.T) {
 	// 测试 pg 数量引起的均衡性变化
 	var pgNums []int
 	var variances []float64
-	for pgNum := 100; pgNum < 10000; pgNum += 100 {
+	for pgNum := 100; pgNum < 10000; pgNum += 1000 {
 		totalWrite, variance := balanceTest(pgNum, 4*1000*1000, behave)
 		t.Logf("pgNum: %d, totalWrite: %d, variance: %f", pgNum, totalWrite, variance)
 		pgNums = append(pgNums, pgNum)
