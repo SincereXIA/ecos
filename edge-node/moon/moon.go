@@ -78,6 +78,7 @@ const (
 )
 
 func (m *Moon) ProposeInfo(ctx context.Context, request *moon.ProposeInfoRequest) (*moon.ProposeInfoReply, error) {
+	logger.Infof("ProposeInfo: %v", request)
 	if request.Id == "" {
 		return nil, errors.New("info key is empty")
 	}

@@ -56,6 +56,7 @@ type Watcher struct {
 // AddNewNodeToCluster will propose a new NodeInfo in moon,
 // if success, it will propose a ConfChang, to add the raftNode into moon group
 func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (*AddNodeReply, error) {
+	logger.Infof("receive add new node to cluster: %v", info.RaftId)
 	w.addNodeMutex.Lock()
 	defer w.addNodeMutex.Unlock()
 
