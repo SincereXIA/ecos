@@ -35,6 +35,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - go build -o build/bin/ecos-client ecos/cli
     - go build -o build/bin/ecos-cloud ecos/cloud
     - go build -o build/bin/ecos-edge-node ecos/edge-node
+    - go build -o build/bin/ecos-client-exp ecos/experiment/exp-client
     - echo "Compile complete."
   artifacts:
     paths:
