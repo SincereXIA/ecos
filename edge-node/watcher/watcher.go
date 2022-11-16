@@ -73,7 +73,7 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	}
 
 	if flag {
-		logger.Infof("check ok, start propose node info", info.RaftId)
+		logger.Infof("check ok, start propose node info: %v", info.RaftId)
 		request := &moon2.ProposeInfoRequest{
 			Head: &common.Head{
 				Timestamp: timestamp.Now(),
