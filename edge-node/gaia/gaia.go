@@ -15,10 +15,8 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"path"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -175,8 +173,10 @@ func (g *Gaia) transformBlocks(info infos.Information) {
 	logger.Infof("gaia start transform block")
 	clusterInfo := info.BaseInfo().GetClusterInfo()
 	chunkBuffer := make([]byte, g.config.ChunkSize)
+
 	g.transMu.Lock()
 	defer g.transMu.Unlock()
+	defer logger.Infof("gaia transform block finished")
 	basePath := g.config.BasePath
 	files, err := ioutil.ReadDir(basePath)
 	if err != nil {
@@ -297,9 +297,9 @@ func NewGaia(ctx context.Context, rpcServer *messenger.RpcServer, watcher *watch
 		config:  config,
 	}
 	gaia.RegisterGaiaServer(rpcServer, &g)
-	err := watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO, "gaia"+strconv.Itoa(rand.Int()), g.transformBlocks)
-	if err != nil {
-		return nil
-	}
+	//err := watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO, "gaia"+strconv.Itoa(rand.Int()), g.transformBlocks)
+	//if err != nil {
+	//	return nil
+	//}
 	return &g
 }

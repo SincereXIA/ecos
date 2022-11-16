@@ -83,7 +83,7 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 
 	// Gen Outpost
 	logger.Infof("Start init Outpost ...")
-	_, err = outpost.NewOutpost(ctx, conf.WatcherConfig.SunAddr, w)
+	o, err := outpost.NewOutpost(ctx, conf.WatcherConfig.SunAddr, w)
 	if err != nil {
 		logger.Errorf("init outpost fail: %v", err)
 	}
@@ -97,6 +97,7 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	}()
 	go w.Run()
 	go a.Run()
+	go o.Run()
 	go func() {
 		// Gen Gateway
 		logger.Infof("Start init Gateway ...")

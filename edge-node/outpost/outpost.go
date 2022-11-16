@@ -54,7 +54,9 @@ func NewOutpost(ctx context.Context, cloudAddr string, w *watcher.Watcher) (*Out
 	err := w.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO,
 		"outpost_cluster_listen_"+strconv.FormatUint(rand.Uint64()%100, 10),
 		func(info infos.Information) {
-			outpost.clusterInfoChanged <- struct{}{}
+			go func() {
+				outpost.clusterInfoChanged <- struct{}{}
+			}()
 		})
 	if err != nil {
 		return nil, err
@@ -190,6 +192,8 @@ func (o *Outpost) Run() error {
 
 	go o.SendChanListenLoop()
 	go o.reportLoop()
+
+	logger.Infof("outpost init success")
 
 	return o.streamLoop()
 }
