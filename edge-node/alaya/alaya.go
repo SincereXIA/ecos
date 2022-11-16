@@ -339,12 +339,14 @@ func (a *Alaya) cleanup() {
 }
 
 func (a *Alaya) applyNewClusterInfo(info infos.Information) {
+	logger.Infof("alaya %v receive new cluster info: %v", a.selfInfo.RaftId, info.GetID())
 	a.ApplyNewClusterInfo(info.BaseInfo().GetClusterInfo())
 }
 
 func (a *Alaya) ApplyNewClusterInfo(clusterInfo *infos.ClusterInfo) {
 	// TODO: (zhang) make pgNum configurable
 	a.mutex.Lock()
+	defer logger.Infof("alaya %v apply new cluster info done", a.selfInfo.RaftId)
 	defer a.mutex.Unlock()
 	a.state = UPDATING
 	oldPipelines := a.clusterPipelines

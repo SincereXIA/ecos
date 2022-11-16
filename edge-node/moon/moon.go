@@ -148,7 +148,7 @@ func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 			info := msg.BaseInfo
 			switch msg.Operate {
 			case moon.ProposeInfoRequest_ADD:
-				logger.Tracef("%d add info %v", m.id, info.GetID())
+				logger.Debugf("%d add info %v", m.id, info.GetID())
 				err = m.infoStorageRegister.Update(info)
 
 			case moon.ProposeInfoRequest_UPDATE:
@@ -159,8 +159,10 @@ func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 			if err != nil {
 				logger.Errorf("Moon process moon message err: %v", err.Error())
 			}
+			logger.Debugf("Moon process moon message success: %v", msg)
 			if m.w.IsRegistered(msg.OperateId) {
 				m.w.Trigger(msg.OperateId, struct{}{})
+				logger.Debugf("trigger %v", msg.OperateId)
 			}
 		}
 		close(commit.ApplyDoneC)

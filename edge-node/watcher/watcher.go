@@ -353,6 +353,7 @@ func (w *Watcher) proposeClusterInfo(clusterInfo *infos.ClusterInfo) {
 	_, err := w.moon.ProposeInfo(w.ctx, request)
 	if err != nil {
 		// TODO
+		logger.Errorf("propose cluster info err: %v", err)
 		return
 	}
 	logger.Infof("[NEW TERM] leader propose new cluster info success")
