@@ -2,6 +2,7 @@ package infos
 
 import (
 	"ecos/utils/errno"
+	"ecos/utils/logger"
 	"sync"
 )
 
@@ -34,11 +35,12 @@ func (s *MemoryInfoStorage) Update(info Information) error {
 	s.kvStorage.Store(info.GetID(), info)
 
 	s.onUpdateMap.Range(func(key, value interface{}) bool {
+		logger.Debugf("call update func: %s", key.(string))
 		f := value.(StorageUpdateFunc)
 		f(info)
 		return true
 	})
-
+	logger.Debugf("MemoryInfoStorage update info: %s finish", info.GetID())
 	return nil
 }
 

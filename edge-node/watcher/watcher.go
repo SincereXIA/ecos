@@ -56,10 +56,12 @@ type Watcher struct {
 // AddNewNodeToCluster will propose a new NodeInfo in moon,
 // if success, it will propose a ConfChang, to add the raftNode into moon group
 func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (*AddNodeReply, error) {
+	logger.Infof("receive add new node to cluster: %v", info.RaftId)
 	w.addNodeMutex.Lock()
 	defer w.addNodeMutex.Unlock()
 
 	flag := true
+	logger.Infof("add new node to cluster: %v", info.RaftId)
 
 	currentPeerInfos := w.getCurrentPeerInfo()
 	for _, peerInfo := range currentPeerInfos {
@@ -71,6 +73,7 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	}
 
 	if flag {
+		logger.Infof("check ok, start propose node info: %v", info.RaftId)
 		request := &moon2.ProposeInfoRequest{
 			Head: &common.Head{
 				Timestamp: timestamp.Now(),
@@ -232,6 +235,7 @@ func (w *Watcher) RequestJoinCluster(leaderInfo *infos.NodeInfo) error {
 		return err
 	}
 	client := NewWatcherClient(conn)
+	logger.Infof("send Join group request to leader")
 	reply, err := client.AddNewNodeToCluster(w.ctx, w.selfNodeInfo)
 	if err != nil {
 		logger.Errorf("Request join to group err: %v", err.Error())
@@ -281,6 +285,7 @@ func (w *Watcher) Run() {
 	if err != nil {
 		logger.Warningf("watcher ask sky err: %v", err)
 	} else {
+		logger.Infof("watcher ask sky success, leader: %v, addr: %v", leaderInfo.RaftId, leaderInfo.IpAddr)
 		err = w.RequestJoinCluster(leaderInfo)
 		if err != nil {
 			logger.Errorf("watcher request join to cluster err: %v", err)
@@ -348,6 +353,7 @@ func (w *Watcher) proposeClusterInfo(clusterInfo *infos.ClusterInfo) {
 	_, err := w.moon.ProposeInfo(w.ctx, request)
 	if err != nil {
 		// TODO
+		logger.Errorf("propose cluster info err: %v", err)
 		return
 	}
 	logger.Infof("[NEW TERM] leader propose new cluster info success")

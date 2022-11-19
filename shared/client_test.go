@@ -64,6 +64,10 @@ func TestClient(t *testing.T) {
 		assert.Equal(t, objectSize, size, "data size not match")
 	}
 
+	t.Run("Add new node", func(t *testing.T) {
+
+	})
+
 	t.Run("test term change", func(t *testing.T) {
 		t.Logf("test term change")
 		oldTerm := watchers[0].GetCurrentTerm()

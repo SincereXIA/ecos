@@ -78,6 +78,7 @@ const (
 )
 
 func (m *Moon) ProposeInfo(ctx context.Context, request *moon.ProposeInfoRequest) (*moon.ProposeInfoReply, error) {
+	logger.Infof("ProposeInfo: %v", request)
 	if request.Id == "" {
 		return nil, errors.New("info key is empty")
 	}
@@ -147,7 +148,7 @@ func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 			info := msg.BaseInfo
 			switch msg.Operate {
 			case moon.ProposeInfoRequest_ADD:
-				logger.Tracef("%d add info %v", m.id, info.GetID())
+				logger.Debugf("%d add info %v", m.id, info.GetID())
 				err = m.infoStorageRegister.Update(info)
 
 			case moon.ProposeInfoRequest_UPDATE:
@@ -158,8 +159,10 @@ func (m *Moon) readCommits(commitC <-chan *eraft.Commit, errorC <-chan error) {
 			if err != nil {
 				logger.Errorf("Moon process moon message err: %v", err.Error())
 			}
+			logger.Debugf("Moon process moon message success: %v", msg)
 			if m.w.IsRegistered(msg.OperateId) {
 				m.w.Trigger(msg.OperateId, struct{}{})
+				logger.Debugf("trigger %v", msg.OperateId)
 			}
 		}
 		close(commit.ApplyDoneC)
@@ -223,6 +226,7 @@ func (m *Moon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Informat
 
 func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.NodeInfo) error {
 	data, _ := nodeInfo.Marshal()
+	logger.Infof("ProposeConfChangeAddNode: %v", nodeInfo)
 
 	m.raft.ConfChangeC <- raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,

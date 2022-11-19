@@ -35,6 +35,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - go build -o build/bin/ecos-client ecos/cli
     - go build -o build/bin/ecos-cloud ecos/cloud
     - go build -o build/bin/ecos-edge-node ecos/edge-node
+    - go build -o build/bin/ecos-client-exp ecos/experiment/exp-client
     - echo "Compile complete."
   artifacts:
     paths:
@@ -90,7 +91,8 @@ sonarqube-check:
 
 ecos-docker-build:
   stage: docker-build
-  needs: [build-job, unit-test-job]
+  needs: [build-job]
+#  needs: [build-job, unit-test-job]
   image: docker:19.03.0
 #  services:
 #    - docker:19.03.0-dind
@@ -125,6 +127,11 @@ ecos-docker-build:
     - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
     - docker tag $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
     - docker push $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
+    - export APP_NAME=ecos-client-exp
+    - docker build -f ecos-client-exp -t $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER .
+    - docker push  $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER
+    - docker tag $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BRANCH_NAME-$BUILD_NUMBER $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
+    - docker push $DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-latest
 
 deploy-job:      # This job runs in the deploy stage.
   stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
@@ -149,6 +156,8 @@ deploy-job:      # This job runs in the deploy stage.
     - kubectl apply -f ecos-cloud.yaml
     - kubectl delete -f ecos-client.yaml || true
     - kubectl apply -f ecos-client.yaml
+    - kubectl delete -f ecos-client-exp.yaml || true
+    - kubectl apply -f ecos-client-exp.yaml
     - sleep 10
     - kubectl delete -f ecos-edge.yaml || true
     - kubectl apply -f ecos-edge.yaml

@@ -77,14 +77,14 @@ func GenPipelines(clusterInfo infos.ClusterInfo, pgNum uint64, groupSize uint64)
 			continue
 		}
 		healthNodeNum += 1
-		rootNode.Children = append(rootNode.Children,
-			&infos.EcosNode{
-				NodeInfo: info,
-				Type:     infos.LeafNodeType,
-				Failed:   false,
-				Root:     rootNode,
-			},
-		)
+		node := &infos.EcosNode{
+			NodeInfo: info,
+			Type:     infos.LeafNodeType,
+			Failed:   false,
+			Root:     rootNode,
+		}
+		//node.Selector = gocrush.NewTreeSelector(node)
+		rootNode.Children = append(rootNode.Children, node)
 	}
 	if uint64(healthNodeNum) < groupSize {
 		return nil
