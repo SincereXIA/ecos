@@ -238,7 +238,7 @@ func (w *EcosWriter) Close() error {
 	w.Status = UPLOADING
 	for i := 0; i < w.blockCount; i++ {
 		block := <-w.finishedBlocks
-		logger.Debugf("block closed: %v", block.BlockId)
+		logger.Tracef("block closed: %v", block.BlockId)
 	}
 	err := w.commitMeta()
 	if err != nil {

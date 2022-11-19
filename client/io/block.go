@@ -208,7 +208,7 @@ func (b *Block) updateBlockInfo() error {
 	} else {
 		b.BlockInfo.BlockId = GenBlockId()
 	}
-	logger.Debugf("Gen block info success: %v", &b.BlockInfo)
+	logger.Tracef("Gen block info success: %v", &b.BlockInfo)
 	b.BlockInfo.PgId = GenBlockPG(&b.BlockInfo)
 	return nil
 }

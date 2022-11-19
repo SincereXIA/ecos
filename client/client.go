@@ -178,8 +178,9 @@ retry:
 				result = nil
 				goto retry
 			}
+		} else {
+			result = append(result, reply.Metas...)
 		}
-		result = append(result, reply.Metas...)
 	}
 	return result, nil
 }
