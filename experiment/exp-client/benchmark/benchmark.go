@@ -82,9 +82,12 @@ type MinioConnector struct {
 }
 
 func NewMinioConnector(ctx context.Context) *MinioConnector {
-	endpoint := "minio.sums.top"
-	accessKeyID := "kubesphere"
-	secretAccessKey := "mKKwuN6Y!G9"
+	//endpoint := "minio.sums.top"
+	//accessKeyID := "kubesphere"
+	//secretAccessKey := "mKKwuN6Y!G9"
+	endpoint := "192.168.7.141:45530"
+	accessKeyID := "VLQ24N15T0PYZL9CHQD6"
+	secretAccessKey := "DlG8CCPP7vKnskmHoY4aJBzUg5MWGUdaUIzFh7id"
 	c, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
 		Secure: false,
