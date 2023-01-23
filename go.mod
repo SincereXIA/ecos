@@ -22,7 +22,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jedib0t/go-pretty/v6 v6.3.0
 	github.com/mattn/go-isatty v0.0.14 // indirect
-	github.com/minio/minio-go/v7 v7.0.43 // indirect
+	github.com/minio/minio-go/v7 v7.0.43
 	github.com/minio/sha256-simd v1.0.0
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826

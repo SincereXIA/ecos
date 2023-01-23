@@ -47,11 +47,14 @@ func NewPrimaryCopyTransporter(ctx context.Context, info *object.BlockInfo, pipe
 		nodeInfo := getNodeInfo(clusterInfo, nodeID)
 		if nodeInfo == nil {
 			// TODO: return err
+			logger.Errorf("NodeInfo not found: %v", nodeID)
+			continue
 		}
 		var writer *RemoteWriter
 		writer, err = NewRemoteWriter(ctx, info, nodeInfo, pipeline)
 		if err != nil {
-			// TODO: return err
+			logger.Errorf("NewRemoteWriter err: %v", err)
+			return nil, err
 		}
 		remoteWriters = append(remoteWriters, writer)
 	}

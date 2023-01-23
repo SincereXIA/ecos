@@ -5,6 +5,7 @@ import (
 	"ecos/messenger/auth"
 	"ecos/messenger/config"
 	"ecos/utils/logger"
+	"errors"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
@@ -109,6 +110,9 @@ func GetRpcConn(addr string, port uint64) (*grpc.ClientConn, error) {
 func GetRpcConnByNodeInfo(info *infos.NodeInfo) (*grpc.ClientConn, error) {
 	addr := info.IpAddr
 	port := info.RpcPort
+	if info.State == infos.NodeState_OFFLINE {
+		return nil, errors.New("node offline")
+	}
 	return GetRpcConn(addr, port)
 }
 

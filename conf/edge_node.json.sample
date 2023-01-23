@@ -4,7 +4,7 @@
   "WatcherConfig": {
     "SunAddr": "ecos-cloud-dev:3267",
     "ClusterInfo": {},
-    "NodeInfoCommitInterval": 22000000000,
+    "NodeInfoCommitInterval": 14000000000,
     "PrometheusAddr": "http://gateway.prometheus.sums.top",
     "ClusterName": "ecos_k8s"
   },

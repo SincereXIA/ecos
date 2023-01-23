@@ -277,8 +277,10 @@ retry:
 			logger.Warningf("term not match, retry")
 			err = b.client.InfoAgent.UpdateCurClusterInfo()
 			if err != nil {
+				logger.Errorf("update cluster info err: %v", err.Error())
 				return err
 			}
+			logger.Infof("update cluster info ok: %v", b.client.InfoAgent.GetCurClusterInfo().Term)
 			goto retry
 		}
 		logger.Warningf("delete Meta: %v failed, err: %v", object.GenObjectId(b.bucketInfo, key), err)

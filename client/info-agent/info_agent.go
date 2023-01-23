@@ -105,9 +105,9 @@ func (agent *InfoAgent) GetInfoByCloud(infoType infos.InfoType, id string) (info
 
 // GetCurClusterInfo Returns current ClusterInfo
 func (agent *InfoAgent) GetCurClusterInfo() infos.ClusterInfo {
-	if agent.currentClusterInfo == nil || agent.currentClusterInfo.Term == 0 {
-		_ = agent.UpdateCurClusterInfo()
-	}
+	//if agent.currentClusterInfo == nil || agent.currentClusterInfo.Term == 0 {
+	_ = agent.UpdateCurClusterInfo()
+	//}
 	agent.mutex.RLock()
 	defer agent.mutex.RUnlock()
 	return *agent.currentClusterInfo
