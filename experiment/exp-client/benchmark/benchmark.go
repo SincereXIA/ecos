@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/rcrowley/go-metrics"
+	"github.com/shirou/gopsutil/v3/net"
 	"io"
 	"math/rand"
 	"time"
@@ -224,21 +225,62 @@ type Tester struct {
 	register *prometheus.Registry
 	registry metrics.Registry
 	sample   metrics.Sample
+
+	bytesWritten           metrics.Counter
+	bytesRead              metrics.Counter
+	bytesWrittenUpdateTime time.Time
+	bytesReadUpdateTime    time.Time
+
+	bytesSentLast uint64
+	bytesRecvLast uint64
+	lastTime      time.Time
+
+	networkSpeedTimer *time.Ticker
 }
 
 func NewTester(ctx context.Context, c Connector) *Tester {
 	ctx, cancel := context.WithCancel(ctx)
 
 	tester := &Tester{
-		ctx:    ctx,
-		c:      c,
-		cancel: cancel,
-		g:      &Generator{},
-		timer:  time.NewTicker(1 * time.Second),
-		sample: metrics.NewUniformSample(1000000),
+		ctx:               ctx,
+		c:                 c,
+		cancel:            cancel,
+		g:                 &Generator{},
+		timer:             time.NewTicker(1 * time.Second),
+		sample:            metrics.NewUniformSample(1000000),
+		networkSpeedTimer: time.NewTicker(1 * time.Second),
+		bytesWritten:      metrics.NewCounter(),
 	}
 	go tester.pushToPrometheus()
+	go tester.monitorNetwork()
 	return tester
+}
+
+func (t *Tester) monitorNetwork() {
+	for {
+		select {
+		case <-t.ctx.Done():
+			return
+		case <-t.networkSpeedTimer.C:
+			netStats, err := net.IOCountersWithContext(t.ctx, true)
+			if err != nil {
+				logger.Errorf("get network stats failed: %v", err)
+				continue
+			}
+			for _, stat := range netStats {
+				if stat.Name != "eth0" && stat.Name != "tun0" {
+					continue
+				}
+				sentDelta := stat.BytesSent - t.bytesSentLast
+				recvDelta := stat.BytesRecv - t.bytesRecvLast
+				t.bytesSentLast = stat.BytesSent
+				t.bytesRecvLast = stat.BytesRecv
+				metrics.GetOrRegisterGauge("uploadSpeed", t.registry).Update(int64(sentDelta))
+				metrics.GetOrRegisterGauge("downloadSpeed", t.registry).Update(int64(recvDelta))
+				logger.Debugf("network speed: %v kB/s %v kB/s", sentDelta/1024, recvDelta/1024)
+			}
+		}
+	}
 }
 
 func (t *Tester) pushToPrometheus() {
@@ -278,6 +320,8 @@ func (t *Tester) TestWritePerformance(size uint64) {
 		t.g.FillRandom(writeData)
 		start := time.Now()
 		_ = t.c.PutObject(objectName, writeData)
+		t.bytesWritten.Inc(int64(size))
+		t.bytesWrittenUpdateTime = time.Now()
 		spendTime := time.Since(start)
 		speed := float64(size) / spendTime.Seconds()
 		metrics.GetOrRegisterGaugeFloat64("ObjPutSpeed", t.registry).Update(speed)

@@ -94,7 +94,7 @@ var runPutCmd = &cobra.Command{
 		base := 1024 * 1024 // 1MB
 		sizeStr := args[0]
 		if sizeStr[len(sizeStr)-1] < '0' || sizeStr[len(sizeStr)-1] > '9' {
-			if sizeStr[len(sizeStr)-1] == 'K' {
+			if sizeStr[len(sizeStr)-1] == 'K' || sizeStr[len(sizeStr)-1] == 'k' {
 				base = 1024
 			}
 			sizeStr = sizeStr[:len(sizeStr)-1]
