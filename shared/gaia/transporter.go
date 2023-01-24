@@ -113,16 +113,22 @@ func (transporter *PrimaryCopyTransporter) Close() error {
 	return nil
 }
 
-func (transporter *PrimaryCopyTransporter) Delete() error {
+func (transporter *PrimaryCopyTransporter) Delete() (error, int64) {
 	localPath := transporter.GetStoragePath()
 	for _, remoteWriter := range transporter.remoteWriters {
 		err := remoteWriter.(*RemoteWriter).Delete()
 		if err != nil {
-			return err
+			return err, 0
 		}
 	}
-	err := os.Remove(localPath)
-	return err
+	file, err := os.Open(localPath)
+	if err != nil {
+		return err, 0
+	}
+	fi, _ := file.Stat()
+	fileSize := fi.Size()
+	err = os.Remove(localPath)
+	return err, fileSize
 }
 
 // RemoteWriter change byte flow to Gaia rpc request and send it.

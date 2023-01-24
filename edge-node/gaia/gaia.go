@@ -158,13 +158,14 @@ func (g *Gaia) DeleteBlock(_ context.Context, req *gaia.DeleteBlockRequest) (*co
 		logger.Errorf("new primary copy transporter failed, err: %v", err)
 		return nil, err
 	}
-	err = t.Delete()
+	err, blockSize := t.Delete()
 	if err != nil {
 		logger.Errorf("delete block failed, err: %v", err)
 		return nil, err
 	}
 	logger.Infof("delete block: %v success", req.BlockId)
 	metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Dec(1)
+	metrics.GetOrRegisterCounter("exp_gaia_size", nil).Dec(blockSize)
 	return &common.Result{Status: common.Result_OK}, nil
 }
 
@@ -254,6 +255,7 @@ func (g *Gaia) processControlMessage(message *gaia.UploadBlockRequest_Message, t
 		}
 		logger.Infof("Gaia %v save block: %v success", g.watcher.GetSelfInfo().RaftId, msg.Block.BlockId)
 		metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Inc(1)
+		metrics.GetOrRegisterCounter("exp_gaia_size", nil).Inc(int64(msg.Block.BlockSize))
 		return stream.SendAndClose(&common.Result{
 			Status: common.Result_OK,
 		})
