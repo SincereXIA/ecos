@@ -173,7 +173,15 @@ func WaitAllTestWatcherOK(watchers []*Watcher) {
 				logger.Debugf("WaitAllTestWatcherOK wait health node, node: %v", w.GetSelfInfo().RaftId)
 				break
 			}
-			logger.Debugf("WaitAllTestWatcherOK wait health node ok, node: %v", w.GetSelfInfo().RaftId)
+			for _, n := range healthNode {
+				if n.RaftId == w.GetSelfInfo().RaftId {
+					if n.IpAddr != w.GetSelfInfo().IpAddr || n.RpcPort != w.GetSelfInfo().RpcPort {
+						ok = false
+						logger.Debugf("WaitAllTestWatcherOK wait health node, node: %v", w.GetSelfInfo().RaftId)
+						break
+					}
+				}
+			}
 		}
 		if ok {
 			return

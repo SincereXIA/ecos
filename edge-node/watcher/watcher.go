@@ -23,16 +23,17 @@ import (
 // Watcher process edge-node join/leave cluster & maintain ClusterInfo.
 //
 // Night watcher swear：
-//   Night gathers, and now my watch begins. It shall not end until my death.
-//   I shall take no wife, hold no lands, father no children.
-//   I shall wear no crowns and win no glory.
-//   I shall live and die at my post.
-//   I am the sword in the darkness.
-//   I am the watcher on the walls.
-//   I am the fire that burns against the cold, the light that brings the dawn,
-//   the horn that wakes the sleepers, the shield that guards the realms of men.
-//   I pledge my life and honor to the Night’s Watch,
-//   for this night and all the nights to come.
+//
+//	Night gathers, and now my watch begins. It shall not end until my death.
+//	I shall take no wife, hold no lands, father no children.
+//	I shall wear no crowns and win no glory.
+//	I shall live and die at my post.
+//	I am the sword in the darkness.
+//	I am the watcher on the walls.
+//	I am the fire that burns against the cold, the light that brings the dawn,
+//	the horn that wakes the sleepers, the shield that guards the realms of men.
+//	I pledge my life and honor to the Night’s Watch,
+//	for this night and all the nights to come.
 type Watcher struct {
 	ctx          context.Context
 	selfNodeInfo *infos.NodeInfo
@@ -60,10 +61,10 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 	w.addNodeMutex.Lock()
 	defer w.addNodeMutex.Unlock()
 
-	flag := true
+	flag := true // 判断该请求是否合法
 	logger.Infof("add new node to cluster: %v", info.RaftId)
 
-	currentPeerInfos := w.getCurrentPeerInfo()
+	currentPeerInfos := w.GetCurrentPeerInfo()
 	for _, peerInfo := range currentPeerInfos {
 		if peerInfo.RaftId == info.RaftId {
 			flag = false
@@ -101,7 +102,7 @@ func (w *Watcher) AddNewNodeToCluster(_ context.Context, info *infos.NodeInfo) (
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
-		PeersNodeInfo: w.getCurrentPeerInfo(),
+		PeersNodeInfo: w.GetCurrentPeerInfo(),
 		LeaderInfo:    nil,
 	}, nil
 }
@@ -161,7 +162,8 @@ func (w *Watcher) GetCurrentTerm() uint64 {
 	return w.GetCurrentClusterInfo().Term
 }
 
-func (w *Watcher) getCurrentPeerInfo() []*infos.NodeInfo {
+// 获取所有对等点的信息，该信息保证通信节点真实有效
+func (w *Watcher) GetCurrentPeerInfo() []*infos.NodeInfo {
 	nodeInfoStorage := w.register.GetStorage(infos.InfoType_NODE_INFO)
 	nodeInfos, err := nodeInfoStorage.GetAll()
 	if err != nil {
@@ -228,7 +230,6 @@ func (w *Watcher) RequestJoinCluster(leaderInfo *infos.NodeInfo) error {
 		w.moon.Set(w.selfNodeInfo, leaderInfo, nil)
 		return nil
 	}
-
 	conn, err := messenger.GetRpcConnByNodeInfo(leaderInfo)
 	if err != nil {
 		logger.Errorf("Request Join group err: %v", err.Error())

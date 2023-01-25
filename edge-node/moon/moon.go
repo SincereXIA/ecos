@@ -90,23 +90,35 @@ func (m *Moon) ProposeInfo(ctx context.Context, request *moon.ProposeInfoRequest
 		logger.Errorf("receive unmarshalled propose info request: %v", request.Id)
 		return nil, err
 	}
-
-	// 注册
-	ch := m.w.Register(opID)
-	m.raft.ProposeC <- data
-
-	// wait propose apply
-	select {
-	case <-ch:
+	if request.BaseInfo.GetInfoType() == infos.InfoType_NODE_INFO {
+		m.NodeInfoChanged(request.BaseInfo.GetNodeInfo())
+		m.raft.ProposeC <- data
 		logger.Infof("propose info request: %v SUCCESS", request.Id)
+		return &moon.ProposeInfoReply{
+			Result: &common.Result{
+				Status: 0,
+			},
+			LeaderInfo: nil,
+		}, err
+	} else {
+		// 注册
+		ch := m.w.Register(opID)
+		m.raft.ProposeC <- data
+
+		// wait propose apply
+		select {
+		case <-ch:
+			logger.Infof("propose info request: %v SUCCESS", request.Id)
+		}
+
+		return &moon.ProposeInfoReply{
+			Result: &common.Result{
+				Status: 0,
+			},
+			LeaderInfo: nil,
+		}, err
 	}
 
-	return &moon.ProposeInfoReply{
-		Result: &common.Result{
-			Status: 0,
-		},
-		LeaderInfo: nil,
-	}, err
 }
 
 func (m *Moon) loadSnapshot() (*raftpb.Snapshot, error) {
@@ -252,6 +264,7 @@ func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raf
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	if m.raft == nil {
+		logger.Errorf("moon %d: raft is not ready", m.id)
 		return nil, errors.New("moon" + strconv.FormatUint(m.id, 10) + ": raft is not ready")
 	}
 
@@ -350,6 +363,7 @@ func (m *Moon) IsLeader() bool {
 	return m.raft.Node.Status().Lead == m.id
 }
 
+// Set  初始化内部 raft 节点
 func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.NodeInfo) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -380,8 +394,10 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 		}
 	}
 	readyC := make(chan bool)
+	logger.Infof("raft node %d start creat", m.id)
 	snapshotterReady, raftNode := eraft.NewRaftNode(int(m.id), m.ctx, peers, m.config.RaftStoragePath, readyC, m.infoStorageRegister.GetSnapshot)
 	m.raft = raftNode
+	logger.Infof("raft node %d creat success", m.id)
 	m.nodeReady = <-readyC
 	m.snapshotter = <-snapshotterReady
 }

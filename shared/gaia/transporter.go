@@ -71,6 +71,7 @@ func (transporter *PrimaryCopyTransporter) init() error {
 	// 创建本地 writer
 	blockPath := transporter.GetStoragePath()
 	_ = common.InitParentPath(blockPath)
+	logger.Debugf("Gaia: create localWriter: %v", blockPath)
 	localWriter, err := os.Create(blockPath)
 	bufferedWriter := bufio.NewWriter(localWriter)
 	if err != nil {

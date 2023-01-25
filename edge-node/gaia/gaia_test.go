@@ -27,7 +27,7 @@ func TestNewGaia(t *testing.T) {
 	watchers, rpcServers, _ := watcher.GenTestWatcherCluster(ctx, basePath, nodeNum)
 
 	for i := 0; i < 5; i++ {
-		basePaths = append(basePaths, "./ecos-data/gaia-"+strconv.Itoa(i))
+		basePaths = append(basePaths, "./ecos-data/gaia-"+strconv.Itoa(i+1))
 	}
 
 	for i := 0; i < 5; i++ {
@@ -55,7 +55,6 @@ func TestNewGaia(t *testing.T) {
 	})
 
 	watcher.WaitAllTestWatcherOK(watchers)
-
 	pipelines := pipeline.GenPipelines(watchers[0].GetCurrentClusterInfo(), 10, 3)
 
 	// Test upload blocks
@@ -198,8 +197,9 @@ func assertFilesOK(t *testing.T, blockID string, fileSize uint64, p *pipeline.Pi
 				t.Errorf("path not exist: %v", filePath)
 			}
 			t.Errorf("path not ok: %v", filePath)
-			return
+			continue
 		}
+		t.Logf("ok: %v", filePath)
 		assert.Equal(t, fileSize, uint64(stat.Size()), "file size should be equal")
 	}
 }
