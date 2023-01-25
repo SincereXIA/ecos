@@ -44,7 +44,8 @@ type Moon struct {
 	cancel    context.CancelFunc
 	nodeReady bool // Channels communication between Moon and Raft module
 
-	infoMap  map[uint64]*infos.NodeInfo
+	//infoMap  map[uint64]*infos.NodeInfo
+	infoMap  sync.Map
 	leaderID uint64 // 注册时的 leader 信息
 
 	infoStorageRegister *infos.StorageRegister
@@ -257,7 +258,7 @@ func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.Nod
 }
 
 func (m *Moon) NodeInfoChanged(nodeInfo *infos.NodeInfo) {
-	m.infoMap[nodeInfo.RaftId] = nodeInfo
+	m.infoMap.Store(nodeInfo.RaftId, nodeInfo)
 }
 
 func (m *Moon) SendRaftMessage(_ context.Context, message *raftpb.Message) (*raftpb.Message, error) {
@@ -284,7 +285,7 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 		ctx:                  ctx,
 		cancel:               cancel,
 		mutex:                sync.RWMutex{},
-		infoMap:              make(map[uint64]*infos.NodeInfo),
+		infoMap:              sync.Map{},
 		config:               config,
 		status:               StatusInit,
 		infoStorageRegister:  register,
@@ -300,10 +301,10 @@ func NewMoon(ctx context.Context, selfInfo *infos.NodeInfo, config *Config, rpcS
 	moon.RegisterMoonServer(rpcServer, m)
 
 	if leaderInfo != nil {
-		m.infoMap[leaderInfo.RaftId] = leaderInfo
+		m.infoMap.Store(leaderInfo.RaftId, leaderInfo)
 	}
 	for _, info := range config.ClusterInfo.NodesInfo {
-		m.infoMap[info.RaftId] = info
+		m.infoMap.Store(info.RaftId, info)
 	}
 
 	return m
@@ -324,14 +325,14 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 
 		// get node info
 		var nodeInfo *infos.NodeInfo
-		var ok bool
 		select {
 		case <-m.ctx.Done():
 			logger.Warningf("moon %d: context is done", m.id)
 			return
 		default:
 		}
-		if nodeInfo, ok = m.infoMap[message.To]; !ok { // infoMap always have latest
+		if value, ok := m.infoMap.Load(message.To); !ok { // infoMap always have latest
+			nodeInfo = value.(*infos.NodeInfo)
 			storage := m.infoStorageRegister.GetStorage(infos.InfoType_NODE_INFO)
 			info, err := storage.Get(strconv.FormatUint(message.To, 10))
 			if err != nil {
@@ -370,17 +371,17 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 	m.status = StatusRegistering
 	m.SelfInfo = selfInfo
 	for _, nodeInfo := range peersInfo {
-		m.infoMap[nodeInfo.RaftId] = nodeInfo
+		m.infoMap.Store(nodeInfo.RaftId, nodeInfo)
 	}
 	if leaderInfo != nil { // leader info is the highest priority
-		m.infoMap[leaderInfo.RaftId] = leaderInfo
+		m.infoMap.Store(leaderInfo.RaftId, leaderInfo)
 	}
 
 	m.id = m.SelfInfo.RaftId
 
 	var peers []raft.Peer
 
-	m.infoMap[m.SelfInfo.RaftId] = m.SelfInfo
+	m.infoMap.Store(m.SelfInfo.RaftId, m.SelfInfo)
 
 	logger.Tracef("leaderInfo: %v", leaderInfo)
 
@@ -389,9 +390,10 @@ func (m *Moon) Set(selfInfo, leaderInfo *infos.NodeInfo, peersInfo []*infos.Node
 			{ID: leaderInfo.RaftId},
 		}
 	} else {
-		for _, nodeInfo := range m.infoMap {
-			peers = append(peers, raft.Peer{ID: nodeInfo.RaftId})
-		}
+		m.infoMap.Range(func(key, value interface{}) bool {
+			peers = append(peers, raft.Peer{ID: value.(*infos.NodeInfo).RaftId})
+			return true
+		})
 	}
 	readyC := make(chan bool)
 	logger.Infof("raft node %d start creat", m.id)
