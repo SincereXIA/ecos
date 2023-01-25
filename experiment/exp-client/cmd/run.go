@@ -19,9 +19,13 @@ var runCmd = &cobra.Command{
 	Use:   "run {put | get | benchmark}",
 	Short: "run exp client",
 	Long:  `Run exp client with default configuration.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		benchmark.NetWorkTimeInterval = time.Duration(timeInterval) * time.Second
+	},
 }
 
 var THREAD_NUM = 8
+var timeInterval = 1
 
 var benchmarkCmd = &cobra.Command{
 	Use: "benchmark",
@@ -137,5 +141,6 @@ func init() {
 	runCmd.AddCommand(benchmarkCmd)
 
 	runCmd.PersistentFlags().IntVarP(&THREAD_NUM, "thread num", "j", 1, "number of test threads")
+	runCmd.PersistentFlags().IntVarP(&timeInterval, "network status interval", "i", 5, "interval of network status report")
 	logger.Logger.SetLevel(logrus.InfoLevel)
 }

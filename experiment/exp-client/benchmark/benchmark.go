@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+var NetWorkTimeInterval = 5 * time.Second // seconds
+
 type Generator struct {
 }
 
@@ -249,7 +251,7 @@ func NewTester(ctx context.Context, c Connector) *Tester {
 		g:                 &Generator{},
 		timer:             time.NewTicker(1 * time.Second),
 		sample:            metrics.NewUniformSample(1000000),
-		networkSpeedTimer: time.NewTicker(5 * time.Second),
+		networkSpeedTimer: time.NewTicker(NetWorkTimeInterval),
 		bytesWritten:      metrics.NewCounter(),
 	}
 	go tester.pushToPrometheus()
@@ -276,8 +278,8 @@ func (t *Tester) monitorNetwork() {
 				recvDelta := stat.BytesRecv - t.bytesRecvLast
 				t.bytesSentLast = stat.BytesSent
 				t.bytesRecvLast = stat.BytesRecv
-				sendSpeed := float64(sentDelta) / 5
-				recvSpeed := float64(recvDelta) / 5
+				sendSpeed := float64(sentDelta) / NetWorkTimeInterval.Seconds()
+				recvSpeed := float64(recvDelta) / NetWorkTimeInterval.Seconds()
 				metrics.GetOrRegisterGauge("uploadSpeed", t.registry).Update(int64(sendSpeed))
 				metrics.GetOrRegisterGauge("downloadSpeed", t.registry).Update(int64(recvSpeed))
 				logger.Infof("network speed: %v kB/s %v kB/s", sendSpeed/1024, recvSpeed/1024)
