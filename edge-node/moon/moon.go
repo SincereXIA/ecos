@@ -331,7 +331,10 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 			return
 		default:
 		}
-		if value, ok := m.infoMap.Load(message.To); !ok { // infoMap always have latest
+
+		var value interface{}
+		var ok bool
+		if value, ok = m.infoMap.Load(message.To); !ok { // infoMap always have latest
 			nodeInfo = value.(*infos.NodeInfo)
 			storage := m.infoStorageRegister.GetStorage(infos.InfoType_NODE_INFO)
 			info, err := storage.Get(strconv.FormatUint(message.To, 10))
@@ -341,6 +344,8 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 			}
 			nodeInfo = info.BaseInfo().GetNodeInfo()
 		}
+
+		nodeInfo = value.(*infos.NodeInfo)
 
 		conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo)
 		if err != nil {
