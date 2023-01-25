@@ -16,12 +16,11 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
-	github.com/google/go-cmp v0.5.7
+	github.com/google/go-cmp v0.5.8
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jedib0t/go-pretty/v6 v6.3.0
-	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/minio/minio-go/v7 v7.0.43
 	github.com/minio/sha256-simd v1.0.0
 	github.com/mitchellh/copystructure v1.2.0
@@ -33,17 +32,18 @@ require (
 	github.com/shirou/gopsutil/v3 v3.22.3
 	github.com/sincerexia/gocrush v0.0.0-20220213012034-a24f00a6eb8e
 	github.com/sirupsen/logrus v1.9.0
+	github.com/sourcegraph/conc v0.2.0
 	github.com/spf13/cobra v1.4.0
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.1
 	github.com/twmb/murmur3 v1.1.6
 	github.com/wxnacy/wgo v1.0.4
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2
 	go.etcd.io/etcd/pkg/v3 v3.5.2
 	go.etcd.io/etcd/raft/v3 v3.5.2
 	go.etcd.io/etcd/server/v3 v3.5.2
-	go.uber.org/zap v1.17.0
+	go.uber.org/zap v1.23.0
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
-	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
+	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
 	google.golang.org/grpc v1.45.0
 	google.golang.org/protobuf v1.28.0
 )

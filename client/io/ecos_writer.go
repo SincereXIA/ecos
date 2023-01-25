@@ -356,8 +356,9 @@ retry:
 // addPartID will ordinal insert partID to EcosWriter.partIDs to form an increasing order
 //
 // Returns:
-// 		true:  if partID NOT in EcosWriter.partIDs
-// 		false: if partID IS  in EcosWriter.partIDs
+//
+//	true:  if partID NOT in EcosWriter.partIDs
+//	false: if partID IS  in EcosWriter.partIDs
 func (w *EcosWriter) addPartID(partID int32) bool {
 	for i, id := range w.partIDs {
 		if partID == id {
@@ -626,7 +627,7 @@ retry:
 		logger.Errorf("Upload Object Failed: %v with Error %v", result, err)
 		return err
 	}
-	logger.Infof("Upload ObjectMeta for %v: success", w.key)
+	logger.Debugf("Upload ObjectMeta for %v: success", w.key)
 	return nil
 }
 

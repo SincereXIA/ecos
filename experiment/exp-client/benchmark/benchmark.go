@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/rcrowley/go-metrics"
 	"github.com/shirou/gopsutil/v3/net"
+	"github.com/sourcegraph/conc/pool"
 	"io"
 	"math/rand"
 	"time"
@@ -248,7 +249,7 @@ func NewTester(ctx context.Context, c Connector) *Tester {
 		g:                 &Generator{},
 		timer:             time.NewTicker(1 * time.Second),
 		sample:            metrics.NewUniformSample(1000000),
-		networkSpeedTimer: time.NewTicker(1 * time.Second),
+		networkSpeedTimer: time.NewTicker(5 * time.Second),
 		bytesWritten:      metrics.NewCounter(),
 	}
 	go tester.pushToPrometheus()
@@ -275,9 +276,11 @@ func (t *Tester) monitorNetwork() {
 				recvDelta := stat.BytesRecv - t.bytesRecvLast
 				t.bytesSentLast = stat.BytesSent
 				t.bytesRecvLast = stat.BytesRecv
-				metrics.GetOrRegisterGauge("uploadSpeed", t.registry).Update(int64(sentDelta))
-				metrics.GetOrRegisterGauge("downloadSpeed", t.registry).Update(int64(recvDelta))
-				logger.Debugf("network speed: %v kB/s %v kB/s", sentDelta/1024, recvDelta/1024)
+				sendSpeed := float64(sentDelta) / 5
+				recvSpeed := float64(recvDelta) / 5
+				metrics.GetOrRegisterGauge("uploadSpeed", t.registry).Update(int64(sendSpeed))
+				metrics.GetOrRegisterGauge("downloadSpeed", t.registry).Update(int64(recvSpeed))
+				logger.Infof("network speed: %v kB/s %v kB/s", sendSpeed/1024, recvSpeed/1024)
 			}
 		}
 	}
@@ -306,29 +309,35 @@ func (t *Tester) pushToPrometheus() {
 	}
 }
 
-func (t *Tester) TestWritePerformance(size uint64) {
+func (t *Tester) TestWritePerformance(size uint64, threadNum int) {
+	logger.Infof("!! start write performance test, size: %v, threadNum: %v", size, threadNum)
 	writeData := t.g.Generate(size)
+	taskPoolSize := threadNum
+	p := pool.New().WithMaxGoroutines(taskPoolSize)
 	for {
 		select {
 		case <-t.ctx.Done():
 			return
 		default:
 		}
-		// 生成随机对象名
-		objectName := "test" + string(genTestData(10))
-		// 生成随机数据
-		t.g.FillRandom(writeData)
-		start := time.Now()
-		_ = t.c.PutObject(objectName, writeData)
-		t.bytesWritten.Inc(int64(size))
-		t.bytesWrittenUpdateTime = time.Now()
-		spendTime := time.Since(start)
-		speed := float64(size) / spendTime.Seconds()
-		metrics.GetOrRegisterGaugeFloat64("ObjPutSpeed", t.registry).Update(speed)
-		metrics.GetOrRegisterHistogram("ObjPutSpeedHistogram", t.registry, t.sample).Update(int64(speed))
-		metrics.GetOrRegisterGaugeFloat64("ObjPutTime", t.registry).Update(float64(spendTime.Milliseconds()))
-		metrics.GetOrRegisterCounter("ObjPutCount", t.registry).Inc(int64(size))
-		logger.Infof("write object %v spend %v", objectName, spendTime)
+		p.Go(func() {
+			// 生成随机对象名
+			logger.Tracef("start write performance test")
+			objectName := "test" + string(genTestData(10))
+			// 生成随机数据
+			t.g.FillRandom(writeData)
+			start := time.Now()
+			_ = t.c.PutObject(objectName, writeData)
+			t.bytesWritten.Inc(int64(size))
+			t.bytesWrittenUpdateTime = time.Now()
+			spendTime := time.Since(start)
+			speed := float64(size) / spendTime.Seconds()
+			metrics.GetOrRegisterGaugeFloat64("ObjPutSpeed", t.registry).Update(speed)
+			metrics.GetOrRegisterHistogram("ObjPutSpeedHistogram", t.registry, t.sample).Update(int64(speed))
+			metrics.GetOrRegisterGaugeFloat64("ObjPutTime", t.registry).Update(float64(spendTime.Milliseconds()))
+			metrics.GetOrRegisterCounter("ObjPutCount", t.registry).Inc(int64(size))
+			logger.Infof("write object %v spend %v", objectName, spendTime)
+		})
 	}
 }
 

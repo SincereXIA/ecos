@@ -139,7 +139,7 @@ func (b *Block) uploadByStream(stream gaia.Gaia_UploadBlockDataClient) error {
 		logger.Errorf("Incompatible size: Chunks: %v, Block: %v", byteCount, b.BlockSize)
 		return errors.New("incompatible upload size")
 	}
-	logger.Infof("Sent %v bytes in block: %v ", byteCount, b.BlockInfo.BlockId)
+	//logger.Infof("Sent %v bytes in block: %v ", byteCount, b.BlockInfo.BlockId)
 	// End Upload by ControlMessage with Code EOF
 	end := &gaia.UploadBlockRequest{
 		Payload: &gaia.UploadBlockRequest_Message{
@@ -151,7 +151,7 @@ func (b *Block) uploadByStream(stream gaia.Gaia_UploadBlockDataClient) error {
 			},
 		},
 	}
-	logger.Infof("PG: %v, NODE: %v", b.PgId, pipe.RaftId)
+	logger.Debugf("PG: %v, NODE: %v", b.PgId, pipe.RaftId)
 	err = stream.Send(end)
 	if err != nil && err != io.EOF {
 		logger.Errorf("uploadBlock send EOF error: %v", err)
@@ -162,7 +162,7 @@ func (b *Block) uploadByStream(stream gaia.Gaia_UploadBlockDataClient) error {
 		logger.Errorf("Unable to get result form server: %v", err)
 		return err
 	} else {
-		logger.Infof("Block upload success")
+		logger.Debugf("Block upload success")
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"ecos/experiment/exp-client/benchmark"
 	configUtil "ecos/utils/config"
 	"ecos/utils/logger"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"os"
 	"os/signal"
@@ -19,6 +20,8 @@ var runCmd = &cobra.Command{
 	Short: "run exp client",
 	Long:  `Run exp client with default configuration.`,
 }
+
+var THREAD_NUM = 8
 
 var benchmarkCmd = &cobra.Command{
 	Use: "benchmark",
@@ -51,7 +54,7 @@ var benchmarkCmd = &cobra.Command{
 
 			tester := benchmark.NewTester(ctx, connector)
 			connector.Clear()
-			go tester.TestWritePerformance(size)
+			go tester.TestWritePerformance(size, THREAD_NUM)
 			time.Sleep(10 * time.Second)
 			tester.Stop()
 			writePerformance = append(writePerformance, tester.GetMean())
@@ -102,7 +105,7 @@ var runPutCmd = &cobra.Command{
 		size, _ := strconv.Atoi(sizeStr)
 		size *= base
 
-		go tester.TestWritePerformance(uint64(size))
+		go tester.TestWritePerformance(uint64(size), THREAD_NUM)
 		WaitSignal()
 		logger.Infof("Test finished")
 		tester.Stop()
@@ -132,4 +135,7 @@ func init() {
 	runCmd.AddCommand(runPutCmd)
 	runCmd.AddCommand(runGetCmd)
 	runCmd.AddCommand(benchmarkCmd)
+
+	runCmd.PersistentFlags().IntVarP(&THREAD_NUM, "thread num", "j", 1, "number of test threads")
+	logger.Logger.SetLevel(logrus.InfoLevel)
 }
