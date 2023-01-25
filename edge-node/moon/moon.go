@@ -234,18 +234,14 @@ func (m *Moon) ProposeConfChangeAddNode(ctx context.Context, nodeInfo *infos.Nod
 		Context: data,
 	}
 
-	// TODO: add time out
-	for {
-		select {
-		case <-m.appliedConfErrorChan:
-			// TODO:
-			return nil
-		case <-m.raft.ApplyConfChangeC:
-			// TODO:
-			return nil
-		}
+	ch := m.w.Register((1 << 8) + nodeInfo.RaftId)
+	timer := time.NewTimer(time.Second * 10)
+	select {
+	case <-ch:
+		return nil
+	case <-timer.C:
+		return errors.New("add node timeout")
 	}
-	return nil
 }
 
 func (m *Moon) NodeInfoChanged(nodeInfo *infos.NodeInfo) {
@@ -340,7 +336,6 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		c := moon.NewMoonClient(conn)
 		_, err = c.SendRaftMessage(m.ctx, &message)
 		if err != nil {
-			m.appliedConfErrorChan <- err
 			logger.Warningf("could not send raft message: %v", err)
 		}
 	}
@@ -410,8 +405,9 @@ func (m *Moon) Run() {
 			return
 		case msgs := <-m.raft.CommunicationC:
 			go m.sendByRpc(msgs)
-		case <-m.raft.ApplyConfChangeC:
-			// DO NOTHING
+		case cc := <-m.raft.ApplyConfChangeC:
+			// 触发通知，该 conf change 已经被 apply
+			go m.w.Trigger((1<<8)+cc.NodeID, struct{}{})
 		}
 	}
 }
