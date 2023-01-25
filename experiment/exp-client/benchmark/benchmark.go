@@ -15,9 +15,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/rcrowley/go-metrics"
 	"github.com/shirou/gopsutil/v3/net"
-	"github.com/sourcegraph/conc/pool"
 	"io"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -318,16 +318,17 @@ func (t *Tester) TestWritePerformance(size uint64, threadNum int) {
 	logger.Infof("!! start write performance test, size: %v, threadNum: %v", size, threadNum)
 	writeData := t.g.Generate(size)
 	taskPoolSize := threadNum
-	p := pool.New().WithMaxGoroutines(taskPoolSize)
-	for {
-		select {
-		case <-t.ctx.Done():
-			return
-		default:
-		}
-		p.Go(func() {
+	wg := sync.WaitGroup{}
+	f := func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-t.ctx.Done():
+				return
+			default:
+			}
 			// 生成随机对象名
-			logger.Tracef("start write performance test")
+			logger.Infof("start write performance test")
 			objectName := "test" + string(genTestData(10))
 			// 生成随机数据
 			t.g.FillRandom(writeData)
@@ -342,8 +343,13 @@ func (t *Tester) TestWritePerformance(size uint64, threadNum int) {
 			metrics.GetOrRegisterGaugeFloat64("ObjPutTime", t.registry).Update(float64(spendTime.Milliseconds()))
 			metrics.GetOrRegisterCounter("ObjPutCount", t.registry).Inc(int64(size))
 			logger.Infof("write object %v spend %v", objectName, spendTime)
-		})
+		}
 	}
+	for i := 0; i < taskPoolSize; i++ {
+		go f()
+		wg.Add(1)
+	}
+	wg.Wait()
 }
 
 func (t *Tester) TestReadPerformance() {
