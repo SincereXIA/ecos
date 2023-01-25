@@ -276,13 +276,16 @@ func (t *Tester) monitorNetwork() {
 				}
 				sentDelta := stat.BytesSent - t.bytesSentLast
 				recvDelta := stat.BytesRecv - t.bytesRecvLast
+				valid := t.bytesSentLast != 0 || t.bytesRecvLast != 0
 				t.bytesSentLast = stat.BytesSent
 				t.bytesRecvLast = stat.BytesRecv
 				sendSpeed := float64(sentDelta) / NetWorkTimeInterval.Seconds()
 				recvSpeed := float64(recvDelta) / NetWorkTimeInterval.Seconds()
-				metrics.GetOrRegisterGauge("uploadSpeed", t.registry).Update(int64(sendSpeed))
-				metrics.GetOrRegisterGauge("downloadSpeed", t.registry).Update(int64(recvSpeed))
-				logger.Infof("network speed: %v kB/s %v kB/s", sendSpeed/1024, recvSpeed/1024)
+				if valid {
+					metrics.GetOrRegisterGauge("uploadSpeed", t.registry).Update(int64(sendSpeed))
+					metrics.GetOrRegisterGauge("downloadSpeed", t.registry).Update(int64(recvSpeed))
+					logger.Infof("network speed: %v kB/s %v kB/s", sendSpeed/1024, recvSpeed/1024)
+				}
 			}
 		}
 	}
