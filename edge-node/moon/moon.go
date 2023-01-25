@@ -335,7 +335,6 @@ func (m *Moon) sendByRpc(messages []raftpb.Message) {
 		var value interface{}
 		var ok bool
 		if value, ok = m.infoMap.Load(message.To); !ok { // infoMap always have latest
-			nodeInfo = value.(*infos.NodeInfo)
 			storage := m.infoStorageRegister.GetStorage(infos.InfoType_NODE_INFO)
 			info, err := storage.Get(strconv.FormatUint(message.To, 10))
 			if err != nil {
