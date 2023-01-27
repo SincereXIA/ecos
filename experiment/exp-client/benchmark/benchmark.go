@@ -32,7 +32,8 @@ func (g *Generator) Generate(size uint64) []byte {
 }
 
 func (g *Generator) FillRandom(data []byte) {
-	directSize := 1024 * 1024 * 10
+	directSize := 1024
+
 	for i := 0; i < directSize && i < len(data); i++ {
 		if i%100 == 0 {
 			data[i] = '\n'
@@ -50,7 +51,7 @@ func (g *Generator) FillRandom(data []byte) {
 }
 
 func genTestData(size int) []byte {
-	directSize := 1024 * 1024 * 10
+	directSize := 1024
 	if size < directSize {
 		data := make([]byte, size)
 		for idx := range data {
@@ -316,7 +317,8 @@ func (t *Tester) pushToPrometheus() {
 
 func (t *Tester) TestWritePerformance(size uint64, threadNum int) {
 	logger.Infof("!! start write performance test, size: %v, threadNum: %v", size, threadNum)
-	writeData := t.g.Generate(size)
+	data := make([]byte, size)
+	t.g.FillRandom(data)
 	taskPoolSize := threadNum
 	wg := sync.WaitGroup{}
 	f := func() {
@@ -331,9 +333,12 @@ func (t *Tester) TestWritePerformance(size uint64, threadNum int) {
 			logger.Infof("start write performance test")
 			objectName := "test" + string(genTestData(10))
 			// 生成随机数据
-			t.g.FillRandom(writeData)
 			start := time.Now()
-			_ = t.c.PutObject(objectName, writeData)
+			t.g.FillRandom(data)
+			logger.Infof("fill random data spend %v", time.Since(start))
+			start = time.Now()
+
+			_ = t.c.PutObject(objectName, data)
 			t.bytesWritten.Inc(int64(size))
 			t.bytesWrittenUpdateTime = time.Now()
 			spendTime := time.Since(start)
@@ -347,6 +352,7 @@ func (t *Tester) TestWritePerformance(size uint64, threadNum int) {
 	}
 	for i := 0; i < taskPoolSize; i++ {
 		go f()
+		time.Sleep(time.Second)
 		wg.Add(1)
 	}
 	wg.Wait()
