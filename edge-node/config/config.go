@@ -27,6 +27,7 @@ type Config struct {
 	AlayaConfig   alaya.Config
 	GaiaConfig    gaia.Config
 	GatewayConfig router.Config
+	SharedConfig  *config.SharedConfig
 }
 
 var DefaultConfig Config
@@ -42,6 +43,7 @@ func init() {
 		StoragePath:   "./ecos-data",
 		GaiaConfig:    gaia.DefaultConfig,
 		GatewayConfig: router.DefaultConfig,
+		SharedConfig:  config.GlobalSharedConfig,
 	}
 	DefaultConfig.WatcherConfig.SelfNodeInfo.RpcPort = rpcPort
 	DefaultConfig.WatcherConfig.SelfNodeInfo.IpAddr = ipAddr

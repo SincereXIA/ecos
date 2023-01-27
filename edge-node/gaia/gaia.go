@@ -10,13 +10,16 @@ import (
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/shared/gaia"
+	configUtil "ecos/utils/config"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"github.com/rcrowley/go-metrics"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -291,6 +294,7 @@ func (g *Gaia) processChunk(chunk *gaia.UploadBlockRequest_Chunk, transporter *g
 
 func NewGaia(ctx context.Context, rpcServer *messenger.RpcServer, watcher *watcher.Watcher,
 	config *Config) *Gaia {
+
 	ctx, cancel := context.WithCancel(ctx)
 	g := Gaia{
 		ctx:     ctx,
@@ -299,9 +303,14 @@ func NewGaia(ctx context.Context, rpcServer *messenger.RpcServer, watcher *watch
 		config:  config,
 	}
 	gaia.RegisterGaiaServer(rpcServer, &g)
-	//err := watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO, "gaia"+strconv.Itoa(rand.Int()), g.transformBlocks)
-	//if err != nil {
-	//	return nil
-	//}
+
+	if configUtil.GlobalSharedConfig.Behave == configUtil.BehaveCeph {
+		logger.Warningf("Gaia behave as ceph, register transformBlocks func")
+		err := watcher.SetOnInfoUpdate(infos.InfoType_CLUSTER_INFO, "gaia"+strconv.Itoa(rand.Int()), g.transformBlocks)
+		if err != nil {
+			return nil
+		}
+	}
+
 	return &g
 }

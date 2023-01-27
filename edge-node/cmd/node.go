@@ -11,7 +11,6 @@ import (
 	"ecos/edge-node/watcher"
 	gateway "ecos/gateway/router"
 	"ecos/messenger"
-	alaya2 "ecos/shared/alaya"
 	configUtil "ecos/utils/config"
 	"ecos/utils/logger"
 	"github.com/gin-gonic/gin"
@@ -19,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"strconv"
 	"syscall"
 	"time"
@@ -57,6 +57,9 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Print config
+	logger.Infof("[Conf] behave: ", conf.Behave)
+
 	// Gen Rpc
 	rpc := messenger.NewRpcServer(conf.WatcherConfig.SelfNodeInfo.RpcPort)
 
@@ -71,10 +74,10 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 
 	// Gen Alaya
 	logger.Infof("Start init Alaya ...")
-	//dbBasePath := path.Join(conf.StoragePath, "/db")
-	//metaDBPath := path.Join(dbBasePath, "/meta")
-	//metaStorage := alaya.NewStableMetaStorage(metaDBPath)
-	metaStorageRegister := alaya2.NewMemoryMetaStorageRegister()
+	dbBasePath := path.Join(conf.StoragePath, "/db")
+	metaDBPath := path.Join(dbBasePath, "/meta")
+	metaStorageRegister, err := alaya.NewRocksDBMetaStorageRegister(metaDBPath)
+	//metaStorageRegister := alaya2.NewMemoryMetaStorageRegister()
 	a := alaya.NewAlaya(ctx, w, &conf.AlayaConfig, metaStorageRegister, rpc)
 
 	// Gen Gaia
