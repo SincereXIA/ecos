@@ -221,14 +221,15 @@ type EcosTester struct {
 }
 
 type Tester struct {
-	ctx      context.Context
-	g        *Generator
-	c        Connector
-	cancel   context.CancelFunc
-	timer    *time.Ticker
-	register *prometheus.Registry
-	registry metrics.Registry
-	sample   metrics.Sample
+	ctx            context.Context
+	g              *Generator
+	c              Connector
+	cancel         context.CancelFunc
+	timer          *time.Ticker
+	register       *prometheus.Registry
+	registry       metrics.Registry
+	sample         metrics.Sample
+	eachObjectSame bool
 
 	bytesWritten           metrics.Counter
 	bytesRead              metrics.Counter
@@ -242,7 +243,7 @@ type Tester struct {
 	networkSpeedTimer *time.Ticker
 }
 
-func NewTester(ctx context.Context, c Connector) *Tester {
+func NewTester(ctx context.Context, c Connector, same bool) *Tester {
 	ctx, cancel := context.WithCancel(ctx)
 
 	tester := &Tester{
@@ -254,6 +255,7 @@ func NewTester(ctx context.Context, c Connector) *Tester {
 		sample:            metrics.NewUniformSample(1000000),
 		networkSpeedTimer: time.NewTicker(NetWorkTimeInterval),
 		bytesWritten:      metrics.NewCounter(),
+		eachObjectSame:    same,
 	}
 	go tester.pushToPrometheus()
 	go tester.monitorNetwork()
@@ -334,8 +336,10 @@ func (t *Tester) TestWritePerformance(size uint64, threadNum int) {
 			objectName := "test" + string(genTestData(10))
 			// 生成随机数据
 			start := time.Now()
-			t.g.FillRandom(data)
-			logger.Infof("fill random data spend %v", time.Since(start))
+			if t.eachObjectSame == false {
+				t.g.FillRandom(data)
+				logger.Infof("fill random data spend %v", time.Since(start))
+			}
 			start = time.Now()
 
 			_ = t.c.PutObject(objectName, data)

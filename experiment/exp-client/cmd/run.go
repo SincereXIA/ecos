@@ -26,6 +26,7 @@ var runCmd = &cobra.Command{
 
 var THREAD_NUM = 8
 var timeInterval = 1
+var eachObjectSame = true
 
 var benchmarkCmd = &cobra.Command{
 	Use: "benchmark",
@@ -56,7 +57,7 @@ var benchmarkCmd = &cobra.Command{
 				connector = benchmark.NewEcosConnector(ctx, &conf)
 			}
 
-			tester := benchmark.NewTester(ctx, connector)
+			tester := benchmark.NewTester(ctx, connector, eachObjectSame)
 			connector.Clear()
 			go tester.TestWritePerformance(size, THREAD_NUM)
 			time.Sleep(10 * time.Second)
@@ -72,7 +73,7 @@ var benchmarkCmd = &cobra.Command{
 				connector = benchmark.NewEcosConnector(ctx, &conf)
 			}
 
-			tester = benchmark.NewTester(ctx, connector)
+			tester = benchmark.NewTester(ctx, connector, eachObjectSame)
 			go tester.TestReadPerformance()
 			time.Sleep(10 * time.Second)
 			tester.Stop()
@@ -96,7 +97,7 @@ var runPutCmd = &cobra.Command{
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		connector := benchmark.NewEcosConnector(ctx, &conf)
-		tester := benchmark.NewTester(ctx, connector)
+		tester := benchmark.NewTester(ctx, connector, eachObjectSame)
 
 		base := 1024 * 1024 // 1MB
 		sizeStr := args[0]
@@ -142,5 +143,6 @@ func init() {
 
 	runCmd.PersistentFlags().IntVarP(&THREAD_NUM, "thread num", "j", 1, "number of test threads")
 	runCmd.PersistentFlags().IntVarP(&timeInterval, "network status interval", "i", 5, "interval of network status report")
+	runCmd.PersistentFlags().BoolVarP(&eachObjectSame, "each object same", "s", true, "whether each object is same")
 	logger.Logger.SetLevel(logrus.InfoLevel)
 }
