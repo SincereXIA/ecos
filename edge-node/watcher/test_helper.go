@@ -168,9 +168,9 @@ func WaitAllTestWatcherOK(watchers []*Watcher) {
 			}
 			clusterInfo := w.GetCurrentClusterInfo()
 			healthNode := clusterInfo.GetHealthNode()
-			if len(healthNode) != clusterNodeNum {
+			if len(healthNode) < clusterNodeNum {
 				ok = false
-				logger.Debugf("WaitAllTestWatcherOK wait health node, node: %v", w.GetSelfInfo().RaftId)
+				logger.Debugf("WaitAllTestWatcherOK wait health node, node: %v, health node num: %v", w.GetSelfInfo().RaftId, len(healthNode))
 				break
 			}
 			for _, n := range healthNode {

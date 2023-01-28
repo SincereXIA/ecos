@@ -8,6 +8,7 @@ import (
 	"ecos/messenger"
 	"ecos/messenger/common"
 	moon2 "ecos/shared/moon"
+	"ecos/utils/config"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
@@ -180,7 +181,68 @@ func (w *Watcher) GetCurrentPeerInfo() []*infos.NodeInfo {
 	return peerNodes
 }
 
+func (w *Watcher) genNewMapXClusterInfo() *infos.ClusterInfo {
+	oldClusterInfo := w.GetCurrentClusterInfo()
+	nodeInfoStorage := w.register.GetStorage(infos.InfoType_NODE_INFO)
+	nodeInfos, err := nodeInfoStorage.GetAll()
+	if err != nil {
+		logger.Errorf("get nodeInfo from nodeInfoStorage fail: %v", err)
+		return nil
+	}
+
+	oldNodesId := make(map[uint64]struct{})
+	for _, node := range oldClusterInfo.NodesInfo {
+		oldNodesId[node.RaftId] = struct{}{}
+	}
+
+	var clusterNodes []*infos.NodeInfo
+	for _, info := range nodeInfos {
+		// copy before change to avoid data race
+		nodeInfo := deepcopy.Copy(info.BaseInfo().GetNodeInfo()).(*infos.NodeInfo)
+		report := w.Monitor.GetNodeReport(nodeInfo.RaftId)
+		if report == nil {
+			logger.Warningf("get report: %v from Monitor fail", nodeInfo.RaftId)
+			logger.Warningf("set node: %v state OFFLINE", nodeInfo.RaftId)
+			nodeInfo.State = infos.NodeState_OFFLINE
+		} else {
+			nodeInfo.State = report.State
+		}
+		// check if already in oldNodes
+		if len(nodeInfos) > len(oldNodesId) {
+			if _, ok := oldNodesId[nodeInfo.RaftId]; ok {
+				nodeInfo.Capacity = 0
+			}
+		}
+		clusterNodes = append(clusterNodes, nodeInfo)
+	}
+
+	sort.Slice(clusterNodes, func(i, j int) bool {
+		return clusterNodes[i].RaftId < clusterNodes[j].RaftId
+	})
+	leaderID := w.moon.GetLeaderID()
+	// TODO (zhang): need a way to gen infoStorage key
+	leaderInfo, err := nodeInfoStorage.Get(strconv.FormatUint(leaderID, 10))
+	if err != nil {
+		logger.Errorf("get leaderInfo from nodeInfoStorage fail: %v", err)
+		return nil
+	}
+	return &infos.ClusterInfo{
+		Term:            uint64(time.Now().UnixNano()),
+		LeaderInfo:      leaderInfo.BaseInfo().GetNodeInfo(),
+		NodesInfo:       clusterNodes,
+		UpdateTimestamp: nil,
+		MetaPgNum:       10,
+		MetaPgSize:      3,
+		BlockPgNum:      100,
+		BlockPgSize:     3,
+		LastTerm:        w.GetCurrentTerm(),
+	}
+}
+
 func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
+	if config.GlobalSharedConfig.Behave == config.BehaveMapX {
+		return w.genNewMapXClusterInfo()
+	}
 	nodeInfoStorage := w.register.GetStorage(infos.InfoType_NODE_INFO)
 	nodeInfos, err := nodeInfoStorage.GetAll()
 	if err != nil {
@@ -202,7 +264,7 @@ func (w *Watcher) genNewClusterInfo() *infos.ClusterInfo {
 		clusterNodes = append(clusterNodes, nodeInfo)
 	}
 	sort.Slice(clusterNodes, func(i, j int) bool {
-		return clusterNodes[i].RaftId > clusterNodes[j].RaftId
+		return clusterNodes[i].RaftId < clusterNodes[j].RaftId
 	})
 	leaderID := w.moon.GetLeaderID()
 	// TODO (zhang): need a way to gen infoStorage key

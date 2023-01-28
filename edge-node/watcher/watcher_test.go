@@ -3,8 +3,11 @@ package watcher
 import (
 	"context"
 	"ecos/edge-node/infos"
+	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	moon2 "ecos/shared/moon"
+	"ecos/utils/config"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -38,9 +41,11 @@ func testWatcher(t *testing.T, mock bool) {
 			}
 		}(rpcServers[i])
 	}
+	// Run First half
+	firstRunNum := nodeNum/2 + 1
 
-	RunAllTestWatcher(watchers)
-	WaitAllTestWatcherOK(watchers)
+	RunAllTestWatcher(watchers[:firstRunNum])
+	WaitAllTestWatcherOK(watchers[:firstRunNum])
 
 	moon := watchers[0].moon
 	bucket := infos.GenBucketInfo("test", "default", "test")
@@ -53,6 +58,32 @@ func testWatcher(t *testing.T, mock bool) {
 		t.Errorf("propose bucket error: %v", err)
 	}
 
+	t.Run("add left half", func(t *testing.T) {
+		RunAllTestWatcher(watchers[firstRunNum:])
+		WaitAllTestWatcherOK(watchers)
+		// test node weight
+		clusterInfo := watchers[0].GetCurrentClusterInfo()
+		if config.GlobalSharedConfig.Behave == config.BehaveMapX {
+			for i, node := range clusterInfo.NodesInfo {
+				if i < firstRunNum {
+					assert.Equal(t, node.Capacity, uint64(0))
+				} else {
+					assert.Greaterf(t, node.Capacity, uint64(0), "node %d capacity is 0", i)
+				}
+			}
+			// Gen pipeline
+			blockPipe := pipeline.GenBlockPipelines(clusterInfo)
+			for _, pipe := range blockPipe {
+				t.Logf("block pipe: %v", pipe)
+			}
+
+		} else {
+			for i, node := range clusterInfo.NodesInfo {
+				assert.Greaterf(t, node.Capacity, uint64(0), "node %d capacity is 0", i)
+			}
+		}
+	})
+
 	t.Cleanup(func() {
 		for i := 0; i < nodeNum; i++ {
 			watchers[i].moon.Stop()
@@ -64,6 +95,6 @@ func testWatcher(t *testing.T, mock bool) {
 		watchers[nodeNum-1].moon.Stop()
 		watchers[nodeNum-1].cancelFunc()
 		rpcServers[nodeNum-1].Stop()
-		WaitAllTestWatcherOK(watchers)
+		WaitAllTestWatcherOK(watchers[:nodeNum-1])
 	})
 }

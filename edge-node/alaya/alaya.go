@@ -494,6 +494,8 @@ func (a *Alaya) IsAllPipelinesOK() bool {
 		if raftNode.raft.Node.Status().Lead != raftNode.getPipeline().RaftId[0] ||
 			len(raftNode.GetVotersID()) != len(raftNode.getPipeline().RaftId) {
 			ok = false
+			logger.Debugf("pipeline %v not ok, want leader:%v, actual leader: %v", raftNode.getPipeline().PgId,
+				raftNode.getPipeline().RaftId[0], raftNode.raft.Node.Status().Lead)
 			return false
 		}
 		length += 1
