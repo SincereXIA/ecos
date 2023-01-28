@@ -58,7 +58,7 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	defer cancel()
 
 	// Print config
-	logger.Infof("[Conf] behave: ", conf.Behave)
+	logger.Infof("[Conf] behave: ", conf.SharedConfig.Behave)
 
 	// Gen Rpc
 	rpc := messenger.NewRpcServer(conf.WatcherConfig.SelfNodeInfo.RpcPort)
