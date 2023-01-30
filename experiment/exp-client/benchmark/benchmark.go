@@ -231,8 +231,6 @@ type Tester struct {
 	sample         metrics.Sample
 	eachObjectSame bool
 
-	bytesWritten           metrics.Counter
-	bytesRead              metrics.Counter
 	bytesWrittenUpdateTime time.Time
 	bytesReadUpdateTime    time.Time
 
@@ -254,8 +252,9 @@ func NewTester(ctx context.Context, c Connector, same bool) *Tester {
 		timer:             time.NewTicker(1 * time.Second),
 		sample:            metrics.NewUniformSample(1000000),
 		networkSpeedTimer: time.NewTicker(NetWorkTimeInterval),
-		bytesWritten:      metrics.NewCounter(),
 		eachObjectSame:    same,
+		register:          prometheus.NewRegistry(),
+		registry:          metrics.NewRegistry(),
 	}
 	go tester.pushToPrometheus()
 	go tester.monitorNetwork()
@@ -295,8 +294,6 @@ func (t *Tester) monitorNetwork() {
 }
 
 func (t *Tester) pushToPrometheus() {
-	t.register = prometheus.NewRegistry()
-	t.registry = metrics.NewRegistry()
 	prometheusClient := prometheusmetrics.NewPrometheusProvider(
 		t.registry, "exp",
 		"client",
@@ -315,6 +312,10 @@ func (t *Tester) pushToPrometheus() {
 			}
 		}
 	}
+}
+
+func (t *Tester) GetWriteBytes() int64 {
+	return metrics.GetOrRegisterCounter("TotalWriteBytes", t.registry).Count()
 }
 
 func (t *Tester) TestWritePerformance(size uint64, threadNum int) {
@@ -343,14 +344,14 @@ func (t *Tester) TestWritePerformance(size uint64, threadNum int) {
 			start = time.Now()
 
 			_ = t.c.PutObject(objectName, data)
-			t.bytesWritten.Inc(int64(size))
 			t.bytesWrittenUpdateTime = time.Now()
 			spendTime := time.Since(start)
 			speed := float64(size) / spendTime.Seconds()
 			metrics.GetOrRegisterGaugeFloat64("ObjPutSpeed", t.registry).Update(speed)
 			metrics.GetOrRegisterHistogram("ObjPutSpeedHistogram", t.registry, t.sample).Update(int64(speed))
 			metrics.GetOrRegisterGaugeFloat64("ObjPutTime", t.registry).Update(float64(spendTime.Milliseconds()))
-			metrics.GetOrRegisterCounter("ObjPutCount", t.registry).Inc(int64(size))
+			metrics.GetOrRegisterCounter("ObjPutCount", t.registry).Inc(1)
+			metrics.GetOrRegisterCounter("TotalWriteBytes", t.registry).Inc(int64(size))
 			logger.Infof("write object %v spend %v", objectName, spendTime)
 		}
 	}
@@ -387,7 +388,8 @@ func (t *Tester) TestReadPerformance() {
 		metrics.GetOrRegisterGaugeFloat64("ObjGetSpeed", t.registry).Update(speed)
 		metrics.GetOrRegisterHistogram("ObjGetSpeedHistogram", t.registry, t.sample).Update(int64(speed))
 		metrics.GetOrRegisterGaugeFloat64("ObjGetTime", t.registry).Update(float64(spendTime.Milliseconds()))
-		metrics.GetOrRegisterCounter("ObjGetCount", t.registry).Inc(int64(size))
+		metrics.GetOrRegisterCounter("ObjGetCount", t.registry).Inc(1)
+		metrics.GetOrRegisterCounter("TotalReadBytes", t.registry).Inc(int64(size))
 		logger.Infof("read object %v spend %v", objectName, spendTime)
 	}
 }

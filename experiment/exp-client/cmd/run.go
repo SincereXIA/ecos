@@ -4,6 +4,7 @@ import (
 	"context"
 	"ecos/client/config"
 	"ecos/experiment/exp-client/benchmark"
+	"ecos/utils/common"
 	configUtil "ecos/utils/config"
 	"ecos/utils/logger"
 	"github.com/sirupsen/logrus"
@@ -21,12 +22,21 @@ var runCmd = &cobra.Command{
 	Long:  `Run exp client with default configuration.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		benchmark.NetWorkTimeInterval = time.Duration(timeInterval) * time.Second
+		size, err := common.ParseSize(limitTestSizeStr)
+		if err != nil {
+			logger.Errorf("Parse limit test size fail: %v", err)
+			os.Exit(1)
+		}
+		limitTestSize = size
+		logger.Infof("Set limit test size to %d", limitTestSize)
 	},
 }
 
 var THREAD_NUM = 8
 var timeInterval = 1
 var eachObjectSame = true
+var limitTestSizeStr = "500GB"
+var limitTestSize = int64(500 * 1024 * 1024 * 1024)
 
 var benchmarkCmd = &cobra.Command{
 	Use: "benchmark",
@@ -111,6 +121,20 @@ var runPutCmd = &cobra.Command{
 		size *= base
 
 		go tester.TestWritePerformance(uint64(size), THREAD_NUM)
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					if tester.GetWriteBytes() > limitTestSize {
+						logger.Infof("Reach limit test size %d", limitTestSize)
+						tester.Stop()
+						return
+					}
+				}
+			}
+		}()
 		WaitSignal()
 		logger.Infof("Test finished")
 		tester.Stop()
@@ -144,5 +168,6 @@ func init() {
 	runCmd.PersistentFlags().IntVarP(&THREAD_NUM, "thread num", "j", 1, "number of test threads")
 	runCmd.PersistentFlags().IntVarP(&timeInterval, "network status interval", "i", 5, "interval of network status report")
 	runCmd.PersistentFlags().BoolVarP(&eachObjectSame, "each object same", "s", true, "whether each object is same")
+	runCmd.PersistentFlags().StringVarP(&limitTestSizeStr, "limit network data size", "l", "500GB", "test size")
 	logger.Logger.SetLevel(logrus.InfoLevel)
 }
