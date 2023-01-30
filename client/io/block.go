@@ -215,6 +215,8 @@ func (b *Block) updateBlockInfo() error {
 }
 
 func (b *Block) Close() error {
+	// log block address
+	logger.Debugf("Close block: %p", b)
 	if b.PartId != 0 { // Not Multipart Block
 		return nil
 	}

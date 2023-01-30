@@ -22,6 +22,7 @@ type PrimaryCopyTransporter struct {
 	pipeline *pipeline.Pipeline
 	basePath string
 
+	localFile     *os.File
 	localWriter   io.Writer
 	remoteWriters []io.Writer
 	ctx           context.Context
@@ -72,8 +73,9 @@ func (transporter *PrimaryCopyTransporter) init() error {
 	blockPath := transporter.GetStoragePath()
 	_ = common.InitParentPath(blockPath)
 	logger.Debugf("Gaia: create localWriter: %v", blockPath)
-	localWriter, err := os.Create(blockPath)
-	bufferedWriter := bufio.NewWriter(localWriter)
+	localFile, err := os.Create(blockPath)
+	transporter.localFile = localFile
+	bufferedWriter := bufio.NewWriter(localFile)
 	if err != nil {
 		return err // TODO: trans to ecos err
 	}
@@ -100,7 +102,20 @@ func (transporter *PrimaryCopyTransporter) Close() error {
 		if err != nil {
 			return err
 		}
-		err = localWriter.Close()
+		err = transporter.localFile.Close()
+		if err != nil {
+			return err
+		}
+		transporter.localWriter = nil
+		transporter.localFile = nil
+	case *bufio.Writer:
+		err := localWriter.Flush()
+		if err != nil {
+			return err
+		}
+	}
+	if transporter.localFile != nil {
+		err := transporter.localFile.Close()
 		if err != nil {
 			return err
 		}

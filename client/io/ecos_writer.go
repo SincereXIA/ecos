@@ -100,6 +100,7 @@ func (w *EcosWriter) getUploadStream(b *Block) (*UploadClient, error) {
 //
 // curBlock shall be nil after calling this.
 func (w *EcosWriter) commitCurBlock() {
+	//logger.Debugf("Committing block %d", w.curBlock)
 	for _, chunk := range w.reserveChunks {
 		w.chunks.Release(chunk)
 	}
@@ -142,6 +143,7 @@ func (w *EcosWriter) getCurChunk() (*localChunk, error) {
 //
 // curChunk shall be nil after calling this.
 func (w *EcosWriter) commitCurChunk() {
+	//logger.Debugf("Committing chunk %p", w.curChunk)
 	if w.curChunk == nil {
 		return
 	}
@@ -159,6 +161,7 @@ func (w *EcosWriter) commitCurChunk() {
 // IllegalStatus: Write called on a closed EcosWriter
 // IncompatibleSize: Written Size NOT corresponded with param
 func (w *EcosWriter) Write(p []byte) (int, error) {
+	//logger.Debugf("EcosWriter.Write: %v, size: %v", w.key, len(p))
 	if len(p) < 500 {
 		logger.Debugf("EcosWriter.Write: %v, %v", w.key, string(p))
 	}
@@ -211,11 +214,11 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 		meta.ObjHash = ""
 	}
 	// w.meta.Blocks is set here. The map and Block.Close ensures the Block Status
-	logger.Debugf("commit blocks num: %v", len(w.blocks))
 	for i := 1; i <= len(w.blocks); i++ {
 		block := w.blocks[i]
 		meta.Blocks = append(meta.Blocks, &block.BlockInfo)
 	}
+	//logger.Debugf("commit blocks num: %v, %v", len(w.blocks), len(meta.Blocks))
 	return meta
 }
 
@@ -241,7 +244,7 @@ func (w *EcosWriter) Close() error {
 	w.Status = UPLOADING
 	for i := 0; i < w.blockCount; i++ {
 		block := <-w.finishedBlocks
-		logger.Tracef("block closed: %v", block.BlockId)
+		logger.Debugf("block closed: %v", block.BlockId)
 	}
 	err := w.commitMeta()
 	if err != nil {

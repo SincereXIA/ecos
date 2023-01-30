@@ -7,6 +7,7 @@ import (
 	edgeNodeTest "ecos/shared"
 	"ecos/shared/moon"
 	"ecos/utils/common"
+	"ecos/utils/logger"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -50,7 +51,7 @@ func TestGateway(t *testing.T) {
 
 		go func() {
 			nodeInfo := watchers[0].GetSelfInfo()
-			DefaultConfig.Host = nodeInfo.IpAddr
+			DefaultConfig.ClientConfig.NodeAddr = nodeInfo.IpAddr
 			DefaultConfig.Port = nodeInfo.RpcPort
 			gateway := NewRouter(DefaultConfig)
 			_ = gateway.Run(":3266")
@@ -73,6 +74,9 @@ func TestGateway(t *testing.T) {
 
 	test10MBBuffer := genTestData(10 << 20)
 	reader := bytes.NewReader(test10MBBuffer)
+
+	test100BBuffer := genTestData(100)
+	reader100B := bytes.NewReader(test100BBuffer)
 
 	// Test ListAllBuckets
 	t.Run("ListAllBuckets", func(t *testing.T) {
@@ -114,6 +118,9 @@ func TestGateway(t *testing.T) {
 		testPutObject(t, client, "default", "testPUTObject.obj", reader)
 		// Blank Data
 		testPutObject(t, client, "default", "testPUTEmptyObject.obj", nil)
+
+		// Small Data
+		testPutObject(t, client, "default", "testPUTSmallObject.obj", reader100B)
 	})
 
 	// Test POST Object
@@ -134,18 +141,30 @@ func TestGateway(t *testing.T) {
 	// Test GET Object
 	t.Run("GetObject", func(t *testing.T) {
 		_, _ = reader.Seek(0, io.SeekStart)
+		_, _ = reader100B.Seek(0, io.SeekStart)
+		testPutObject(t, client, "default", "testGETSmallObject_PUT.obj", reader100B)
 		testPutObject(t, client, "default", "testGETObject_PUT.obj", reader)
 		testPostObject(t, client, "default", "testGETObject_POST.obj", reader)
-		obj := testGetObject(t, client, "default", "testGETObject_PUT.obj", false)
+
+		obj := testGetObject(t, client, "default", "testGETSmallObject_PUT.obj", false)
 		content, err := io.ReadAll(obj)
 		assert.NoError(t, err)
+		assert.Equal(t, string(test100BBuffer), string(content))
+
+		obj = testGetObject(t, client, "default", "testGETObject_PUT.obj", false)
+		content, err = io.ReadAll(obj)
+		assert.NoError(t, err)
 		assert.Equal(t, string(test10MBBuffer), string(content))
+
 		obj = testGetObject(t, client, "default", "testGETObject_POST.obj", false)
 		content, err = io.ReadAll(obj)
 		assert.NoError(t, err)
 		if !bytes.Equal(content, nil) {
 			t.Errorf("GetObject: content is not equal")
 		}
+
+		// Small Data
+
 	})
 
 	// Test DELETE Object
@@ -326,7 +345,7 @@ func testPutObject(t *testing.T, client *s3.Client, bucketName string, key strin
 		Body:   data,
 	})
 	assert.NoError(t, err)
-	t.Logf("PutObject: %#v", putObjectOutput)
+	logger.Infof("PutObject: %#v", putObjectOutput)
 }
 
 func testPostObject(t *testing.T, _ *s3.Client, bucketName string, key string, data io.Reader) {

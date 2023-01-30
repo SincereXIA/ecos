@@ -156,7 +156,7 @@ func (m *NodeMonitor) collectNodes() {
 				time.Sleep(time.Second * 3)
 				continue
 			}
-			logger.Debugf("Node: %v start collect node report", m.watcher.GetSelfInfo().GetID())
+			logger.Tracef("Node: %v start collect node report", m.watcher.GetSelfInfo().GetID())
 
 			m.watcher.GetCurrentClusterInfo()
 			nodeInfoStorage := m.watcher.register.GetStorage(infos.InfoType_NODE_INFO)
