@@ -197,7 +197,7 @@ func (register *RocksDBMetaStorageRegister) NewRocksDBMetaStorage(cfName string)
 func NewRocksDBMetaStorageRegister(basePath string) (*RocksDBMetaStorageRegister, error) {
 	err := common.InitPath(basePath)
 	if err != nil {
-		logger.Errorf("Set path %s failed, err: %v", basePath)
+		logger.Fatalf("Set path %s failed, err: %v", basePath, err.Error())
 	}
 	cfNames, err := gorocksdb.ListColumnFamilies(database.Opts, basePath)
 	if err != nil {

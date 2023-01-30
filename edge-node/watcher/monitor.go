@@ -97,8 +97,31 @@ func (m *NodeMonitor) pushToPrometheus() {
 		case <-m.ctx.Done():
 			ms, _ := register.Gather()
 			for _, m := range ms {
-				logger.Infof("metric: %v", m)
+				logger.Infof("reset metric: %v", m)
+
+				// reset metric to 0
+				for _, metric := range m.Metric {
+					if metric.Counter != nil {
+						*metric.Counter.Value = 0.0
+					}
+					if metric.Gauge != nil {
+						*metric.Gauge.Value = 0.0
+					}
+					if metric.Histogram != nil {
+						*metric.Histogram.SampleSum = 0.0
+						*metric.Histogram.SampleCount = 0
+						metric.Histogram.Bucket = nil
+					}
+					if metric.Summary != nil {
+						*metric.Summary.SampleSum = 0.0
+						*metric.Summary.SampleCount = 0
+						metric.Summary.Quantile = nil
+					}
+				}
 			}
+			_ = push.New("http://gateway.prometheus.sums.top", "monitor").
+				Gatherer(register).Grouping("node",
+				strconv.FormatUint(m.watcher.GetSelfInfo().RaftId, 10)).Push()
 			return
 		case <-m.timer.C:
 			err := push.New("http://gateway.prometheus.sums.top", "monitor").
