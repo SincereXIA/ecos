@@ -79,6 +79,7 @@ func putObject(c *gin.Context) {
 		c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, &key))
 		return
 	}
+	c.Header("ETag", "fake")
 	c.Status(http.StatusOK)
 }
 
@@ -439,8 +440,9 @@ func deleteObjects(c *gin.Context) {
 
 // objectLevelPostHandler handles object level POST requests
 // POST /{bucketName}/{key} Include:
-//  CreateMultiPartUpload:   POST /Key+?uploads
-//  CompleteMultipartUpload: POST /Key+?uploadId=UploadId
+//
+//	CreateMultiPartUpload:   POST /Key+?uploads
+//	CompleteMultipartUpload: POST /Key+?uploadId=UploadId
 func objectLevelPostHandler(c *gin.Context) {
 	if c.Param("key") == "/" {
 		bucketLevelPostHandler(c)
@@ -460,9 +462,10 @@ func objectLevelPostHandler(c *gin.Context) {
 // objectLevelPutHandler handles object level PUT requests
 //
 // PUT /{bucketName}/{key} Include:
-//  PutObject:  PUT /Key+
-//  CopyObject: PUT /Key+
-//  UploadPart: PUT /Key+?uploadId=UploadId&partNumber=PartNumber
+//
+//	PutObject:  PUT /Key+
+//	CopyObject: PUT /Key+
+//	UploadPart: PUT /Key+?uploadId=UploadId&partNumber=PartNumber
 func objectLevelPutHandler(c *gin.Context) {
 	if c.Param("key") == "/" {
 		createBucket(c)
@@ -492,8 +495,9 @@ func objectLevelPutHandler(c *gin.Context) {
 // objectLevelGetHandler handles object level GET requests
 //
 // GET /{bucketName}/{key} Include:
-//  GetObject: GET /Key+?partNumber=PartNumber&response-cache-control=ResponseCacheControl&response-content-disposition=ResponseContentDisposition&response-content-encoding=ResponseContentEncoding&response-content-language=ResponseContentLanguage&response-content-type=ResponseContentType&response-expires=ResponseExpires&versionId=VersionId
-//  ListParts: GET /Key+?max-parts=MaxParts&part-number-marker=PartNumberMarker&uploadId=UploadId
+//
+//	GetObject: GET /Key+?partNumber=PartNumber&response-cache-control=ResponseCacheControl&response-content-disposition=ResponseContentDisposition&response-content-encoding=ResponseContentEncoding&response-content-language=ResponseContentLanguage&response-content-type=ResponseContentType&response-expires=ResponseExpires&versionId=VersionId
+//	ListParts: GET /Key+?max-parts=MaxParts&part-number-marker=PartNumberMarker&uploadId=UploadId
 func objectLevelGetHandler(c *gin.Context) {
 	if c.Param("key") == "/" {
 		bucketLevelGetHandler(c)
@@ -523,8 +527,9 @@ func objectLevelGetHandler(c *gin.Context) {
 // objectLevelDeleteHandler handles object level DELETE requests
 //
 // DELETE /{bucketName}/{key} Include:
-//  DeleteObject:         DELETE /Key+?versionId=VersionId
-//  AbortMultipartUpload: DELETE /Key+?uploadId=UploadId
+//
+//	DeleteObject:         DELETE /Key+?versionId=VersionId
+//	AbortMultipartUpload: DELETE /Key+?uploadId=UploadId
 func objectLevelDeleteHandler(c *gin.Context) {
 	if c.Param("key") == "/" {
 		bucketLevelDeleteHandler(c)
@@ -545,7 +550,8 @@ func objectLevelDeleteHandler(c *gin.Context) {
 // objectLevelHeadHandler handles object level HEAD requests
 //
 // HEAD /{bucketName}/{key} Include:
-//  HeadObject: HEAD /Key+?versionId=VersionId
+//
+//	HeadObject: HEAD /Key+?versionId=VersionId
 func objectLevelHeadHandler(c *gin.Context) {
 	if c.Param("key") == "/" {
 		bucketLevelHeadHandler(c)

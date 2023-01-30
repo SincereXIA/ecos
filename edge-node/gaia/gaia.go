@@ -115,32 +115,34 @@ func (g *Gaia) GetBlockData(req *gaia.GetBlockRequest, server gaia.Gaia_GetBlock
 	chunkSize := g.config.ChunkSize
 	chunk := make([]byte, chunkSize)
 	for {
-		readBytes, err := r.Read(chunk)
-		if err != nil && err != io.EOF {
+		readBytes, readErr := r.Read(chunk)
+		if readErr != nil && readErr != io.EOF {
 			logger.Errorf("read panic, err: $v", err)
 			return err
 		}
 		// read this block finished, return io.EOF
-		if err == io.EOF {
-			logger.Infof("gaia [%v] read this block finished", g.watcher.GetSelfInfo().RaftId)
-			metrics.GetOrRegisterTimer(watcher.MetricsGaiaBlockGetTimer, nil).UpdateSince(timeStart)
-			break
-		}
 		if uint64(curChunk) < startChunk {
 			curChunk++
 			continue
 		}
-		err = server.Send(&gaia.GetBlockResult{
-			Payload: &gaia.GetBlockResult_Chunk{
-				Chunk: &gaia.Chunk{
-					Content:   chunk[:readBytes],
-					ReadBytes: uint64(readBytes),
+		if readBytes > 0 {
+			err = server.Send(&gaia.GetBlockResult{
+				Payload: &gaia.GetBlockResult_Chunk{
+					Chunk: &gaia.Chunk{
+						Content:   chunk[:readBytes],
+						ReadBytes: uint64(readBytes),
+					},
 				},
-			},
-		})
+			})
+		}
 		if err != nil {
 			logger.Infof("send Block res err: %v", err)
 			return err
+		}
+		if readErr == io.EOF {
+			logger.Infof("gaia [%v] read this block finished", g.watcher.GetSelfInfo().RaftId)
+			metrics.GetOrRegisterTimer(watcher.MetricsGaiaBlockGetTimer, nil).UpdateSince(timeStart)
+			break
 		}
 	}
 	return nil

@@ -26,9 +26,6 @@ func NewRouter(cfg Config) *gin.Engine {
 		return nil
 	}
 	clientConfig := cfg.ClientConfig
-	if cfg.Host != "" {
-		clientConfig.NodeAddr = cfg.Host
-	}
 	if cfg.Port != 0 {
 		clientConfig.NodePort = cfg.Port
 	}

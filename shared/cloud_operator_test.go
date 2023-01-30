@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"context"
 	client2 "ecos/client"
 	"ecos/client/config"
 	"github.com/stretchr/testify/assert"
@@ -11,7 +12,37 @@ import (
 	"testing"
 	"time"
 )
-import "context"
+
+var cloudClientConf = config.DefaultConfig
+var edgeClientConf = config.DefaultConfig
+
+var cloudClient *client2.Client
+var edgeClient *client2.Client
+
+func putObject(t *testing.T, ctx context.Context, objName string, data []byte, connectType int) {
+	var client *client2.Client
+	switch connectType {
+	case config.ConnectCloud:
+		client = cloudClient
+	case config.ConnectEdge:
+		client = edgeClient
+	}
+	factory, err := client.GetIOFactory("default")
+	assert.NoError(t, err)
+	writer := factory.GetEcosWriter(objName)
+	_, err = writer.Write(data)
+	assert.NoError(t, err)
+	err = writer.Close()
+	assert.NoError(t, err)
+
+	//_, err := client.PutObject(ctx, objName, bytes.NewReader(data))
+	assert.NoError(t, err)
+}
+
+func init() {
+	cloudClientConf.ConnectType = config.ConnectCloud
+	edgeClientConf.ConnectType = config.ConnectEdge
+}
 
 func TestNewCloudBucketOperator(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())

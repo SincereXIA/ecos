@@ -65,6 +65,7 @@ func (b *Block) Upload() error {
 
 func (b *Block) uploadByCloud() error {
 	conn, err := messenger.GetRpcConn(b.conf.CloudAddr, b.conf.CloudPort)
+	logger.Infof("Get cloud connection to upload block: %v", b.key)
 	if err != nil {
 		logger.Errorf("Get cloud connection failed: %v", err)
 		return err

@@ -84,7 +84,7 @@ func listObjects(c *gin.Context) {
 			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 			return
 		}
-		timestamp := meta.UpdateTime.Format(time.RFC3339Nano)
+		timestamp := meta.UpdateTime.Format("2006-01-02T15:04:05.999999Z07:00")
 		result.Contents = append(result.Contents, Content{
 			Key:          &key,
 			LastModified: &timestamp,
@@ -110,7 +110,7 @@ func listObjectsV2(c *gin.Context) {
 			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 			return
 		}
-		timestamp := meta.UpdateTime.Format(time.RFC3339Nano)
+		timestamp := meta.UpdateTime.Format("2006-01-02T15:04:05.999999Z07:00") // 6 digits for nanoseconds (minio)
 		result.Contents = append(result.Contents, Content{
 			Key:          &key,
 			LastModified: &timestamp,
@@ -211,8 +211,9 @@ func listBuckets(c *gin.Context) {
 // bucketLevelPostHandler handles bucket level POST requests
 //
 // POST /{bucketName} Include:
-//  PostObject:   POST /
-//  DeleteObject: POST /?delete
+//
+//	PostObject:   POST /
+//	DeleteObject: POST /?delete
 func bucketLevelPostHandler(c *gin.Context) {
 	if _, del := c.GetQuery("delete"); del {
 		deleteObjects(c)
@@ -224,9 +225,10 @@ func bucketLevelPostHandler(c *gin.Context) {
 // bucketLevelGetHandler handles bucket level GET requests
 //
 // GET /{bucketName} Include:
-//  ListObjects:          GET /?delimiter=Delimiter&encoding-type=EncodingType&marker=Marker&max-keys=MaxKeys&prefix=Prefix
-//  ListObjectsV2:        GET /?list-type=2&continuation-token=ContinuationToken&delimiter=Delimiter&encoding-type=EncodingType&fetch-owner=FetchOwner&max-keys=MaxKeys&prefix=Prefix&start-after=StartAfter
-//  ListMultipartUploads: GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
+//
+//	ListObjects:          GET /?delimiter=Delimiter&encoding-type=EncodingType&marker=Marker&max-keys=MaxKeys&prefix=Prefix
+//	ListObjectsV2:        GET /?list-type=2&continuation-token=ContinuationToken&delimiter=Delimiter&encoding-type=EncodingType&fetch-owner=FetchOwner&max-keys=MaxKeys&prefix=Prefix&start-after=StartAfter
+//	ListMultipartUploads: GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
 func bucketLevelGetHandler(c *gin.Context) {
 	if _, uploads := c.GetQuery("uploads"); uploads {
 		listMultipartUploads(c)
@@ -242,7 +244,8 @@ func bucketLevelGetHandler(c *gin.Context) {
 // bucketLevelPutHandler handles bucket level PUT requests
 //
 // PUT /{bucketName} Include:
-//  CreateBucket: PUT /
+//
+//	CreateBucket: PUT /
 func bucketLevelPutHandler(c *gin.Context) {
 	createBucket(c)
 }
@@ -250,7 +253,8 @@ func bucketLevelPutHandler(c *gin.Context) {
 // bucketLevelHeadHandler handles bucket level HEAD requests
 //
 // HEAD /{bucketName} Include:
-//  HeadBucket: HEAD /
+//
+//	HeadBucket: HEAD /
 func bucketLevelHeadHandler(c *gin.Context) {
 	headBucket(c)
 }
@@ -258,7 +262,8 @@ func bucketLevelHeadHandler(c *gin.Context) {
 // bucketLevelDeleteHandler handles bucket level DELETE requests
 //
 // DELETE /{bucketName} Include:
-//  DeleteBucket: DELETE /
+//
+//	DeleteBucket: DELETE /
 func bucketLevelDeleteHandler(c *gin.Context) {
 	deleteBucket(c)
 }

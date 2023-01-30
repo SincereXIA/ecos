@@ -159,6 +159,9 @@ func (w *EcosWriter) commitCurChunk() {
 // IllegalStatus: Write called on a closed EcosWriter
 // IncompatibleSize: Written Size NOT corresponded with param
 func (w *EcosWriter) Write(p []byte) (int, error) {
+	if len(p) < 500 {
+		logger.Debugf("EcosWriter.Write: %v, %v", w.key, string(p))
+	}
 	if w.partObject {
 		return 0, errno.MethodNotAllowed
 	}
