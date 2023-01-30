@@ -95,6 +95,10 @@ func (m *NodeMonitor) pushToPrometheus() {
 	for {
 		select {
 		case <-m.ctx.Done():
+			ms, _ := register.Gather()
+			for _, m := range ms {
+				logger.Infof("metric: %v", m)
+			}
 			return
 		case <-m.timer.C:
 			err := push.New("http://gateway.prometheus.sums.top", "monitor").
@@ -115,7 +119,7 @@ func (m *NodeMonitor) Register(name string, reporter Reporter) error {
 	return nil
 }
 
-//CollectNodes 收集 Cluster 中所有 Node 的节点信息
+// CollectNodes 收集 Cluster 中所有 Node 的节点信息
 func (m *NodeMonitor) collectNodes() {
 	for {
 		select {
