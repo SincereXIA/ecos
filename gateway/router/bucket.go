@@ -84,7 +84,7 @@ func listObjects(c *gin.Context) {
 			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 			return
 		}
-		timestamp := meta.UpdateTime.Format("2006-01-02T15:04:05.999999Z07:00")
+		timestamp := meta.UpdateTime.Format("2006-01-02T15:04:05.999999Z")
 		result.Contents = append(result.Contents, Content{
 			Key:          &key,
 			LastModified: &timestamp,
@@ -110,7 +110,7 @@ func listObjectsV2(c *gin.Context) {
 			c.XML(http.StatusInternalServerError, InternalError(err.Error(), bucketName, c.Request.URL.Path, nil))
 			return
 		}
-		timestamp := meta.UpdateTime.Format("2006-01-02T15:04:05.999999Z07:00") // 6 digits for nanoseconds (minio)
+		timestamp := meta.UpdateTime.Format("2006-01-02T15:04:05.999999Z") // 6 digits for nanoseconds (minio)
 		result.Contents = append(result.Contents, Content{
 			Key:          &key,
 			LastModified: &timestamp,
