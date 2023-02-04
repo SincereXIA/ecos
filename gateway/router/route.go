@@ -26,25 +26,25 @@ func NewRouter(cfg Config) *gin.Engine {
 		return nil
 	}
 	clientConfig := cfg.ClientConfig
-	if cfg.Port != 0 {
-		clientConfig.NodePort = cfg.Port
-	}
+	//if cfg.Port != 0 {
+	//	clientConfig.NodePort = cfg.Port
+	//}
 	InitClient(clientConfig)
 	router := gin.Default()
-	router.Use(func(c *gin.Context) { // Use chan to record gateway process time
-		startTime := time.Now()
-		metricChan := make(chan string, 1)
-		c.Set("metric", &metricChan)
-		c.Next()
-		select {
-		case metricsName := <-metricChan:
-			logger.Infof("Pushing to %s", metricsName)
-			metrics.GetOrRegisterTimer(metricsName, nil).UpdateSince(startTime)
-		default:
-			logger.Infof("No metrics to push")
-		}
-		close(metricChan)
-	})
+	//router.Use(func(c *gin.Context) { // Use chan to record gateway process time
+	//	startTime := time.Now()
+	//	metricChan := make(chan string, 1)
+	//	c.Set("metric", &metricChan)
+	//	c.Next()
+	//	select {
+	//	case metricsName := <-metricChan:
+	//		logger.Infof("Pushing to %s", metricsName)
+	//		metrics.GetOrRegisterTimer(metricsName, nil).UpdateSince(startTime)
+	//	default:
+	//		logger.Infof("No metrics to push")
+	//	}
+	//	close(metricChan)
+	//})
 	router.Use(timeoutMiddleware())
 	router.Use(func(c *gin.Context) {
 		c.Header("Server", "ECOS")

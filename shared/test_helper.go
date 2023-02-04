@@ -22,7 +22,7 @@ func RunTestEdgeNodeCluster(t gomock.TestReporter, ctx context.Context, mock boo
 	var alayas []alaya.Alayaer
 	var cloudAddr string
 	if mock {
-		watchers, rpcServers, _, _ = watcher.GenMockWatcherCluster(t, ctx, basePath, num)
+		watchers, rpcServers, cloudAddr = watcher.GenTestWatcherCluster(ctx, basePath, num)
 		alayas = GenMockAlayaCluster(t, ctx, basePath, watchers, rpcServers)
 	} else {
 		watchers, rpcServers, cloudAddr = watcher.GenTestWatcherCluster(ctx, basePath, num)

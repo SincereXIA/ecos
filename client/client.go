@@ -81,7 +81,20 @@ func New(config *config.ClientConfig) (*Client, error) {
 	}, nil
 }
 
+func (client *Client) getMoonByCloud() (moon.MoonClient, uint64, error) {
+	conn, err := messenger.GetRpcConn(client.config.CloudAddr, client.config.CloudPort)
+	if err != nil {
+		return nil, 0, err
+	}
+	moonClient := moon.NewMoonClient(conn)
+	return moonClient, 0, nil
+}
+
 func (client *Client) GetMoon() (moon.MoonClient, uint64, error) {
+	if client.config.ConnectType == config.ConnectCloud {
+		return client.getMoonByCloud()
+	}
+
 	for _, nodeInfo := range client.InfoAgent.GetCurClusterInfo().NodesInfo {
 		if nodeInfo.State != infos.NodeState_ONLINE {
 			continue
@@ -202,10 +215,10 @@ func (client *Client) GetIOFactory(bucketName string) (*io.EcosIOFactory, error)
 }
 
 func (client *Client) GetVolumeOperator() VolumeOperator {
-	switch client.config.ConnectType {
-	case config.ConnectCloud:
-		return NewCloudVolumeOperator(client.ctx, client, client.config.Credential.GetUserID())
-	}
+	//switch client.config.ConnectType {
+	//case config.ConnectCloud:
+	//	return NewCloudVolumeOperator(client.ctx, client, client.config.Credential.GetUserID())
+	//}
 	return NewEdgeVolumeOperator(client.ctx, client.config.Credential.GetUserID(), client)
 }
 

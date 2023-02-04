@@ -24,9 +24,11 @@ type Rainbow struct {
 
 	rwMutex sync.RWMutex // protect clusterInfo & requestSeq
 
-	gaia  *CloudGaia
-	alaya *CloudAlaya
-	moon  *CloudMoon
+	gaia   *CloudGaia
+	alaya  *CloudAlaya
+	moon   *CloudMoon
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // eventLoop 处理 stream 中收到的 content
@@ -61,6 +63,8 @@ func (r *Rainbow) eventLoop(stream Rainbow_GetStreamServer, nodeInfo *infos.Node
 			switch payload.Request.Resource {
 			case Request_META:
 				r.processMetaRequest(payload.Request, sendChan)
+			case Request_BLOCK:
+				r.processBlockRequest(payload.Request, sendChan)
 			default:
 				sendError(sendChan, payload.Request, errors.New("not support resource"))
 			}
@@ -108,6 +112,10 @@ func (r *Rainbow) processMetaRequest(req *Request, sendChan chan *Response) {
 		}
 	}
 	sendError(sendChan, req, errors.New("not support method"))
+}
+
+func (r *Rainbow) processBlockRequest(req *Request, sendChan chan *Response) {
+
 }
 
 func (r *Rainbow) GetStream(stream Rainbow_GetStreamServer) error {
@@ -207,9 +215,12 @@ func (r *Rainbow) SendRequestToEdgeLeader(request *Request) (<-chan *Response, e
 }
 
 func NewRainbow(ctx context.Context, rpcServer *messenger.RpcServer, conf *config.CloudConfig) *Rainbow {
+	ctx, cancel := context.WithCancel(ctx)
 	rainbow := &Rainbow{
 		router:     NewRouter(),
 		requestSeq: 10000,
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 	rainbow.gaia = NewCloudGaia(ctx, rpcServer, conf)
 	rainbow.alaya = NewCloudAlaya(ctx, rpcServer, conf, rainbow)

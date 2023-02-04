@@ -61,6 +61,10 @@ func GenTestMockWatcher(t gomock.TestReporter, ctx context.Context,
 func GenMockWatcherCluster(t gomock.TestReporter, ctx context.Context, _ string, num int) ([]*Watcher, []*messenger.RpcServer, string, []*gomock.Controller) {
 	sunPort, sunRpc := messenger.NewRandomPortRpcServer()
 	sun.NewSun(sunRpc)
+	// init rainbow
+	logger.Infof("Start init rainbow ...")
+	_ = rainbow.NewRainbow(ctx, sunRpc, &config.DefaultCloudConfig)
+
 	go func() {
 		err := sunRpc.Run()
 		if err != nil {

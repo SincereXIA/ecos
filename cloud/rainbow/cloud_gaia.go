@@ -73,8 +73,28 @@ func (g *CloudGaia) UploadBlockData(stream gaia.Gaia_UploadBlockDataServer) erro
 	}
 }
 
+func (g *CloudGaia) doDelete(blockId string) error {
+	blockPath := path.Join(g.conf.BasePath, "gaia", "blocks", blockId)
+	err := os.Remove(blockPath)
+	if err != nil {
+		logger.Errorf("delete block: %v failed, err: %v", blockId, err)
+		return err
+	}
+	return nil
+}
+
 func (g *CloudGaia) DeleteBlock(ctx context.Context, in *gaia.DeleteBlockRequest) (*common.Result, error) {
-	panic("implement me")
+	blockId := in.BlockId
+	err := g.doDelete(blockId)
+	if err != nil {
+		return &common.Result{
+			Status:  common.Result_FAIL,
+			Message: err.Error(),
+		}, err
+	}
+	return &common.Result{
+		Status: common.Result_OK,
+	}, nil
 }
 
 func (g *CloudGaia) GetBlockData(req *gaia.GetBlockRequest, server gaia.Gaia_GetBlockDataServer) error {

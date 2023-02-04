@@ -40,6 +40,9 @@ func (c *Cleaner) RemoveBlock(term uint64, blockInfo *object.BlockInfo) error {
 }
 
 func (c *Cleaner) RemoveObjectBlocks(meta *object.ObjectMeta) error {
+	if meta.Position == object.ObjectMeta_POSITION_CLOUD {
+		return nil
+	}
 	for _, blockInfo := range meta.Blocks {
 		err := c.RemoveBlock(meta.Term, blockInfo)
 		if err != nil {

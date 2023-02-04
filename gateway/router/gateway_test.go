@@ -3,6 +3,7 @@ package router
 import (
 	"bytes"
 	"context"
+	config2 "ecos/client/config"
 	"ecos/edge-node/infos"
 	edgeNodeTest "ecos/shared"
 	"ecos/shared/moon"
@@ -34,6 +35,9 @@ func TestGateway(t *testing.T) {
 		})
 		_ = common.InitAndClearPath(basePath)
 		watchers, _, _ := edgeNodeTest.RunTestEdgeNodeCluster(t, ctx, true, basePath, 9)
+		sunAddr := watchers[0].Config.CloudAddr
+		sunPort := watchers[0].Config.CloudPort
+		logger.Infof("Sun address: %s", sunAddr)
 
 		// Add a test bucket first
 		bucketName := "default"
@@ -49,13 +53,29 @@ func TestGateway(t *testing.T) {
 			t.Errorf("Failed to add bucket: %v", err)
 		}
 
-		go func() {
-			nodeInfo := watchers[0].GetSelfInfo()
-			DefaultConfig.ClientConfig.NodeAddr = nodeInfo.IpAddr
-			DefaultConfig.Port = nodeInfo.RpcPort
-			gateway := NewRouter(DefaultConfig)
-			_ = gateway.Run(":3266")
-		}()
+		connectTo := "edge"
+
+		if connectTo == "edge" {
+			go func() {
+				nodeInfo := watchers[0].GetSelfInfo()
+				DefaultConfig.ClientConfig.NodeAddr = nodeInfo.IpAddr
+				DefaultConfig.ClientConfig.NodePort = nodeInfo.RpcPort
+				DefaultConfig.Port = nodeInfo.RpcPort
+				gateway := NewRouter(DefaultConfig)
+				_ = gateway.Run(":3266")
+			}()
+		} else {
+			go func() {
+				cloudGatewayConfig := DefaultConfig
+				cloudGatewayConfig.ClientConfig.NodeAddr = ""
+				cloudGatewayConfig.ClientConfig.CloudAddr = sunAddr
+				cloudGatewayConfig.ClientConfig.CloudPort = sunPort
+				cloudGatewayConfig.ClientConfig.ConnectType = config2.ConnectCloud
+				cloudGatewayConfig.Port = 3266
+				gateway := NewRouter(cloudGatewayConfig)
+				_ = gateway.Run(":3266")
+			}()
+		}
 	}
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {

@@ -96,6 +96,56 @@ func (g *Gaia) getBlockBasePath() string {
 	return path.Join(g.config.BasePath)
 }
 
+func (g *Gaia) getBlockDataByCloud(req *gaia.GetBlockRequest, server gaia.Gaia_GetBlockDataServer) error {
+	// get block data from cloud
+	conn, err := messenger.GetRpcConn(g.watcher.Config.CloudAddr, g.watcher.Config.CloudPort)
+	if err != nil {
+		logger.Errorf("get rpc conn to cloud failed, err: %v", err)
+		return err
+	}
+	gaiaClient := gaia.NewGaiaClient(conn)
+	res, err := gaiaClient.GetBlockData(context.Background(), req)
+	if err != nil {
+		logger.Errorf("get block data from cloud failed, err: %v", err)
+		return err
+	}
+	clusterInfo := g.watcher.GetCurrentClusterInfo()
+	transp, err := gaia.NewPrimaryCopyTransporter(g.ctx, &object.BlockInfo{
+		BlockId:   "",
+		PartId:    0,
+		BlockSize: 0,
+		BlockHash: "",
+		PgId:      0,
+	}, &pipeline.Pipeline{
+		RaftId: []uint64{g.watcher.GetSelfInfo().RaftId},
+	}, g.watcher.GetSelfInfo().RaftId, &clusterInfo, g.config.BasePath)
+	defer transp.Close()
+
+	for {
+		rs, err := res.Recv()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			terr := res.CloseSend()
+			if terr != nil {
+				logger.Errorf("close send failed, err: %v", terr)
+			}
+			return err
+		}
+		err = server.Send(rs)
+		if err != nil {
+			terr := res.CloseSend()
+			if terr != nil {
+				logger.Errorf("close send failed, err: %v", terr)
+			}
+			return err
+		}
+		transp.Write(rs.GetChunk().Content)
+	}
+	return nil
+}
+
 // GetBlockData return local block data to client
 func (g *Gaia) GetBlockData(req *gaia.GetBlockRequest, server gaia.Gaia_GetBlockDataServer) error {
 	timeStart := time.Now()
@@ -104,7 +154,7 @@ func (g *Gaia) GetBlockData(req *gaia.GetBlockRequest, server gaia.Gaia_GetBlock
 	block, err := os.Open(blockPath)
 	if err != nil {
 		logger.Errorf("open blockPath: %v failed, err: %v", blockPath, err)
-		return err
+		return g.getBlockDataByCloud(req, server)
 	}
 	defer block.Close()
 

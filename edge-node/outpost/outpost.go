@@ -13,6 +13,7 @@ import (
 	"ecos/messenger/common"
 	"ecos/shared/alaya"
 	"ecos/shared/gaia"
+	"ecos/shared/moon"
 	"ecos/utils/logger"
 	"errors"
 	"io"
@@ -156,6 +157,7 @@ func (o *Outpost) streamLoop() (err error) {
 
 func (o *Outpost) Run() error {
 	// 等待集群信息就绪
+	logger.Infof("outpost waiting for cluster info ready")
 	ok := o.w.WaitClusterOK()
 	if !ok {
 		logger.Errorf("cluster is not ok, outpost exit")
@@ -319,6 +321,29 @@ func (o *Outpost) doMetaRequest(request *rainbow.Request) {
 				},
 			},
 		}
+	case rainbow.Request_DELETE:
+		c, _ := o.getClient()
+		objID := request.RequestId
+		_, bucketID, key, _, _ := object.SplitID(objID)
+		split := strings.Split(bucketID, "/")
+		bucketName := split[len(split)-1]
+		bucket, _ := c.GetVolumeOperator().Get(bucketName)
+		err := bucket.Remove(key)
+		if err != nil {
+			o.returnFail(request, err)
+			break
+		}
+		o.sendChan <- &rainbow.Content{
+			Payload: &rainbow.Content_Response{
+				Response: &rainbow.Response{
+					ResponseTo: request.RequestSeq,
+					Result: &common.Result{
+						Status: common.Result_OK,
+					},
+				},
+			},
+		}
+
 	default:
 		o.sendChan <- &rainbow.Content{
 			Payload: &rainbow.Content_Response{
@@ -459,6 +484,53 @@ func (o *Outpost) doInfoRequest(request *rainbow.Request) {
 						Status: common.Result_OK,
 					},
 					Infos: []*infos.BaseInfo{info.BaseInfo()},
+				},
+			},
+		}
+	case rainbow.Request_PUT:
+		infoType := request.GetInfoType()
+		infoID := request.RequestId
+		logger.Debugf("outpost put info, type: %v, id: %v", infoType, infoID)
+		info := request.Info
+		if info == nil {
+			o.returnFail(request, errors.New("info is nil"))
+			return
+		}
+		o.w.GetMoon().ProposeInfo(o.ctx, &moon.ProposeInfoRequest{
+			Operate:  moon.ProposeInfoRequest_ADD,
+			Id:       info.GetID(),
+			BaseInfo: info,
+		})
+		o.sendChan <- &rainbow.Content{
+			Payload: &rainbow.Content_Response{
+				Response: &rainbow.Response{
+					ResponseTo: request.RequestSeq,
+					Result: &common.Result{
+						Status: common.Result_OK,
+					},
+				},
+			},
+		}
+	case rainbow.Request_LIST:
+		infoType := request.GetInfoType()
+		logger.Debugf("outpost list info, type: %v", infoType)
+		reply, err := o.w.GetMoon().ListInfo(o.ctx, &moon.ListInfoRequest{
+			InfoType: infoType,
+			Prefix:   request.RequestId,
+		})
+		if err != nil {
+			o.returnFail(request, err)
+			return
+		}
+		baseInfos := reply.BaseInfos
+		o.sendChan <- &rainbow.Content{
+			Payload: &rainbow.Content_Response{
+				Response: &rainbow.Response{
+					ResponseTo: request.RequestSeq,
+					Result: &common.Result{
+						Status: common.Result_OK,
+					},
+					Infos: baseInfos,
 				},
 			},
 		}
