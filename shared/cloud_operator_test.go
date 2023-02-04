@@ -4,6 +4,7 @@ import (
 	"context"
 	client2 "ecos/client"
 	"ecos/client/config"
+	"ecos/edge-node/infos"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
@@ -66,18 +67,38 @@ func TestNewCloudBucketOperator(t *testing.T) {
 	conf.CloudPort = uint64(cloudPort)
 	conf.ConnectType = config.ConnectCloud
 
+	edgeConf := conf
+	edgeConf.ConnectType = config.ConnectEdge
+
 	client, err := client2.New(&conf)
+	edgeClient, err := client2.New(&edgeConf)
 	if err != nil {
 		t.Errorf("Failed to create client: %v", err)
 	}
+	edgeBucketInfo := infos.GenBucketInfo("root", "edge", "root")
+	edgeClient.GetVolumeOperator().CreateBucket(edgeBucketInfo)
 	objectNum := 20
 	objectSize := 1024 * 1024 * 10 //10M
 	factory, err := client.GetIOFactory("default")
+	edgeFactory, err := edgeClient.GetIOFactory("edge")
+
+	e2cFactory, err := edgeClient.GetIOFactory("default")
+	//c2eFactory, err := client.GetIOFactory("edge")
+
 	t.Run("put object", func(t *testing.T) {
 		for i := 0; i < objectNum; i++ {
 			data := genTestData(objectSize)
 			writer := factory.GetEcosWriter("/test_" + strconv.Itoa(i) + "/ecos-test")
 			size, err := writer.Write(data)
+			if err != nil {
+				t.Errorf("Failed to write data: %v", err)
+			}
+			err = writer.Close()
+			assert.NoError(t, err, "Failed to write data")
+			assert.Equal(t, objectSize, size, "data size not match")
+
+			writer = edgeFactory.GetEcosWriter("/test_edge_" + strconv.Itoa(i) + "/ecos-test")
+			size, err = writer.Write(data)
 			if err != nil {
 				t.Errorf("Failed to write data: %v", err)
 			}
@@ -97,6 +118,17 @@ func TestNewCloudBucketOperator(t *testing.T) {
 		}
 		assert.NoError(t, err, "Failed to list objects")
 		assert.Equal(t, objectNum, len(objects), "object num not match")
+
+		bucket, err = cloudVolumeOperator.Get("edge")
+		objects, err = bucket.List("/")
+		assert.NoError(t, err, "Failed to list objects")
+		assert.Equal(t, objectNum, len(objects), "object num not match")
+
+		edgeVolumeOperator := edgeClient.GetVolumeOperator()
+		bucket, err = edgeVolumeOperator.Get("edge")
+		objects, err = bucket.List("/")
+		assert.NoError(t, err, "Failed to list objects")
+		assert.Equal(t, objectNum, len(objects), "object num not match")
 	})
 
 	t.Run("get object by cloud", func(t *testing.T) {
@@ -107,6 +139,30 @@ func TestNewCloudBucketOperator(t *testing.T) {
 			t.Errorf("Failed to read data: %v", err)
 		}
 		assert.Equal(t, objectSize, size, "data size not match")
+
+		reader = e2cFactory.GetEcosReader("/test_0/ecos-test")
+		data = make([]byte, objectSize)
+		size, err = reader.Read(data)
+		if err != nil && err != io.EOF {
+			t.Errorf("Failed to read data: %v", err)
+		}
+		assert.Equal(t, objectSize, size, "data size not match")
+
+		reader = e2cFactory.GetEcosReader("/test_0/ecos-test")
+		data = make([]byte, objectSize)
+		size, err = reader.Read(data)
+		if err != nil && err != io.EOF {
+			t.Errorf("Failed to read data: %v", err)
+		}
+		assert.Equal(t, objectSize, size, "data size not match")
+
+		//reader = c2eFactory.GetEcosReader("/test_edge_0/ecos-test")
+		//data = make([]byte, objectSize)
+		//size, err = reader.Read(data)
+		//if err != nil && err != io.EOF {
+		//	t.Errorf("Failed to read data: %v", err)
+		//}
+		//assert.Equal(t, objectSize, size, "data size not match")
 	})
 
 }

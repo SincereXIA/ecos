@@ -111,7 +111,7 @@ func (g *Gaia) getBlockDataByCloud(req *gaia.GetBlockRequest, server gaia.Gaia_G
 	}
 	clusterInfo := g.watcher.GetCurrentClusterInfo()
 	transp, err := gaia.NewPrimaryCopyTransporter(g.ctx, &object.BlockInfo{
-		BlockId:   "",
+		BlockId:   req.BlockId,
 		PartId:    0,
 		BlockSize: 0,
 		BlockHash: "",
@@ -143,6 +143,7 @@ func (g *Gaia) getBlockDataByCloud(req *gaia.GetBlockRequest, server gaia.Gaia_G
 		}
 		transp.Write(rs.GetChunk().Content)
 	}
+	transp.Close()
 	return nil
 }
 

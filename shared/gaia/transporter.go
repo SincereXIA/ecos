@@ -115,6 +115,7 @@ func (transporter *PrimaryCopyTransporter) Close() error {
 		}
 	}
 	if transporter.localFile != nil {
+		logger.Debugf("close file: %v", transporter.basePath+transporter.info.BlockId)
 		err := transporter.localFile.Close()
 		if err != nil {
 			return err
