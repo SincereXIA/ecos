@@ -417,7 +417,7 @@ func (a *Alaya) ApplyNewPipelines(pipelines *pipeline.ClusterPipelines, oldPipel
 	}
 }
 
-func NewAlaya(ctx context.Context, watcher *watcher.Watcher, config *Config,
+func NewAlaya(ctx context.Context, watcher *watcher.Watcher, outpost *outpost.Outpost, config *Config,
 	metaStorageRegister alaya.MetaStorageRegister, rpcServer *messenger.RpcServer) Alayaer {
 	ctx, cancel := context.WithCancel(ctx)
 	c := cleaner.NewCleaner(ctx, watcher)
@@ -433,6 +433,7 @@ func NewAlaya(ctx context.Context, watcher *watcher.Watcher, config *Config,
 		watcher:             watcher,
 		cleaner:             c,
 		raftNodeStopChan:    make(chan uint64),
+		o:                   outpost,
 	}
 	alaya.RegisterAlayaServer(rpcServer, &a)
 	clusterInfo := watcher.GetCurrentClusterInfo()

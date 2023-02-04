@@ -83,7 +83,7 @@ func TestNewCloudBucketOperator(t *testing.T) {
 	edgeFactory, err := edgeClient.GetIOFactory("edge")
 
 	e2cFactory, err := edgeClient.GetIOFactory("default")
-	//c2eFactory, err := client.GetIOFactory("edge")
+	c2eFactory, err := client.GetIOFactory("edge")
 
 	t.Run("put object", func(t *testing.T) {
 		for i := 0; i < objectNum; i++ {
@@ -156,13 +156,43 @@ func TestNewCloudBucketOperator(t *testing.T) {
 		}
 		assert.Equal(t, objectSize, size, "data size not match")
 
-		//reader = c2eFactory.GetEcosReader("/test_edge_0/ecos-test")
-		//data = make([]byte, objectSize)
-		//size, err = reader.Read(data)
-		//if err != nil && err != io.EOF {
-		//	t.Errorf("Failed to read data: %v", err)
-		//}
-		//assert.Equal(t, objectSize, size, "data size not match")
+		reader = c2eFactory.GetEcosReader("/test_edge_0/ecos-test")
+		data = make([]byte, objectSize)
+		size, err = reader.Read(data)
+		if err != nil && err != io.EOF {
+			t.Errorf("Failed to read data: %v", err)
+		}
+		assert.Equal(t, objectSize, size, "data size not match")
+	})
+
+	t.Run("test object change", func(t *testing.T) {
+		writer := edgeFactory.GetEcosWriter("edgeData")
+		data := "first data"
+		_, err := writer.Write([]byte(data))
+		if err != nil {
+			t.Errorf("Failed to write data: %v", err)
+		}
+		err = writer.Close()
+		assert.NoError(t, err, "Failed to write data")
+
+		reader := c2eFactory.GetEcosReader("edgeData")
+		buf := make([]byte, len(data))
+		reader.Read(buf)
+		assert.Equal(t, data, string(buf), "data not match")
+
+		writer = edgeFactory.GetEcosWriter("edgeData")
+		data = "second data"
+		_, err = writer.Write([]byte(data))
+		if err != nil {
+			t.Errorf("Failed to write data: %v", err)
+		}
+		err = writer.Close()
+		assert.NoError(t, err, "Failed to write data")
+
+		reader = c2eFactory.GetEcosReader("edgeData")
+		buf = make([]byte, len(data))
+		reader.Read(buf)
+		assert.Equal(t, data, string(buf), "data not match")
 	})
 
 }

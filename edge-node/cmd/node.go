@@ -72,24 +72,24 @@ func nodeRun(cmd *cobra.Command, _ []string) {
 	// Gen Watcher
 	w := watcher.NewWatcher(ctx, &conf.WatcherConfig, rpc, m, storageRegister)
 
-	// Gen Alaya
-	logger.Infof("Start init Alaya ...")
-	dbBasePath := path.Join(conf.StoragePath, "/db")
-	metaDBPath := path.Join(dbBasePath, "/meta")
-	metaStorageRegister, err := alaya.NewRocksDBMetaStorageRegister(metaDBPath)
-	//metaStorageRegister := alaya2.NewMemoryMetaStorageRegister()
-	a := alaya.NewAlaya(ctx, w, &conf.AlayaConfig, metaStorageRegister, rpc)
-
-	// Gen Gaia
-	logger.Infof("Start init Gaia ...")
-	_ = gaia.NewGaia(ctx, rpc, w, &conf.GaiaConfig)
-
 	// Gen Outpost
 	logger.Infof("Start init Outpost ...")
 	o, err := outpost.NewOutpost(ctx, conf.WatcherConfig.SunAddr, w)
 	if err != nil {
 		logger.Errorf("init outpost fail: %v", err)
 	}
+
+	// Gen Alaya
+	logger.Infof("Start init Alaya ...")
+	dbBasePath := path.Join(conf.StoragePath, "/db")
+	metaDBPath := path.Join(dbBasePath, "/meta")
+	metaStorageRegister, err := alaya.NewRocksDBMetaStorageRegister(metaDBPath)
+	//metaStorageRegister := alaya2.NewMemoryMetaStorageRegister()
+	a := alaya.NewAlaya(ctx, w, o, &conf.AlayaConfig, metaStorageRegister, rpc)
+
+	// Gen Gaia
+	logger.Infof("Start init Gaia ...")
+	_ = gaia.NewGaia(ctx, rpc, w, &conf.GaiaConfig)
 
 	// Run
 	go func() {

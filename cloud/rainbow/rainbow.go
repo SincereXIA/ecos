@@ -9,6 +9,7 @@ import (
 	"ecos/utils/logger"
 	"errors"
 	"go.etcd.io/etcd/pkg/v3/wait"
+	"strconv"
 	"sync"
 )
 
@@ -72,6 +73,7 @@ func (r *Rainbow) eventLoop(stream Rainbow_GetStreamServer, nodeInfo *infos.Node
 	}
 }
 
+// sendChanLoop 将 sendChan 中的响应发送到 stream, 每个节点启动一个单独的 goroutine
 func (r *Rainbow) sendChanLoop(stream Rainbow_GetStreamServer, sendChan chan *Response) {
 	for resp := range sendChan {
 		logger.Debugf("cloud send response_to: %v", resp.ResponseTo)
@@ -108,10 +110,14 @@ func (r *Rainbow) processMetaRequest(req *Request, sendChan chan *Response) {
 		}
 		sendChan <- &Response{
 			ResponseTo: req.RequestSeq,
-			IsLast:     true,
+			Result: &common.Result{
+				Status: common.Result_OK,
+			},
+			IsLast: true,
 		}
+	default:
+		sendError(sendChan, req, errors.New("not support method"))
 	}
-	sendError(sendChan, req, errors.New("not support method"))
 }
 
 func (r *Rainbow) processBlockRequest(req *Request, sendChan chan *Response) {
@@ -181,6 +187,14 @@ func (r *Rainbow) GetClusterInfo() *infos.ClusterInfo {
 	return r.clusterInfo
 }
 
+func (r *Rainbow) GetClusterInfoByTerm(term uint64) (*infos.ClusterInfo, error) {
+	baseInfo, err := r.moon.GetInfoDirect(infos.InfoType_CLUSTER_INFO, strconv.FormatUint(term, 10))
+	if err != nil {
+		return nil, err
+	}
+	return baseInfo.GetClusterInfo(), nil
+}
+
 // SendRequestToNode 向指定节点发送请求
 // 返回响应 channel
 func (r *Rainbow) SendRequestToNode(nodeId uint64, request *Request) (<-chan *Response, error) {
@@ -222,7 +236,7 @@ func NewRainbow(ctx context.Context, rpcServer *messenger.RpcServer, conf *confi
 		ctx:        ctx,
 		cancel:     cancel,
 	}
-	rainbow.gaia = NewCloudGaia(ctx, rpcServer, conf)
+	rainbow.gaia = NewCloudGaia(ctx, rpcServer, conf, rainbow)
 	rainbow.alaya = NewCloudAlaya(ctx, rpcServer, conf, rainbow)
 	rainbow.moon = NewCloudMoon(ctx, rpcServer, rainbow)
 	RegisterRainbowServer(rpcServer, rainbow)

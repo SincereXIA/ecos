@@ -57,7 +57,7 @@ func (c *CloudMoon) GetInfo(ctx context.Context, req *moon.GetInfoRequest) (*moo
 		Result: &common.Result{
 			Status: common.Result_OK,
 		},
-		BaseInfo: info.BaseInfo(),
+		BaseInfo: info,
 	}, nil
 }
 
@@ -91,7 +91,7 @@ func (c *CloudMoon) ListInfo(ctx context.Context, req *moon.ListInfoRequest) (*m
 	}, nil
 }
 
-func (c *CloudMoon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Information, error) {
+func (c *CloudMoon) GetInfoDirect(infoType infos.InfoType, id string) (*infos.BaseInfo, error) {
 	resp, err := c.r.SendRequestDirect(&Request{
 		Method:    Request_GET,
 		Resource:  Request_INFO,
@@ -100,14 +100,14 @@ func (c *CloudMoon) GetInfoDirect(infoType infos.InfoType, id string) (infos.Inf
 	})
 	if err != nil {
 		logger.Errorf("CloudMoon send request to edge failed: %s", err.Error())
-		return infos.InvalidInfo{}, err
+		return infos.InvalidInfo{}.BaseInfo(), err
 	}
 
 	r := <-resp
 	if len(r.Infos) == 0 {
-		return infos.InvalidInfo{}, errors.New(r.Result.Message)
+		return infos.InvalidInfo{}.BaseInfo(), errors.New(r.Result.Message)
 	}
 
 	info := r.Infos[0]
-	return info.BaseInfo(), nil
+	return info, nil
 }

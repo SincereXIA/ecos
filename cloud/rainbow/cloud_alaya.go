@@ -43,14 +43,15 @@ func NewCloudAlaya(ctx context.Context, server *messenger.RpcServer, conf *confi
 
 func (a *CloudAlaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (*common.Result, error) {
 	logger.Infof("cloud Record meta: %v", meta)
-	meta.ObjId = object.CleanObjectKey(meta.ObjId)
-	err := a.storage.RecordMeta(meta)
+	m := *meta
+	m.ObjId = object.CleanObjectKey(m.ObjId)
+	err := a.storage.RecordMeta(&m)
 	if err != nil {
 		return nil, err
 	}
 
 	// 通知边缘端
-	a.syncEdgeChan <- meta
+	a.syncEdgeChan <- &m
 
 	return &common.Result{
 		Status: common.Result_OK,
@@ -122,7 +123,7 @@ func (a *CloudAlaya) ListMeta(ctx context.Context, req *alaya.ListMetaRequest) (
 	if err != nil {
 		return nil, err
 	}
-	bucketInfo := info.BaseInfo().GetBucketInfo()
+	bucketInfo := info.GetBucketInfo()
 
 	// 获取所有 keySlot 中满足的 meta
 	for i := 1; i <= int(bucketInfo.Config.KeySlotNum); i++ {

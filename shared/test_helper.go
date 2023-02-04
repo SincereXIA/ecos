@@ -21,15 +21,17 @@ func RunTestEdgeNodeCluster(t gomock.TestReporter, ctx context.Context, mock boo
 	var rpcServers []*messenger.RpcServer
 	var alayas []alaya.Alayaer
 	var cloudAddr string
+	var outposts []*outpost.Outpost
 	if mock {
 		watchers, rpcServers, cloudAddr = watcher.GenTestWatcherCluster(ctx, basePath, num)
+		outposts = GenOutpostCluster(ctx, cloudAddr, watchers)
 		alayas = GenMockAlayaCluster(t, ctx, basePath, watchers, rpcServers)
 	} else {
 		watchers, rpcServers, cloudAddr = watcher.GenTestWatcherCluster(ctx, basePath, num)
-		alayas = GenAlayaCluster(ctx, basePath, watchers, rpcServers)
+		outposts = GenOutpostCluster(ctx, cloudAddr, watchers)
+		alayas = GenAlayaCluster(ctx, basePath, watchers, outposts, rpcServers)
 	}
 	_ = GenGaiaCluster(ctx, basePath, watchers, rpcServers)
-	outposts := GenOutpostCluster(ctx, cloudAddr, watchers)
 
 	for i := 0; i < num; i++ {
 		go func(server *messenger.RpcServer) {
@@ -54,7 +56,7 @@ func RunTestEdgeNodeCluster(t gomock.TestReporter, ctx context.Context, mock boo
 	return watchers, alayas, rpcServers
 }
 
-func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.Watcher, rpcServers []*messenger.RpcServer) []alaya.Alayaer {
+func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.Watcher, outposts []*outpost.Outpost, rpcServers []*messenger.RpcServer) []alaya.Alayaer {
 	var alayas []alaya.Alayaer
 	nodeNum := len(watchers)
 	for i := 0; i < nodeNum; i++ {
@@ -62,7 +64,7 @@ func GenAlayaCluster(ctx context.Context, basePath string, watchers []*watcher.W
 		//metaStorage := alaya.NewStableMetaStorage(path.Join(basePath, strconv.Itoa(i), "alaya", "meta"))
 		metaStorageRegister := alaya2.NewMemoryMetaStorageRegister()
 		alayaConfig := alaya.DefaultConfig
-		a := alaya.NewAlaya(ctx, watchers[i], &alayaConfig, metaStorageRegister, rpcServers[i])
+		a := alaya.NewAlaya(ctx, watchers[i], outposts[i], &alayaConfig, metaStorageRegister, rpcServers[i])
 		alayas = append(alayas, a)
 	}
 	return alayas

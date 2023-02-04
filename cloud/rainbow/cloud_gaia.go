@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"ecos/cloud/config"
+	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
 	"ecos/messenger"
 	"ecos/messenger/common"
@@ -19,11 +20,14 @@ type CloudGaia struct {
 	ctx context.Context
 	gaia.UnimplementedGaiaServer
 	conf *config.CloudConfig
+	r    *Rainbow
 }
 
-func NewCloudGaia(ctx context.Context, rpcServer *messenger.RpcServer, conf *config.CloudConfig) *CloudGaia {
+func NewCloudGaia(ctx context.Context, rpcServer *messenger.RpcServer, conf *config.CloudConfig,
+	rainbow *Rainbow) *CloudGaia {
 	g := &CloudGaia{
 		ctx:  ctx,
+		r:    rainbow,
 		conf: conf,
 	}
 	gaia.RegisterGaiaServer(rpcServer, g)
@@ -97,14 +101,49 @@ func (g *CloudGaia) DeleteBlock(ctx context.Context, in *gaia.DeleteBlockRequest
 	}, nil
 }
 
+func (g *CloudGaia) getBlockDataByEdge(req *gaia.GetBlockRequest, server gaia.Gaia_GetBlockDataServer) error {
+	clusterInfo, err := g.r.GetClusterInfoByTerm(req.Term)
+	if err != nil {
+		return err
+	}
+	pgID := object.GenBlockPgID(req.BlockId, clusterInfo.BlockPgNum)
+	pipelines, err := pipeline.NewClusterPipelines(*clusterInfo)
+	if err != nil {
+		return err
+	}
+	p := pipelines.GetBlockPipeline(pgID)
+	nodeId := p.RaftId[0]
+	// send request to node
+	resp, err := g.r.SendRequestToNode(nodeId, &Request{
+		Method:    Request_GET,
+		Resource:  Request_BLOCK,
+		Term:      req.Term,
+		RequestId: req.BlockId,
+	})
+	if err != nil {
+		return err
+	}
+	for r := range resp {
+		server.Send(&gaia.GetBlockResult{
+			Payload: &gaia.GetBlockResult_Chunk{
+				Chunk: &gaia.Chunk{
+					Content:   r.Chunk,
+					ReadBytes: uint64(len(r.Chunk)),
+				},
+			},
+		})
+	}
+	return nil
+}
+
 func (g *CloudGaia) GetBlockData(req *gaia.GetBlockRequest, server gaia.Gaia_GetBlockDataServer) error {
 	logger.Infof("Cloud Gaia start send block: %v", req.BlockId)
 	// open block file
 	blockPath := path.Join(g.conf.BasePath, "gaia", "blocks", req.BlockId)
 	block, err := os.Open(blockPath)
 	if err != nil {
-		logger.Errorf("open blockPath: %v failed, err: %v", blockPath, err)
-		return err
+		logger.Warningf("open blockPath: %v failed, err: %v", blockPath, err)
+		return g.getBlockDataByEdge(req, server)
 	}
 	defer block.Close()
 

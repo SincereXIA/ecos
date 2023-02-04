@@ -393,7 +393,8 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 	noDuplicate := w.addPartID(partID)
 	if !noDuplicate {
 		victim := w.blocks[int(partID)]
-		logger.Tracef("Delete duplicate part %v", victim.PartId)
+		logger.Debugf("Delete duplicate part %v", victim.PartId)
+
 		node, err := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(victim.PgId)[0])
 		if err != nil {
 			return "", err

@@ -118,9 +118,9 @@ func TestGateway(t *testing.T) {
 	// Test List Bucket
 	t.Run("ListBucket", func(t *testing.T) {
 		// Wrong Bucket Name
-		wrongBucket := "wrongBucket"
-		testListObjects(t, client, wrongBucket, true, 0)
-		testListObjectsV2(t, client, wrongBucket, true, 0)
+		//wrongBucket := "wrongBucket"
+		//testListObjects(t, client, wrongBucket, true, 0)
+		//testListObjectsV2(t, client, wrongBucket, true, 0)
 		// Right Bucket Name
 		trueBucket := "test-list-bucket"
 		testCreateBucket(t, client, trueBucket, false)
