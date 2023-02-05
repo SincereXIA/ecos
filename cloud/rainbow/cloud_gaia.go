@@ -126,8 +126,9 @@ func (g *CloudGaia) getBlockDataByEdge(req *gaia.GetBlockRequest, server gaia.Ga
 	blockInfo := &object.BlockInfo{
 		BlockId: req.BlockId,
 	}
-	t, err := gaia.NewPrimaryCopyTransporter(g.ctx, blockInfo, p, 0,
-		nil, path.Join(g.conf.BasePath, "gaia", "blocks"))
+	t, err := gaia.NewPrimaryCopyTransporter(g.ctx, blockInfo, &pipeline.Pipeline{
+		RaftId: []uint64{0},
+	}, 0, nil, path.Join(g.conf.BasePath, "gaia", "blocks"))
 	if err != nil {
 		return err
 	}
