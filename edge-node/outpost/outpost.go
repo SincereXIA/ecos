@@ -296,7 +296,12 @@ func (o *Outpost) doMetaRequest(request *rainbow.Request) {
 
 		serverId := pipes.GetMetaPGNodeID(pgID)[0]
 
-		nodeInfo, _ := o.w.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO, serverId)
+		nodeInfo, err := o.w.GetMoon().GetInfoDirect(infos.InfoType_NODE_INFO, serverId)
+		if err != nil {
+			logger.Errorf("get node info failed, err: %v", err)
+			o.returnFail(request, err)
+			break
+		}
 		conn, err := messenger.GetRpcConnByNodeInfo(nodeInfo.BaseInfo().GetNodeInfo())
 		if err != nil {
 			logger.Errorf("get rpc conn failed, err: %v", err)

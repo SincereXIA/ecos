@@ -5,6 +5,7 @@ import (
 	"ecos/cloud/config"
 	"ecos/cloud/rainbow"
 	"ecos/cloud/sun"
+	gateway "ecos/gateway/router"
 	"ecos/messenger"
 	"ecos/utils/logger"
 	"github.com/gin-gonic/gin"
@@ -44,6 +45,11 @@ func main() {
 	// init rainbow
 	logger.Infof("Start init rainbow ...")
 	_ = rainbow.NewRainbow(ctx, rpcServer, &config.DefaultCloudConfig)
+
+	// init gateway
+	logger.Infof("Start init gateway ...")
+	g := gateway.NewRouter(gateway.DefaultConfig)
+	_ = g.Run()
 
 	// init Gin
 	router := NewRouter()

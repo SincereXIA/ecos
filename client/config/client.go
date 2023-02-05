@@ -47,6 +47,9 @@ func init() {
 		UploadBuffer:  uploadBuffer,
 		NodeAddr:      "ecos-edge-dev.ecos.svc.cluster.local",
 		NodePort:      3267,
-		ConnectType:   ConnectEdge,
+
+		CloudAddr:   "ecos-cloud-dev.ecos.svc.cluster.local",
+		CloudPort:   3267,
+		ConnectType: ConnectEdge,
 	}
 }

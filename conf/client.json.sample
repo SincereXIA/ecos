@@ -1,10 +1,16 @@
 {
-  "Object": {
-    "BlockSize": 4194304,
-    "ChunkSize": 1048576,
-    "BlockHash": true,
-    "ObjectHash": false
+  "Credential": {
+    "AccessKey": "root",
+    "SecretKey": "root"
   },
-  "UploadTimeoutMs": 1000,
-  "UploadBuffer": 33554432
+  "Object": {
+    "ChunkSize": 1048576
+  },
+  "UploadTimeout": 0,
+  "UploadBuffer": 33554432,
+  "NodeAddr": "ecos-edge-dev.ecos.svc.cluster.local",
+  "NodePort": 3267,
+  "CloudAddr": "ecos-cloud-dev.ecos.svc.cluster.local",
+  "CloudPort": 3267,
+  "ConnectType": 0
 }

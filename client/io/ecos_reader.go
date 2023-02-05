@@ -157,7 +157,7 @@ func (r *EcosReader) GetBlockByEdge(blockInfo *object.BlockInfo) ([]byte, error)
 	if err != nil {
 		logger.Errorf("get gaia server info failed, err: %v", err)
 	}
-	logger.Debugf("get block %10.10s from %v", blockInfo.BlockId, gaiaServerInfo.RaftId)
+	logger.Debugf("get block %10.10s from %v, %v", blockInfo.BlockId, gaiaServerInfo.RaftId, gaiaServerInfo.IpAddr)
 	client, err := NewGaiaClient(gaiaServerInfo, r.f.config)
 	if err != nil {
 		return nil, err

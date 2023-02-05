@@ -154,7 +154,7 @@ func (g *Gaia) GetBlockData(req *gaia.GetBlockRequest, server gaia.Gaia_GetBlock
 	blockPath := path.Join(g.config.BasePath, req.BlockId)
 	block, err := os.Open(blockPath)
 	if err != nil {
-		logger.Errorf("open blockPath: %v failed, err: %v", blockPath, err)
+		logger.Warningf("open blockPath: %v failed, err: %v", blockPath, err)
 		return g.getBlockDataByCloud(req, server)
 	}
 	defer block.Close()

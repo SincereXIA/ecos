@@ -6,7 +6,9 @@
     "ClusterInfo": {},
     "NodeInfoCommitInterval": 14000000000,
     "PrometheusAddr": "http://gateway.prometheus.sums.top",
-    "ClusterName": "ecos_k8s"
+    "ClusterName": "ecos_k8s",
+    "CloudAddr": "ecos-cloud-dev",
+    "CloudPort": 3267,
   },
   "MoonConfig": {
     "ClusterInfo": {},
