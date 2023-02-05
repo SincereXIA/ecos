@@ -89,6 +89,7 @@ message BucketConfig {
   }
   HashType block_hash_type = 6;
   HashType object_hash_type = 7;
+  uint32 max_extra_data_size = 8;
 }
 
 message ClusterInfo{

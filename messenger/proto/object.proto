@@ -40,6 +40,7 @@ message ObjectMeta {
   repeated BlockInfo blocks = 8;
   uint64 term = 9;
   MetaData meta_data = 10;
+  bytes extra_data = 11;
 }
 
 message BlockInfo {
