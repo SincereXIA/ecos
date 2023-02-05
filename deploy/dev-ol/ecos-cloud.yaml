@@ -93,4 +93,8 @@ spec:
       protocol: TCP
       port: 3267
       targetPort: 3267
+    - name: gateway-cloud
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
   clusterIP: None

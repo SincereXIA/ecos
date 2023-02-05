@@ -7,3 +7,4 @@ COPY build/bin/ecos-cloud .
 ENTRYPOINT ["./ecos-cloud"]
 EXPOSE 3267
 EXPOSE 3268
+EXPOSE 8080
