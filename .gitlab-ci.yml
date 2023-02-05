@@ -156,9 +156,11 @@ deploy-job:      # This job runs in the deploy stage.
     - kubectl apply -f ecos-cloud.yaml
     - kubectl delete -f ecos-client.yaml || true
     - kubectl apply -f ecos-client.yaml
+    - kubectl delete -f ecos-client-cloud.yaml || true
+    - kubectl apply -f ecos-client-cloud.yaml
     - kubectl delete -f ecos-client-exp.yaml || true
     - kubectl apply -f ecos-client-exp.yaml
-    - sleep 10
+    - sleep 5
     - kubectl delete -f ecos-edge.yaml || true
     - kubectl apply -f ecos-edge.yaml
     - echo "Application successfully deployed."
