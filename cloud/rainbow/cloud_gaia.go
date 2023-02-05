@@ -123,6 +123,14 @@ func (g *CloudGaia) getBlockDataByEdge(req *gaia.GetBlockRequest, server gaia.Ga
 	if err != nil {
 		return err
 	}
+	blockInfo := &object.BlockInfo{
+		BlockId: req.BlockId,
+	}
+	t, err := gaia.NewPrimaryCopyTransporter(g.ctx, blockInfo, p, 0,
+		nil, path.Join(g.conf.BasePath, "gaia", "blocks"))
+	if err != nil {
+		return err
+	}
 	for r := range resp {
 		server.Send(&gaia.GetBlockResult{
 			Payload: &gaia.GetBlockResult_Chunk{
@@ -132,7 +140,9 @@ func (g *CloudGaia) getBlockDataByEdge(req *gaia.GetBlockRequest, server gaia.Ga
 				},
 			},
 		})
+		t.Write(r.Chunk)
 	}
+	t.Close()
 	return nil
 }
 
