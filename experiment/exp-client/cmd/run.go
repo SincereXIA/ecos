@@ -63,7 +63,9 @@ var benchmarkCmd = &cobra.Command{
 			var connector benchmark.Connector
 
 			if len(args) > 0 && args[0] == "minio" {
-				connector = benchmark.NewMinioConnector(ctx)
+				connector = benchmark.NewMinioConnector(ctx, "minio")
+			} else if len(args) > 0 && args[0] == "ceph" {
+				connector = benchmark.NewMinioConnector(ctx, "ceph")
 			} else {
 				connector = benchmark.NewEcosConnector(ctx, &conf)
 			}
@@ -79,7 +81,9 @@ var benchmarkCmd = &cobra.Command{
 			logger.Infof("Start benchmark with size %d", size)
 			ctx, cancel = context.WithCancel(context.Background())
 			if len(args) > 0 && args[0] == "minio" {
-				connector = benchmark.NewMinioConnector(ctx)
+				connector = benchmark.NewMinioConnector(ctx, "minio")
+			} else if len(args) > 0 && args[0] == "ceph" {
+				connector = benchmark.NewMinioConnector(ctx, "ceph")
 			} else {
 				connector = benchmark.NewEcosConnector(ctx, &conf)
 			}
@@ -99,7 +103,7 @@ var benchmarkCmd = &cobra.Command{
 }
 
 var runPutCmd = &cobra.Command{
-	Use: "put {size}",
+	Use: "put {size} [minio | ceph | ecos]",
 	Run: func(cmd *cobra.Command, args []string) {
 		confPath := "./config.json"
 		conf := config.DefaultConfig
@@ -107,7 +111,13 @@ var runPutCmd = &cobra.Command{
 		configUtil.ReadAll()
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		connector := benchmark.NewEcosConnector(ctx, &conf)
+		var connector benchmark.Connector
+		connector = benchmark.NewEcosConnector(ctx, &conf)
+		if len(args) > 0 && args[1] == "minio" {
+			connector = benchmark.NewMinioConnector(ctx, "minio")
+		} else if len(args) > 0 && args[1] == "ceph" {
+			connector = benchmark.NewMinioConnector(ctx, "ceph")
+		}
 		tester := benchmark.NewTester(ctx, connector, eachObjectSame)
 
 		base := 1024 * 1024 // 1MB
