@@ -30,9 +30,9 @@ func (cvo *CloudVolumeOperator) List(prefix string) ([]Operator, error) {
 	}
 	var buckets []Operator
 	for _, info := range reply.BaseInfos {
-		buckets = append(buckets, &BucketOperator{
-			bucketInfo: info.GetBucketInfo(),
-			client:     cvo.client,
+		buckets = append(buckets, &CloudBucketOperator{
+			info:   info.GetBucketInfo(),
+			client: cvo.client,
 		})
 	}
 	return buckets, nil
@@ -81,12 +81,25 @@ func NewCloudVolumeOperator(ctx context.Context, client *Client, volumeID string
 }
 
 func (cvo *CloudVolumeOperator) Get(key string) (Operator, error) {
-	return NewCloudBucketOperator(cvo.ctx, cvo.client, key), nil
+	moonClient, _, err := cvo.client.GetMoon()
+	if err != nil {
+		logger.Errorf("get moon client err: %v", err.Error())
+		return nil, err
+	}
+	reply, err := moonClient.GetInfo(cvo.ctx, &moon.GetInfoRequest{
+		InfoType: infos.InfoType_BUCKET_INFO,
+		InfoId:   infos.GenBucketID(cvo.volumeID, key),
+	})
+	if err != nil {
+		return nil, err
+	}
+	info := reply.BaseInfo.GetBucketInfo()
+	return NewCloudBucketOperator(cvo.ctx, cvo.client, info), nil
 }
 
 type CloudBucketOperator struct {
-	bucketName string
-	client     *Client
+	info   *infos.BucketInfo
+	client *Client
 
 	ctx context.Context
 }
@@ -102,25 +115,23 @@ func (cbo *CloudBucketOperator) Remove(key string) error {
 }
 
 func (cbo *CloudBucketOperator) State() (string, error) {
-	//TODO implement me
-	panic("implement me CloudBucketOperator.State")
+	return protoToJson(cbo.info)
 }
 
 func (cbo *CloudBucketOperator) Info() (interface{}, error) {
-	//TODO implement me
-	panic("implement me CloudBucketOperator.Info")
+	return protoToJson(cbo.info)
 }
 
-func NewCloudBucketOperator(ctx context.Context, client *Client, bucketName string) *CloudBucketOperator {
+func NewCloudBucketOperator(ctx context.Context, client *Client, bucketInfo *infos.BucketInfo) *CloudBucketOperator {
 	return &CloudBucketOperator{
-		bucketName: bucketName,
-		client:     client,
-		ctx:        ctx,
+		info:   bucketInfo,
+		client: client,
+		ctx:    ctx,
 	}
 }
 
 func (cbo *CloudBucketOperator) List(prefix string) ([]Operator, error) {
-	metas, err := cbo.client.ListObjects(cbo.ctx, cbo.bucketName, prefix)
+	metas, err := cbo.client.ListObjects(cbo.ctx, cbo.info.BucketName, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -153,12 +164,10 @@ func (c CloudObjectOperator) Remove(key string) error {
 }
 
 func (c CloudObjectOperator) State() (string, error) {
-	//TODO implement me
 	return protoToJson(c.meta)
 }
 
 func (c CloudObjectOperator) Info() (interface{}, error) {
-	//TODO implement me
 	return protoToJson(c.meta)
 }
 

@@ -253,6 +253,30 @@ func BenchmarkClient(b *testing.B) {
 		}
 	})
 
+	b.Run("get object small", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			b.StopTimer()
+			b.Logf("%v", n)
+			data := genTestData(102)
+			writer := factory.GetEcosWriter("test" + strconv.Itoa(n))
+			size, err := writer.Write(data)
+			if err != nil {
+				b.Errorf("Failed to write data: %v", err)
+			}
+			if size != len(data) {
+				b.Errorf("Write size not match")
+			}
+			writer.Close()
+			buf := make([]byte, 1024)
+			b.StartTimer()
+			reader := factory.GetEcosReader("test" + strconv.Itoa(n))
+			size, _ = reader.Read(buf)
+			if size != len(data) {
+				b.Errorf("Read size not match")
+			}
+		}
+	})
+
 	b.Run("put object", func(b *testing.B) {
 		keys := sizeMap.Keys()
 		for _, key := range keys {

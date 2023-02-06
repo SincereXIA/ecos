@@ -209,7 +209,7 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 		MetaData:   nil,
 	}
 	// append extra data
-	if w.writeSize < uint64(w.f.bucketInfo.Config.MaxExtraDataSize) {
+	if w.writeSize < uint64(w.f.bucketInfo.Config.MaxExtraDataSize) && w.writeSize > 0 {
 		meta.ExtraData = w.curChunk.data[:w.writeSize]
 	}
 

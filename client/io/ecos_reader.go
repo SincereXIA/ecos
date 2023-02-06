@@ -228,7 +228,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 				logger.Errorf("get block failed, err: %v", err)
 				return
 			}
-			logger.Tracef("block %10.10s size: %d", info.BlockId, len(block))
+			//logger.Tracef("block %10.10s size: %d", info.BlockId, len(block))
 			copy(p[bufferL:bufferR], block[blockL:blockR])
 			atomic.AddInt64(&count, int64(bufferR-bufferL))
 			waitGroup.Done()
@@ -265,7 +265,7 @@ retry:
 		logger.Errorf("get objMeta failed, err: %v", err)
 		return err
 	}
-	logger.Infof("get objMeta success, meta: %v", r.meta)
+	//logger.Infof("get objMeta success, meta: %v", r.meta)
 	return nil
 }
 
