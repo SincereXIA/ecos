@@ -30,7 +30,9 @@ func NewRouter(cfg Config) *gin.Engine {
 	//	clientConfig.NodePort = cfg.Port
 	//}
 	InitClient(clientConfig)
-	router := gin.Default()
+	//router := gin.Default()
+	router := gin.New()
+	router.Use(gin.Logger()) // not recovery
 	//router.Use(func(c *gin.Context) { // Use chan to record gateway process time
 	//	startTime := time.Now()
 	//	metricChan := make(chan string, 1)
