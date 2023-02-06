@@ -70,5 +70,6 @@ func (p *Pool) AcquireMultiple(count int) ([]io.Closer, error) {
 
 // Release 将一个使用后的资源池释放回池里
 func (p *Pool) Release(r io.Closer) {
+	r.Close()
 	p.resources <- r
 }

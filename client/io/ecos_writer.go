@@ -27,7 +27,8 @@ type localChunk struct {
 
 // Close sets localChunk.data to nil
 func (c *localChunk) Close() error {
-	c.data = nil
+	//c.data = nil
+	c.freeSize = uint64(len(c.data))
 	return nil
 }
 
@@ -219,11 +220,20 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 		meta.ObjHash = ""
 	}
 	// w.meta.Blocks is set here. The map and Block.Close ensures the Block Status
+	length := uint64(0)
+	length += uint64(len(meta.ExtraData))
 	for i := 1; i <= len(w.blocks); i++ {
 		block := w.blocks[i]
 		meta.Blocks = append(meta.Blocks, &block.BlockInfo)
+		length += block.BlockSize
 	}
 	//logger.Debugf("commit blocks num: %v, %v", len(w.blocks), len(meta.Blocks))
+	if length != w.writeSize {
+		logger.Errorf("commit blocks length: %v, %v", length, w.writeSize)
+	}
+	if length != meta.ObjSize {
+		logger.Errorf("commit blocks length: %v, %v", length, meta.ObjSize)
+	}
 	return meta
 }
 
@@ -256,8 +266,10 @@ func (w *EcosWriter) Close() error {
 	}
 	err := w.commitMeta()
 	if w.curChunk != nil {
+		//w.curChunk.Close()
 		w.chunks.Release(w.curChunk)
 		for _, c := range w.reserveChunks {
+			//c.Close()
 			w.chunks.Release(c)
 		}
 	}

@@ -37,6 +37,8 @@ type EcosReader struct {
 	meta         *object.ObjectMeta
 	cachedBlocks sync.Map
 
+	offset int64
+
 	// For Go Metrics
 	startTime time.Time
 }
@@ -242,6 +244,10 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 
 	if err == io.EOF {
 		metrics.GetOrRegisterTimer(watcher.MetricsClientGetTimer, nil).UpdateSince(r.startTime)
+	}
+	r.offset += count
+	if r.offset > int64(r.meta.ObjSize) {
+		logger.Errorf("read offset %d > objSize %d", r.offset, r.meta.ObjSize)
 	}
 	return int(count), err
 }

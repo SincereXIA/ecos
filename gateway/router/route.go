@@ -32,7 +32,7 @@ func NewRouter(cfg Config) *gin.Engine {
 	InitClient(clientConfig)
 	//router := gin.Default()
 	router := gin.New()
-	router.Use(gin.Logger()) // not recovery
+	//router.Use(gin.Logger()) // not recovery
 	//router.Use(func(c *gin.Context) { // Use chan to record gateway process time
 	//	startTime := time.Now()
 	//	metricChan := make(chan string, 1)
@@ -47,7 +47,7 @@ func NewRouter(cfg Config) *gin.Engine {
 	//	}
 	//	close(metricChan)
 	//})
-	router.Use(timeoutMiddleware())
+	//router.Use(timeoutMiddleware())
 	router.Use(func(c *gin.Context) {
 		c.Header("Server", "ECOS")
 		c.Header("Accept-Ranges", "bytes")

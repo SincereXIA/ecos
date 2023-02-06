@@ -39,7 +39,6 @@ func main() {
 			logger.Errorf("Sun rpc server run err: %v", err)
 		}
 	}()
-
 	Sun = s
 	logger.Infof("Sun init success")
 
