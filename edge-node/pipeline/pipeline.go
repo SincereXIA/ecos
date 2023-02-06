@@ -54,6 +54,10 @@ func (cp *ClusterPipelines) GetBlockPipeline(pgID uint64) *Pipeline {
 	return cp.BlockPipelines[pgID-1]
 }
 
+func CleanCache() {
+	_ = bm.ClearAll()
+}
+
 func NewClusterPipelines(info infos.ClusterInfo) (*ClusterPipelines, error) {
 	if bm.IsExist(strconv.FormatUint(info.Term, 10) + info.UpdateTimestamp.String()) {
 		res := bm.Get(strconv.FormatUint(info.Term, 10) + info.UpdateTimestamp.String())

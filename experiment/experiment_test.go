@@ -1,6 +1,9 @@
 package experiment
 
-import "testing"
+import (
+	"ecos/edge-node/pipeline"
+	"testing"
+)
 
 func TestExpBalance(t *testing.T) {
 	behave := CEPH_LIKE
@@ -10,6 +13,7 @@ func TestExpBalance(t *testing.T) {
 	var variances []float64
 	for pgNum := 100; pgNum < 10000; pgNum += 1000 {
 		totalWrite, variance := balanceTest(pgNum, 4*1000*1000, behave)
+		pipeline.CleanCache()
 		t.Logf("pgNum: %d, totalWrite: %d, variance: %f", pgNum, totalWrite, variance)
 		pgNums = append(pgNums, pgNum)
 		variances = append(variances, variance)
