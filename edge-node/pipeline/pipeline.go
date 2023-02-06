@@ -4,14 +4,22 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"github.com/astaxie/beego/cache"
 	"github.com/sincerexia/gocrush"
 	"strconv"
+	"time"
 )
 
 type ClusterPipelines struct {
 	Term           uint64
 	MetaPipelines  []*Pipeline
 	BlockPipelines []*Pipeline
+}
+
+var bm cache.Cache
+
+func init() {
+	bm, _ = cache.NewCache("memory", `{"interval":600}`)
 }
 
 func (cp *ClusterPipelines) GetMetaPG(pgID uint64) []uint64 {
@@ -47,16 +55,25 @@ func (cp *ClusterPipelines) GetBlockPipeline(pgID uint64) *Pipeline {
 }
 
 func NewClusterPipelines(info infos.ClusterInfo) (*ClusterPipelines, error) {
+	if bm.IsExist(strconv.FormatUint(info.Term, 10) + info.UpdateTimestamp.String()) {
+		res := bm.Get(strconv.FormatUint(info.Term, 10) + info.UpdateTimestamp.String())
+		return res.(*ClusterPipelines), nil
+	}
 	metaPipelines := GenMetaPipelines(info)
 	blockPipelines := GenBlockPipelines(info)
 	if len(metaPipelines) == 0 || len(blockPipelines) == 0 {
 		return nil, errno.ClusterNotOK
 	}
-	return &ClusterPipelines{
+
+	res := &ClusterPipelines{
 		Term:           info.Term,
 		MetaPipelines:  metaPipelines,
 		BlockPipelines: blockPipelines,
-	}, nil
+	}
+
+	_ = bm.Put(strconv.FormatUint(info.Term, 10)+info.UpdateTimestamp.String(), res, time.Minute*10)
+
+	return res, nil
 }
 
 func GenMetaPipelines(clusterInfo infos.ClusterInfo) []*Pipeline {
