@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	config2 "ecos/client/config"
 	"ecos/cloud/config"
 	"ecos/cloud/rainbow"
 	"ecos/cloud/sun"
@@ -48,7 +49,9 @@ func main() {
 
 	// init gateway
 	logger.Infof("Start init gateway ...")
-	g := gateway.NewRouter(gateway.DefaultConfig)
+	gatewayConf := gateway.DefaultConfig
+	gatewayConf.ClientConfig.ConnectType = config2.ConnectCloud
+	g := gateway.NewRouter(gatewayConf)
 	_ = g.Run()
 
 	// init Gin
