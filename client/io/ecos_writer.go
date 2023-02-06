@@ -208,6 +208,11 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 		Term:       w.clusterInfo.Term,
 		MetaData:   nil,
 	}
+	// append extra data
+	if w.writeSize < uint64(w.f.bucketInfo.Config.MaxExtraDataSize) {
+		meta.ExtraData = w.curChunk.data[:w.writeSize]
+	}
+
 	if w.f.bucketInfo.Config.ObjectHashType != infos.BucketConfig_OFF {
 		meta.ObjHash = hex.EncodeToString(w.objHash.Sum(nil))
 	} else {
@@ -239,14 +244,23 @@ func (w *EcosWriter) Close() error {
 	if w.Status != READING {
 		return errno.RepeatedClose
 	}
-	w.commitCurChunk()
-	w.commitCurBlock()
-	w.Status = UPLOADING
-	for i := 0; i < w.blockCount; i++ {
-		block := <-w.finishedBlocks
-		logger.Debugf("block closed: %v", block.BlockId)
+	if w.writeSize > uint64(w.f.bucketInfo.Config.MaxExtraDataSize) {
+		w.commitCurChunk()
+		w.commitCurBlock()
+		w.Status = UPLOADING
+		for i := 0; i < w.blockCount; i++ {
+			block := <-w.finishedBlocks
+			logger.Debugf("block closed: %v", block.BlockId)
+		}
+	} else {
 	}
 	err := w.commitMeta()
+	if w.curChunk != nil {
+		w.chunks.Release(w.curChunk)
+		for _, c := range w.reserveChunks {
+			w.chunks.Release(c)
+		}
+	}
 	if err != nil {
 		return err
 	}

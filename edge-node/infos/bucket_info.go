@@ -41,6 +41,7 @@ func GenBucketInfo(volumeID, bucketName, userID string) *BucketInfo {
 			HistoryVersionEnable: false,
 			BlockHashType:        BucketConfig_MURMUR3_128,
 			ObjectHashType:       BucketConfig_MURMUR3_128,
+			MaxExtraDataSize:     1024,
 		},
 	}
 }

@@ -46,6 +46,7 @@ var benchmarkCmd = &cobra.Command{
 		configUtil.Register(&conf, confPath)
 		configUtil.ReadAll()
 		testSize := []uint64{
+			128,              // 128B
 			4 * 1024,         // 4KB
 			512 * 1024,       // 512KB
 			1024 * 1024,      // 1MB

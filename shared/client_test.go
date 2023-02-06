@@ -108,6 +108,27 @@ func TestClient(t *testing.T) {
 		assert.Equal(t, objectSize, size, "data size not match")
 	})
 
+	t.Run("put get object small", func(t *testing.T) {
+		data := genTestData(102)
+		writer := factory.GetEcosWriter("/small-key")
+		size, err := writer.Write(data)
+		if err != nil {
+			t.Errorf("Failed to write data: %v", err)
+		}
+		err = writer.Close()
+		assert.NoError(t, err, "Failed to write data")
+		assert.Equal(t, 102, size, "data size not match")
+
+		reader := factory.GetEcosReader("/small-key")
+		readData := make([]byte, 102)
+		size, err = reader.Read(readData)
+		if err != nil && err != io.EOF {
+			t.Errorf("Failed to read data: %v", err)
+		}
+		assert.Equal(t, 102, size, "data size not match")
+		assert.Equal(t, data, readData, "data not match")
+	})
+
 	t.Run("test get cluster report", func(t *testing.T) {
 		operator := client.GetClusterOperator()
 		state, err := operator.State()
@@ -209,6 +230,28 @@ func BenchmarkClient(b *testing.B) {
 	sizeMap.Set("1M", 1024*1024)
 	sizeMap.Set("10M", 10*1024*1024)
 	sizeMap.Set("100M", 100*1024*1024)
+
+	b.Run("put object small", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			b.Logf("%v", n)
+			b.StopTimer()
+			data := genTestData(102)
+			b.StartTimer()
+			writer := factory.GetEcosWriter("test" + strconv.Itoa(n))
+			b.Logf("1")
+			size, err := writer.Write(data)
+			b.Logf("2")
+			if err != nil {
+				b.Errorf("Failed to write data: %v", err)
+			}
+			if size != len(data) {
+				b.Errorf("Write size not match")
+			}
+			writer.Close()
+			b.Logf("3")
+			b.Logf("write %d bytes", size)
+		}
+	})
 
 	b.Run("put object", func(b *testing.B) {
 		keys := sizeMap.Keys()

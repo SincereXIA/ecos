@@ -198,6 +198,21 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 			logger.Errorf("gen pipelines failed, err: %v", err)
 		}
 	}
+
+	// 直接从元数据 meta 中读取附加的信息
+	if len(r.meta.ExtraData) > 0 {
+		if r.curBlockOffset >= len(r.meta.ExtraData) {
+			return 0, io.EOF
+		}
+		r.curBlockIndex = -1
+		count := copy(p, r.meta.ExtraData[r.curBlockOffset:])
+		r.curBlockOffset += count
+		if r.curBlockOffset == len(r.meta.ExtraData) {
+			return count, nil
+		}
+		return count, nil
+	}
+
 	count, pending := int64(0), len(p)
 
 	// 预计本次需要读取几个 block
