@@ -13,6 +13,6 @@ var GlobalSharedConfig *SharedConfig
 
 func init() {
 	GlobalSharedConfig = &SharedConfig{
-		Behave: BehaveCeph,
+		Behave: BehaveEcos,
 	}
 }
