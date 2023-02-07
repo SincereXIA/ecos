@@ -277,6 +277,8 @@ func (g *Gaia) transformBlocks(info infos.Information) {
 
 		_, _ = io.CopyBuffer(t, f, chunkBuffer)
 		t.Close()
+		metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Dec(1)
+		metrics.GetOrRegisterCounter("exp_gaia_size", nil).Dec(file.Size())
 	}
 }
 
