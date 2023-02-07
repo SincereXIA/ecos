@@ -6,11 +6,13 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
+	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	commonMessenger "ecos/messenger/common"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
+	"github.com/rcrowley/go-metrics"
 	"io"
 	"os"
 	"path"
@@ -26,6 +28,8 @@ type PrimaryCopyTransporter struct {
 	localWriter   io.Writer
 	remoteWriters []io.Writer
 	ctx           context.Context
+	selfId        uint64
+	writeToSelf   bool
 }
 
 // NewPrimaryCopyTransporter return a PrimaryCopyTransporter
@@ -34,15 +38,18 @@ type PrimaryCopyTransporter struct {
 func NewPrimaryCopyTransporter(ctx context.Context, info *object.BlockInfo, pipeline *pipeline.Pipeline,
 	selfID uint64, clusterInfo *infos.ClusterInfo, basePath string) (t *PrimaryCopyTransporter, err error) {
 	transporter := &PrimaryCopyTransporter{
-		info:     info,
-		pipeline: pipeline,
-		basePath: basePath,
-		ctx:      ctx,
+		info:        info,
+		pipeline:    pipeline,
+		basePath:    basePath,
+		ctx:         ctx,
+		selfId:      selfID,
+		writeToSelf: false,
 	}
 	// 创建远端 writer
 	var remoteWriters []io.Writer
 	for _, nodeID := range pipeline.RaftId {
 		if selfID == nodeID {
+			transporter.writeToSelf = true
 			continue
 		}
 		nodeInfo := getNodeInfo(clusterInfo, nodeID)
@@ -84,7 +91,7 @@ func (transporter *PrimaryCopyTransporter) init() error {
 }
 
 func (transporter *PrimaryCopyTransporter) Write(chunk []byte) (n int, err error) {
-	if transporter.localWriter == nil {
+	if transporter.localWriter == nil && transporter.writeToSelf {
 		err := transporter.init()
 		if err != nil {
 			return 0, err
@@ -92,6 +99,9 @@ func (transporter *PrimaryCopyTransporter) Write(chunk []byte) (n int, err error
 	}
 	// MultiWriter 貌似不是并行的
 	multiWriter := io.MultiWriter(append(transporter.remoteWriters, transporter.localWriter)...)
+	if transporter.writeToSelf {
+		metrics.GetOrRegisterCounter("exp_gaia_size", nil).Inc(int64(len(chunk)))
+	}
 	return multiWriter.Write(chunk)
 }
 
@@ -126,6 +136,9 @@ func (transporter *PrimaryCopyTransporter) Close() error {
 		if err != nil {
 			return err
 		}
+	}
+	if transporter.writeToSelf {
+		metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Inc(1)
 	}
 	return nil
 }

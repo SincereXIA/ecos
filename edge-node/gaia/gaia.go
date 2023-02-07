@@ -312,8 +312,7 @@ func (g *Gaia) processControlMessage(message *gaia.UploadBlockRequest_Message, t
 			})
 		}
 		logger.Infof("Gaia %v save block: %v success", g.watcher.GetSelfInfo().RaftId, msg.Block.BlockId)
-		metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Inc(1)
-		metrics.GetOrRegisterCounter("exp_gaia_size", nil).Inc(int64(msg.Block.BlockSize))
+		//metrics.GetOrRegisterCounter("exp_gaia_size", nil).Inc(int64(msg.Block.BlockSize))
 		return stream.SendAndClose(&common.Result{
 			Status: common.Result_OK,
 		})
