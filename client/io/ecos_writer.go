@@ -324,10 +324,14 @@ func (w *EcosWriter) genPartialHash() string {
 	if w.f.bucketInfo.Config.ObjectHashType == infos.BucketConfig_OFF {
 		return ""
 	}
-	w.objHash.Reset()
+	if w.objHash != nil {
+		w.objHash.Reset()
+	}
 	for _, partID := range w.partIDs {
 		block := w.blocks[int(partID)]
-		w.objHash.Write([]byte(block.BlockInfo.BlockHash))
+		if w.objHash != nil {
+			w.objHash.Write([]byte(block.BlockInfo.BlockHash))
+		}
 	}
 	return hex.EncodeToString(w.objHash.Sum(nil))
 }
@@ -422,18 +426,18 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 		victim := w.blocks[int(partID)]
 		logger.Debugf("Delete duplicate part %v", victim.PartId)
 
-		node, err := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(victim.PgId)[0])
-		if err != nil {
-			return "", err
-		}
-		client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.f.config)
-		if err != nil {
-			return "", err
-		}
-		err = victim.Abort(client)
-		if err != nil {
-			return "", err
-		}
+		//node, err := w.f.infoAgent.Get(infos.InfoType_NODE_INFO, w.pipes.GetBlockPGNodeID(victim.PgId)[0])
+		//if err != nil {
+		//	return "", err
+		//}
+		//client, err := NewGaiaClient(node.BaseInfo().GetNodeInfo(), w.f.config)
+		//if err != nil {
+		//	return "", err
+		//}
+		//err = victim.Abort(client)
+		//if err != nil {
+		//	return "", err
+		//}
 		go w.abortBlock(victim)
 		delete(w.blocks, int(partID))
 	}
@@ -525,7 +529,7 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 	}
 	w.Status = FINISHED
 	var etag string
-	if w.objHash != nil {
+	if w.objHash == nil {
 		etag = uuid.NewString()
 	} else {
 		etag = hex.EncodeToString(w.objHash.Sum(nil))

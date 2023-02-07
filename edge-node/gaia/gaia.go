@@ -219,7 +219,7 @@ func (g *Gaia) DeleteBlock(_ context.Context, req *gaia.DeleteBlockRequest) (*co
 		logger.Errorf("delete block failed, err: %v", err)
 		return nil, err
 	}
-	logger.Infof("delete block: %v success", req.BlockId)
+	logger.Infof("Gaia: %v delete block: %v success", g.watcher.GetSelfInfo().RaftId, req.BlockId)
 	metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Dec(1)
 	metrics.GetOrRegisterCounter("exp_gaia_size", nil).Dec(blockSize)
 	return &common.Result{Status: common.Result_OK}, nil
