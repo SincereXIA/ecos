@@ -95,6 +95,11 @@ func NewMinioConnector(ctx context.Context, connect string) *MinioConnector {
 		accessKeyID = "VLQ24N15T0PYZL9CHQD6"
 		secretAccessKey = "DlG8CCPP7vKnskmHoY4aJBzUg5MWGUdaUIzFh7id"
 	}
+	if connect == "ecos-gw" {
+		endpoint = "s3-edge.sums.top:80"
+		accessKeyID = "root"
+		secretAccessKey = "root"
+	}
 	c, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
 		Secure: false,

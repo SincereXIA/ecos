@@ -66,6 +66,8 @@ var benchmarkCmd = &cobra.Command{
 				connector = benchmark.NewMinioConnector(ctx, "minio")
 			} else if len(args) > 0 && args[0] == "ceph" {
 				connector = benchmark.NewMinioConnector(ctx, "ceph")
+			} else if len(args) > 0 && args[0] == "ecos-gw" {
+				connector = benchmark.NewMinioConnector(ctx, "ecos-gw")
 			} else {
 				connector = benchmark.NewEcosConnector(ctx, &conf)
 			}
@@ -117,6 +119,8 @@ var runPutCmd = &cobra.Command{
 			connector = benchmark.NewMinioConnector(ctx, "minio")
 		} else if len(args) > 0 && args[1] == "ceph" {
 			connector = benchmark.NewMinioConnector(ctx, "ceph")
+		} else if len(args) > 0 && args[1] == "ecos-gw" {
+			connector = benchmark.NewMinioConnector(ctx, "ecos-gw")
 		}
 		tester := benchmark.NewTester(ctx, connector, eachObjectSame)
 

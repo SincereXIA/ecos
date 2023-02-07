@@ -464,7 +464,7 @@ func testCreateMultipartUpload(t *testing.T, client *s3.Client, bucketName strin
 }
 
 func testUploadPart(t *testing.T, client *s3.Client, bucketName string, key string, uploadId string, partNumber int32, data io.Reader, wantErr bool) {
-	uploadPartOutput, err := client.UploadPart(context.TODO(), &s3.UploadPartInput{
+	_, err := client.UploadPart(context.TODO(), &s3.UploadPartInput{
 		Bucket:     aws.String(bucketName),
 		Key:        aws.String(key),
 		UploadId:   aws.String(uploadId),
@@ -476,7 +476,7 @@ func testUploadPart(t *testing.T, client *s3.Client, bucketName string, key stri
 		return
 	}
 	assert.NoError(t, err)
-	t.Logf("UploadPart: %#v", uploadPartOutput)
+	//t.Logf("UploadPart: %#v", uploadPartOutput)
 }
 
 func testCompleteMultipartUpload(t *testing.T, client *s3.Client, bucketName string, key string, uploadId string, parts []types.CompletedPart, wantErr bool) {
