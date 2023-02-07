@@ -12,6 +12,7 @@ import (
 	"ecos/utils/timestamp"
 	"encoding/hex"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/google/uuid"
 	"github.com/rcrowley/go-metrics"
 	"hash"
 	"io"
@@ -454,7 +455,9 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 			data:     chunkData[:readSize],
 		}
 		w.blocks[int(partID)].chunks = append(w.blocks[int(partID)].chunks, chunk)
-		w.objHash.Write(chunkData[:readSize])
+		if w.objHash != nil {
+			w.objHash.Write(chunkData[:readSize])
+		}
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -521,7 +524,13 @@ func (w *EcosWriter) CloseMultiPart(parts ...types.CompletedPart) (string, error
 		return "", err
 	}
 	w.Status = FINISHED
-	return hex.EncodeToString(w.objHash.Sum(nil)), nil
+	var etag string
+	if w.objHash != nil {
+		etag = uuid.NewString()
+	} else {
+		etag = hex.EncodeToString(w.objHash.Sum(nil))
+	}
+	return etag, nil
 }
 
 // AbortMultiPart will abort EcosWriter for multipart upload.
