@@ -44,7 +44,7 @@ func (g *Gaia) UploadBlockData(stream gaia.Gaia_UploadBlockDataServer) error {
 	var timeStart *time.Time
 	defer func() {
 		if timeStart != nil {
-			metrics.GetOrRegisterTimer(watcher.MetricsGaiaBlockPutTimer, nil).UpdateSince(*timeStart)
+			metrics.GetOrRegisterTimer(messenger.MetricsGaiaBlockPutTimer, nil).UpdateSince(*timeStart)
 		}
 	}()
 	for {
@@ -192,7 +192,7 @@ func (g *Gaia) GetBlockData(req *gaia.GetBlockRequest, server gaia.Gaia_GetBlock
 		}
 		if readErr == io.EOF {
 			logger.Infof("gaia [%v] read this block finished", g.watcher.GetSelfInfo().RaftId)
-			metrics.GetOrRegisterTimer(watcher.MetricsGaiaBlockGetTimer, nil).UpdateSince(timeStart)
+			metrics.GetOrRegisterTimer(messenger.MetricsGaiaBlockGetTimer, nil).UpdateSince(timeStart)
 			break
 		}
 	}
@@ -220,7 +220,7 @@ func (g *Gaia) DeleteBlock(_ context.Context, req *gaia.DeleteBlockRequest) (*co
 		return nil, err
 	}
 	logger.Infof("Gaia: %v delete block: %v success", g.watcher.GetSelfInfo().RaftId, req.BlockId)
-	metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Dec(1)
+	metrics.GetOrRegisterCounter(messenger.MetricsGaiaBlockCount, nil).Dec(1)
 	metrics.GetOrRegisterCounter("exp_gaia_size", nil).Dec(blockSize)
 	return &common.Result{Status: common.Result_OK}, nil
 }
@@ -277,7 +277,7 @@ func (g *Gaia) transformBlocks(info infos.Information) {
 
 		_, _ = io.CopyBuffer(t, f, chunkBuffer)
 		t.Close()
-		metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Dec(1)
+		metrics.GetOrRegisterCounter(messenger.MetricsGaiaBlockCount, nil).Dec(1)
 		metrics.GetOrRegisterCounter("exp_gaia_size", nil).Dec(file.Size())
 	}
 }

@@ -5,7 +5,7 @@ import (
 	client2 "ecos/client"
 	"ecos/client/config"
 	"ecos/edge-node/infos"
-	"ecos/edge-node/watcher"
+	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/logger"
 	"github.com/elliotchance/orderedmap"
@@ -161,9 +161,9 @@ func TestClient(t *testing.T) {
 		assert.Equal(t, 2, len(buckets), "bucket count not match")
 	})
 	t.Run("test metrics", func(t *testing.T) {
-		metaPutTime := metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaPutTimer, nil).Mean()
+		metaPutTime := metrics.GetOrRegisterTimer(messenger.MetricsAlayaMetaPutTimer, nil).Mean()
 		t.Logf("meta put time: %v", metaPutTime)
-		blockPutTime := metrics.GetOrRegisterTimer(watcher.MetricsGaiaBlockPutTimer, nil).Mean()
+		blockPutTime := metrics.GetOrRegisterTimer(messenger.MetricsGaiaBlockPutTimer, nil).Mean()
 		t.Logf("block put time: %v", blockPutTime/float64(time.Second.Nanoseconds()))
 	})
 }

@@ -7,7 +7,6 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
-	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	"ecos/messenger/common"
 	"ecos/shared/gaia"
@@ -243,7 +242,7 @@ func (r *EcosReader) Read(p []byte) (n int, err error) {
 	logger.Tracef("read %d bytes done", count)
 
 	if err == io.EOF {
-		metrics.GetOrRegisterTimer(watcher.MetricsClientGetTimer, nil).UpdateSince(r.startTime)
+		metrics.GetOrRegisterTimer(messenger.MetricsClientGetTimer, nil).UpdateSince(r.startTime)
 	}
 	r.offset += count
 	if r.offset > int64(r.meta.ObjSize) {

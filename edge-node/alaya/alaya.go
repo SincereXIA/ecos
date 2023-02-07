@@ -187,7 +187,7 @@ func (a *Alaya) RecordObjectMeta(ctx context.Context, meta *object.ObjectMeta) (
 		}
 		logger.Infof("Alaya record object meta success, obj_id: %v, size: %v", meta.ObjId, meta.ObjSize)
 	}
-	metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaPutTimer, nil).UpdateSince(timeStart)
+	metrics.GetOrRegisterTimer(messenger.MetricsAlayaMetaPutTimer, nil).UpdateSince(timeStart)
 
 	return &common.Result{
 		Status: common.Result_OK,
@@ -216,7 +216,7 @@ func (a *Alaya) GetObjectMeta(ctx context.Context, req *alaya.MetaRequest) (*obj
 		logger.Errorf("alaya get metaStorage by objID failed, err: %v", err)
 		return nil, err
 	}
-	metrics.GetOrRegisterTimer(watcher.MetricsAlayaMetaGetTimer, nil).UpdateSince(timeStart)
+	metrics.GetOrRegisterTimer(messenger.MetricsAlayaMetaGetTimer, nil).UpdateSince(timeStart)
 	return objMeta, nil
 }
 
@@ -460,7 +460,7 @@ func (a *Alaya) Run() {
 		case pgID := <-a.raftNodeStopChan:
 			a.PGMessageChans.Delete(pgID)
 			a.PGRaftNode.Delete(pgID)
-			metrics.GetOrRegisterCounter(watcher.MetricsAlayaPipelineCount, nil).Dec(1)
+			metrics.GetOrRegisterCounter(messenger.MetricsAlayaPipelineCount, nil).Dec(1)
 		case <-a.ctx.Done():
 			a.cleanup()
 			return
@@ -576,6 +576,6 @@ func (a *Alaya) makeAlayaRaftInPipeline(p *pipeline.Pipeline, oldP *pipeline.Pip
 		NewAlayaRaft(a.ctx, a.selfInfo.RaftId, p, oldP, a.config, a.watcher, storage,
 			c.(chan raftpb.Message), a.raftNodeStopChan))
 	logger.Infof("Node: %v successful add raft node in alaya, PG: %v", a.selfInfo.RaftId, pgID)
-	metrics.GetOrRegisterCounter(watcher.MetricsAlayaPipelineCount, nil).Inc(1)
+	metrics.GetOrRegisterCounter(messenger.MetricsAlayaPipelineCount, nil).Inc(1)
 	return a.getRaftNode(pgID)
 }

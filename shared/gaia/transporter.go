@@ -6,7 +6,6 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
-	"ecos/edge-node/watcher"
 	"ecos/messenger"
 	commonMessenger "ecos/messenger/common"
 	"ecos/utils/common"
@@ -138,7 +137,7 @@ func (transporter *PrimaryCopyTransporter) Close() error {
 		}
 	}
 	if transporter.writeToSelf {
-		metrics.GetOrRegisterCounter(watcher.MetricsGaiaBlockCount, nil).Inc(1)
+		metrics.GetOrRegisterCounter(messenger.MetricsGaiaBlockCount, nil).Inc(1)
 	}
 	return nil
 }

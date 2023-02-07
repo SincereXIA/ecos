@@ -1,4 +1,4 @@
-package watcher
+package messenger
 
 const (
 	MetricsAlaya             = "ecos.node.alaya"

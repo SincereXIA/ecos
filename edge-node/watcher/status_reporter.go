@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"ecos/edge-node/infos"
+	"ecos/messenger"
 	"github.com/rcrowley/go-metrics"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
@@ -40,8 +41,8 @@ func (s *StatusReporter) GetReports() []Report {
 	deltaBytesRecv := netState[0].BytesRecv - s.lastNetBytesRecv
 	sentPerSec := float64(deltaBytesSent) / time.Since(s.lastReportTime).Seconds()
 	recvPerSec := float64(deltaBytesRecv) / time.Since(s.lastReportTime).Seconds()
-	metrics.GetOrRegisterMeter(MetricsSystemNetworkBytesSendPerSecond, nil).Mark(int64(sentPerSec))
-	metrics.GetOrRegisterMeter(MetricsSystemNetworkBytesReceivedPerSecond, nil).Mark(int64(recvPerSec))
+	metrics.GetOrRegisterMeter(messenger.MetricsSystemNetworkBytesSendPerSecond, nil).Mark(int64(sentPerSec))
+	metrics.GetOrRegisterMeter(messenger.MetricsSystemNetworkBytesReceivedPerSecond, nil).Mark(int64(recvPerSec))
 	s.lastReportTime = time.Now()
 	s.lastNetBytesSent = netState[0].BytesSent
 	s.lastNetBytesRecv = netState[0].BytesRecv
@@ -53,9 +54,9 @@ func (s *StatusReporter) GetReports() []Report {
 	status.GoroutineCount = uint64(runtime.NumGoroutine())
 
 	// Get ecos metrics
-	status.MetaPipelineCount = uint64(metrics.GetOrRegisterCounter(MetricsAlayaPipelineCount, nil).Count())
-	status.MetaCount = uint64(metrics.GetOrRegisterCounter(MetricsAlayaMetaCount, nil).Count())
-	status.BlockCount = uint64(metrics.GetOrRegisterCounter(MetricsGaiaBlockCount, nil).Count())
+	status.MetaPipelineCount = uint64(metrics.GetOrRegisterCounter(messenger.MetricsAlayaPipelineCount, nil).Count())
+	status.MetaCount = uint64(metrics.GetOrRegisterCounter(messenger.MetricsAlayaMetaCount, nil).Count())
+	status.BlockCount = uint64(metrics.GetOrRegisterCounter(messenger.MetricsGaiaBlockCount, nil).Count())
 
 	return []Report{
 		{

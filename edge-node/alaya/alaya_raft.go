@@ -171,11 +171,11 @@ func (r *Raft) readCommit(commitC <-chan *eraft.Commit, errorC <-chan error) {
 				if err != nil {
 					logger.Warningf("alaya record object meta err: %v", err)
 				}
-				metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Inc(1)
+				metrics.GetOrRegisterCounter(messenger.MetricsAlayaMetaCount, nil).Inc(1)
 			case alaya.MetaOperate_DELETE:
 				logger.Infof("delete meta: %v", metaOperate.Meta.ObjId)
 				err = r.metaStorage.Delete(metaOperate.Meta.ObjId)
-				metrics.GetOrRegisterCounter(watcher.MetricsAlayaMetaCount, nil).Dec(1)
+				metrics.GetOrRegisterCounter(messenger.MetricsAlayaMetaCount, nil).Dec(1)
 			default:
 				logger.Errorf("unsupported alaya meta operate")
 			}

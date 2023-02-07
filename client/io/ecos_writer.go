@@ -5,7 +5,7 @@ import (
 	"ecos/edge-node/infos"
 	"ecos/edge-node/object"
 	"ecos/edge-node/pipeline"
-	"ecos/edge-node/watcher"
+	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
@@ -278,7 +278,7 @@ func (w *EcosWriter) Close() error {
 		return err
 	}
 	w.Status = FINISHED
-	metrics.GetOrRegisterTimer(watcher.MetricsClientPutTimer, nil).UpdateSince(w.startTime)
+	metrics.GetOrRegisterTimer(messenger.MetricsClientPutTimer, nil).UpdateSince(w.startTime)
 	return nil
 }
 
@@ -476,7 +476,7 @@ func (w *EcosWriter) WritePart(partID int32, reader io.Reader) (string, error) {
 		return "", err
 	}
 	go w.uploadBlock(int(partID), w.blocks[int(partID)])
-	metrics.GetOrRegisterTimer(watcher.MetricsClientPartPutTimer, nil).UpdateSince(w.startTime)
+	metrics.GetOrRegisterTimer(messenger.MetricsClientPartPutTimer, nil).UpdateSince(w.startTime)
 	return w.blocks[int(partID)].BlockId, nil
 }
 

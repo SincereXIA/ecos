@@ -3,7 +3,7 @@ package router
 import (
 	"bufio"
 	"ecos/edge-node/object"
-	"ecos/edge-node/watcher"
+	"ecos/messenger"
 	"ecos/utils/common"
 	"ecos/utils/errno"
 	"ecos/utils/logger"
@@ -475,7 +475,7 @@ func objectLevelPutHandler(c *gin.Context) {
 		uploadPart(c)
 		defer func() {
 			if metricChan, ok := c.Get("metric"); ok {
-				*metricChan.(*chan string) <- watcher.MetricsGatewayPartPutTimer
+				*metricChan.(*chan string) <- messenger.MetricsGatewayPartPutTimer
 			}
 		}()
 		return
@@ -487,7 +487,7 @@ func objectLevelPutHandler(c *gin.Context) {
 	putObject(c)
 	defer func() {
 		if metricChan, ok := c.Get("metric"); ok {
-			*metricChan.(*chan string) <- watcher.MetricsGatewayPutTimer
+			*metricChan.(*chan string) <- messenger.MetricsGatewayPutTimer
 		}
 	}()
 }
@@ -511,7 +511,7 @@ func objectLevelGetHandler(c *gin.Context) {
 		getPart(c)
 		defer func() {
 			if metricChan, ok := c.Get("metric"); ok {
-				*metricChan.(*chan string) <- watcher.MetricsGatewayPartGetTimer
+				*metricChan.(*chan string) <- messenger.MetricsGatewayPartGetTimer
 			}
 		}()
 		return
@@ -519,7 +519,7 @@ func objectLevelGetHandler(c *gin.Context) {
 	getObject(c)
 	defer func() {
 		if metricChan, ok := c.Get("metric"); ok {
-			*metricChan.(*chan string) <- watcher.MetricsGatewayGetTimer
+			*metricChan.(*chan string) <- messenger.MetricsGatewayGetTimer
 		}
 	}()
 }
@@ -542,7 +542,7 @@ func objectLevelDeleteHandler(c *gin.Context) {
 	deleteObject(c)
 	defer func() {
 		if metricChan, ok := c.Get("metric"); ok {
-			*metricChan.(*chan string) <- watcher.MetricsGatewayDeleteTimer
+			*metricChan.(*chan string) <- messenger.MetricsGatewayDeleteTimer
 		}
 	}()
 }
@@ -560,7 +560,7 @@ func objectLevelHeadHandler(c *gin.Context) {
 	headObject(c)
 	defer func() {
 		if metricChan, ok := c.Get("metric"); ok {
-			*metricChan.(*chan string) <- watcher.MetricsGatewayStatTimer
+			*metricChan.(*chan string) <- messenger.MetricsGatewayStatTimer
 		}
 	}()
 }
