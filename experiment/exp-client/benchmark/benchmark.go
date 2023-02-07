@@ -121,7 +121,9 @@ func (c *MinioConnector) PutObject(objectName string, data []byte) error {
 }
 
 func (c *MinioConnector) ListObjects() ([]string, error) {
-	objects := c.c.ListObjects(c.ctx, "test", minio.ListObjectsOptions{})
+	objects := c.c.ListObjects(c.ctx, "test", minio.ListObjectsOptions{
+		UseV1: true,
+	})
 	var objectNames []string
 	for object := range objects {
 		objectNames = append(objectNames, object.Key)
