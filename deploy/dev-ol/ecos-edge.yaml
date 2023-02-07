@@ -74,6 +74,7 @@ spec:
           requests:
             storage: 300Gi
         storageClassName: rook-ceph-block
+        persistentVolumeReclaimPolicy: Delete
       metadata:
         name: ecos-edge-storage
         namespace: ecos
