@@ -13,6 +13,7 @@ import (
 	"ecos/utils/logger"
 	"ecos/utils/timestamp"
 	"github.com/golang/mock/gomock"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path"
@@ -22,6 +23,7 @@ import (
 )
 
 func TestAlaya(t *testing.T) {
+	logger.Logger.SetLevel(logrus.InfoLevel)
 	t.Run("Real Alaya", func(t *testing.T) {
 		testAlaya(t, false)
 	})
