@@ -17,6 +17,7 @@ import (
 	"hash"
 	"io"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -54,6 +55,7 @@ type EcosWriter struct {
 	curBlock       *Block
 	blockCount     int
 	finishedBlocks chan *Block
+	objectMeta     *object.ObjectMeta // 生成的对象元数据
 
 	writeSize uint64
 	objHash   hash.Hash
@@ -242,6 +244,7 @@ func (w *EcosWriter) genMeta(objectKey string) *object.ObjectMeta {
 // Then these infos will be sent to AlayaServer
 func (w *EcosWriter) commitMeta() error {
 	meta := w.genMeta(w.key)
+	w.objectMeta = meta
 	return w.uploadMeta(meta)
 }
 
@@ -280,6 +283,33 @@ func (w *EcosWriter) Close() error {
 	w.Status = FINISHED
 	metrics.GetOrRegisterTimer(messenger.MetricsClientPutTimer, nil).UpdateSince(w.startTime)
 	return nil
+}
+
+func (w *EcosWriter) CloseAsync() error {
+	go func() {
+		err := w.Close()
+		if err != nil {
+			logger.Errorf("CloseAsync: %v", err)
+		}
+	}()
+	return nil
+}
+
+func (w *EcosWriter) GetState() EcosWriterState {
+	blockInfos := make([]object.BlockInfo, 0)
+	for _, block := range w.blocks {
+		blockInfos = append(blockInfos, block.BlockInfo)
+	}
+	meta := object.ObjectMeta{}
+	if w.objectMeta != nil {
+		meta = *w.objectMeta
+	}
+
+	return EcosWriterState{
+		Status: strconv.Itoa(int(w.Status)),
+		Meta:   meta,
+		Blocks: blockInfos,
+	}
 }
 
 // Abort will change EcosWriter.Status: READING -> ABORTED

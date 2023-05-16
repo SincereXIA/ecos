@@ -165,7 +165,7 @@ func (m *NodeMonitor) collectNodes() {
 				logger.Errorf("get nodeInfo from nodeInfoStorage fail: %v", err)
 				//return
 			}
-			logger.Debugf("Node: %v start send collect request, node size: %v", m.watcher.GetSelfInfo().GetID(), len(nodeInfos))
+			logger.Tracef("Node: %v start send collect request, node size: %v", m.watcher.GetSelfInfo().GetID(), len(nodeInfos))
 
 			// 拉取其他节点信息
 			for _, nodeInfo := range nodeInfos {
